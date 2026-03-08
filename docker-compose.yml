@@ -1,0 +1,57 @@
+services:
+  postgres_db:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: endux_user
+      POSTGRES_PASSWORD: endux_password
+      POSTGRES_DB: endux_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    networks:
+      - endux_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U endux_user -d endux_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  endux_backend:
+    build:
+      context: ./node-service
+      dockerfile: Dockerfile
+    container_name: endux_backend
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://endux_user:endux_password@postgres_db:5432/endux_db?schema=public
+      - PORT=3000
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    networks:
+      - endux_network
+    volumes:
+      - ./node-service:/usr/src/app
+      - /usr/src/app/node_modules
+
+  endux_frontend:
+    build:
+      context: ./web-client
+      dockerfile: Dockerfile
+    container_name: endux_frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - endux_backend
+    networks:
+      - endux_network
+    volumes:
+      - ./web-client:/app
+      - /app/node_modules
+
+networks:
+  endux_network:
+    driver: bridge

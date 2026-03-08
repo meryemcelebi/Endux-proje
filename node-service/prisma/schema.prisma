@@ -1,0 +1,22 @@
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model kullanici {
+  id             Int      @id @default(autoincrement())
+  kullanici_adi  String   @unique  // Giriş için kullanılacak kullanıcı adı (örn: op_ahmet)
+  ad             String
+  soyad          String
+  email          String?  @unique  // Opsiyonel — admin ve yöneticiler için
+  sifre_hash     String
+  rol            String   @default("operator") // "admin", "yonetici", "operator", "teknisyen"
+  aktif          Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
