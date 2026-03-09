@@ -3,17 +3,18 @@ services:
     image: postgres:15-alpine
     container_name: postgres_db
     environment:
-      POSTGRES_USER: endux_user
-      POSTGRES_PASSWORD: endux_password
-      POSTGRES_DB: endux_db
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d
     networks:
       - endux_network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U endux_user -d endux_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -26,8 +27,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=postgresql://endux_user:endux_password@postgres_db:5432/endux_db?schema=public
-      - PORT=3000
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}?schema=public
+      - PORT=${PORT}
+      - JWT_SECRET=${JWT_SECRET}
     depends_on:
       postgres_db:
         condition: service_healthy
