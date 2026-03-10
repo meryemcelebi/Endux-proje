@@ -3,7 +3,7 @@ services:
     image: postgres:15-alpine
     container_name: postgres_db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_USER: endux_admin
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
@@ -53,6 +53,20 @@ services:
     volumes:
       - ./web-client:/app
       - /app/node_modules
+
+  endux_ai:
+    build:
+      context: ./ai-services
+      dockerfile: Dockerfile
+    container_name: endux_ai
+    ports:
+      - "8000:8000"
+    depends_on:
+      - endux_backend
+    networks:
+      - endux_network
+    volumes:
+      - ./ai-services:/app
 
 networks:
   endux_network:
