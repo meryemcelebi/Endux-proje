@@ -2,11 +2,12 @@ import express from "express";
 import cors from "cors";
 import { config } from "./config";
 import routes from "./routes";
+import { connectDB } from "./config/db";
 
 
 const app = express();
-
-
+// Veritabanı bağlantısını başlat
+connectDB();
 
 
 app.use(cors());
