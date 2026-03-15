@@ -1,12 +1,12 @@
 import dotenv from "dotenv";
-import path from "path";
 
-// .env dosyasını projenin kök dizininden yükle
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 
 export const config = {
-  port: parseInt(process.env.PORT || "3000", 10),
+  port:process.env.PORT || "3000", 
   databaseUrl: process.env.DATABASE_URL || "",
+  jwtSecret: process.env.JWT_SECRET || "denemekey",
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
   nodeEnv: process.env.NODE_ENV || "development",
+
 };
 
