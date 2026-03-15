@@ -14,7 +14,7 @@ model kullanici {
   ad             String
   soyad          String
   email          String?  @unique  // Opsiyonel — admin ve yöneticiler için
-  sifre_hash     String
+  sifre          String
   rol            String   @default("operator") // "admin", "yonetici", "operator", "teknisyen"
   aktif          Boolean  @default(true)
   createdAt      DateTime @default(now())

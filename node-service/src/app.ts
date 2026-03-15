@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import { config } from "./config";
 import routes from "./routes";
-import { connectDB } from "./config/db";
+import { connectDB } from "./config/prisma";
 
 
 const app = express();
