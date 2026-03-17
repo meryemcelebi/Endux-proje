@@ -1,6 +1,7 @@
 import { Request, Response,NextFunction } from 'express';
 import { generateToken } from '../utils/jwt';
 import prisma  from '../config/prisma';
+import { sifreKarsilastir } from '../utils/hash';
 
 //Login — `POST /api/auth/login`
 
@@ -15,7 +16,8 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
         return;
     }
 
-    if(kullanici.sifre !== sifre) {
+    const sifreDogruMu = await sifreKarsilastir(sifre, kullanici.sifre);
+    if(!sifreDogruMu) {
         res.status(401).json({success: false, message: 'Giriş başarısız. Şifre hatalı.'});
         return;
     }
