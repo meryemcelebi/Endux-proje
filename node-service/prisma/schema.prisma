@@ -217,7 +217,6 @@ model makine {
   makine_id            Int                    @id @default(autoincrement())
   firma_id             Int
   m_tur_id             Int
-  makine_qr            String                 @unique @default(uuid()) @db.Uuid               
   makine_ad            String                 @db.VarChar(100)
   seri_no              String[]               @db.VarChar(150)
   satin_alma_tarihi    DateTime               @db.Date
@@ -227,6 +226,7 @@ model makine {
   mevcut_risk_skoru    Decimal                @db.Decimal(3, 2)
   mevcut_risk_seviyesi du_ort_yuk[]
   aktiflik_durumu      Boolean
+  makine_qr            String                 @unique @default(uuid()) @db.Uuid
   ai_ariza_tespit      ai_ariza_tespit[]
   ai_model_log         ai_model_log[]
   ariza_kaydi          ariza_kaydi[]
