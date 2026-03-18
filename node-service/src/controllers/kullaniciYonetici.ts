@@ -7,9 +7,10 @@ import { hashSifre } from "../utils/hash";
 export async function kullaniciOlustur(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const {kullanici_adi, ad, soyad, email, sifre, rol} = req.body;
+        const epostaKayit = email || kullanici_adi;
         
-        // Kullanıcı var mı kontrol et
-        const mevcutKullanici = await prisma.kullanici.findUnique({ where: { kullanici_adi } });
+        // Kullanıcı var mı kontrol et (artık eposta üzerinden kontrol ediliyor)
+        const mevcutKullanici = await prisma.kullanici.findUnique({ where: { eposta: epostaKayit } });
         if (mevcutKullanici) {
             res.status(400).json({ success: false, message: 'Bu kullanıcı adı zaten kullanılıyor.' });
             return;
@@ -18,15 +19,17 @@ export async function kullaniciOlustur(req: Request, res: Response, next: NextFu
         // Şifreyi hashle
         const hashlenmisSifre = await hashSifre(sifre);
         
-        // Kullanıcıyı veritabanına kaydet
+        // Kullanıcıyı veritabanına kaydet (Yeni DB şemasına göre zorunlu alanlar eklendi)
         const yeniKullanici = await prisma.kullanici.create({
             data: {
-                kullanici_adi,
-                ad: ad || "Belirtilmedi",
-                soyad: soyad || "Belirtilmedi",
-                email,
+                ad: ad || "Belirsiz",
+                soyad: soyad || "Belirsiz",
+                eposta: epostaKayit,
                 sifre: hashlenmisSifre,
-                rol: rol || "operator"
+                telefon: "0000000000",
+                firma_id: 1, // DB gerekliliği
+                rol_id: 1,   // DB gerekliliği
+                aktiflik: true
             }
         });
 

@@ -2,6 +2,8 @@ import { Router } from "express";
 import { login, benKimim } from '../controllers/oturumYonetici';
 import { kullaniciOlustur } from '../controllers/kullaniciYonetici';
 import { oturumKontrol,rolKontrol } from '../middlewares/yetki';
+import { formKaydet, sablonGetir } from '../controllers/checklistYonetici';
+
 
 const router = Router();
 
@@ -11,13 +13,15 @@ router.post("/kullanicilar",
      oturumKontrol,
      rolKontrol("admin", "yönetici"),
      kullaniciOlustur);
-    
-// Diğer route modülleri burada tanımlanacak
+// Checklist formu kaydetme route'u
+/// İşçi giriş yapmış mı kontrol etmek için 'oturumKontrol' yetkisini kullanıyoruz
+router.post("/checklist/form", oturumKontrol, formKaydet);
+//operatörün seçtiği şablona göre form maddelerini getiren route
+router.get("/checklist/sablon/:sablon_id", oturumKontrol, sablonGetir);
 
-// İleride eklenecek route modülleri:
-// router.use("/makineler", makinelerRoutes);
-// router.use("/kontrol", kontrolRoutes);
-// router.use("/bakim", bakimRoutes);
-// router.use("/kullanicilar", kullanicilarRoutes);
+
+
+
+
 
 export default router;
