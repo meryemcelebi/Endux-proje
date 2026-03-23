@@ -22,9 +22,18 @@
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^7.13.1",
+    "react-router-dom": "^7.13.1"
+  },
+  
+  "dependencies": {
     "@prisma/adapter-pg": "^7.4.2",
+    "html5-qrcode": "^2.3.8",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/pg": "^8.18.0"
   }
 }
+

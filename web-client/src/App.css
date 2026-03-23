@@ -1,22 +1,29 @@
- #root {
-  width: 100%;
-  min-height: 100vh;
+#root  /*ana alan*/
+{
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
 }
 
-.logo {
+.logo  /*Logo görselini düzenler*/
+{
   height: 6em;
   padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
+  will-change: filter; /*Performans iyileştirme*/
+  transition: filter 300ms;  /*filtre geçiş süresi*/
 }
-.logo:hover {
+.logo:hover   /*logo üzerine gelince gölge ekler*/
+{
   filter: drop-shadow(0 0 2em #646cffaa);
 }
-.logo.react:hover {
+.logo.react:hover /*sadece react logosuna gölge yapar*/
+{
   filter: drop-shadow(0 0 2em #61dafbaa);
 }
 
-@keyframes logo-spin {
+@keyframes logo-spin   /*logo döndürme animasyonu yapar*/
+{
   from {
     transform: rotate(0deg);
   }
@@ -25,16 +32,19 @@
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
+@media (prefers-reduced-motion: no-preference)  /*kullanıcı istemezse animasyon yapmaz*/
+{
   a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
+    animation: logo-spin infinite 20s linear;  /*2.linkin içindeki logo sürekli döner*/
   }
 }
 
-.card {
+.card /*kart tasarımı*/
+{
   padding: 2em;
 }
 
-.read-the-docs {
+.read-the-docs /*yazı rengini dep-ğiştirir*/
+{
   color: #888;
 }

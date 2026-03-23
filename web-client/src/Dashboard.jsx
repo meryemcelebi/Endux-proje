@@ -1,83 +1,57 @@
-import React from 'react';
+import { useNavigate } from "react-router-dom";
 
-const Dashboard = () => (
-  <div style={{ padding: '20px' }}>
-    <h2>Dashboard</h2>
-    <p>*Buraya ileride KPI kutuları ve harita gelecek.*</p>
+export default function Dashboard() {
+  const navigate = useNavigate();
 
-    {/* Üst KPI Kutuları */}
-    <div style={{ display: 'flex', gap: '20px', marginTop: '20px' }}>
-      <div style={{
-        flex: 1,
-        background: 'lightgray',
-        padding: '30px',
-        border: '2px dashed gray',
-        textAlign: 'center',
-        borderRadius: '8px'
-      }}>
-         Günlük Kritik Uyarılar
+  return (
+    <div style={{ padding: 20 }}>
+
+      {/* ÜST MENÜ */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+        <h2>Dashboard</h2>
+
+        <button onClick={() => navigate("/makineler")}>
+          Makineler
+        </button>
       </div>
 
-      <div style={{
-        flex: 1,
-        background: 'lightgray',
-        padding: '30px',
-        border: '2px dashed gray',
-        textAlign: 'center',
-        borderRadius: '8px'
-      }}>
-         Bekleyen Bakım Onayları
+      {/* ÜST 3 KUTU */}
+      <div style={{ display: "flex", gap: 15, marginBottom: 20 }}>
+        <div style={boxStyle}>Kritik Uyarılar</div>
+        <div style={boxStyle}>Bakım Bekleyenler</div>
+        <div style={boxStyle}>OEE</div>
       </div>
 
-      <div style={{
-        flex: 1,
-        background: 'lightgray',
-        padding: '30px',
-        border: '2px dashed gray',
-        textAlign: 'center',
-        borderRadius: '8px'
-      }}>
-         Genel OEE Skoru
-      </div>
-    </div>
-
-    {/* Alt Harita ve Masraf Kutuları */}
-    <div style={{ display: 'flex', gap: '20px', marginTop: '20px' }}>
-      
-      {/* Harita Kutusu */}
-      <div style={{
-        flex: 2,
-        height: '300px',
-        background: 'lightgray',
-        border: '2px dashed gray',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: '8px',
-        fontWeight: 'bold'
-      }}>
-         Buraya Fabrika Haritası Gelecek
-      </div>
-
-      {/* Masraf Kutusu */}
-      <div style={{
-        flex: 1,
-        height: '300px',
-        background: 'lightgray',
-        border: '2px dashed gray',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: '8px',
-        fontWeight: 'bold',
-        textAlign: 'center',
-        padding: '10px'
-      }}>
-         Makine Alım & Bakım Masraf Oranı
+      {/* ALT */}
+      <div style={{ display: "flex", gap: 15 }}>
+        <div style={bigBox}>Fabrika Haritası</div>
+        <div style={bigBox}>Masraf Analizi</div>
       </div>
 
     </div>
-  </div>
-);
+  );
+}
 
-export default Dashboard;
+const boxStyle = {
+  flex: 1,
+  height: 120,
+  background: "#f5f5f5",
+  borderRadius: 10,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: "bold",
+  border: "1px solid #ddd",
+};
+
+const bigBox = {
+  flex: 1,
+  height: 280,
+  background: "#e9e9e9",
+  borderRadius: 10,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: "bold",
+  border: "1px solid #ccc",
+};
