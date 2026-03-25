@@ -6,7 +6,7 @@ export default function MakineDetay() {
 
     return (
         <div style={{ padding: 20 }}>
-            <h2>📊 Makine Yönetici Paneli</h2>
+            <h2>Makine Yönetici Paneli</h2>
 
             <p><b>Makine ID:</b> {id}</p>
 
@@ -16,10 +16,10 @@ export default function MakineDetay() {
                 border: "1px solid #ccc",
                 borderRadius: 8
             }}>
-                <p>🔧 Durum: Aktif</p>
-                <p>⚙️ Son bakım: 12.03.2026</p>
-                <p>📈 Çalışma süresi: 148 saat</p>
-                <p>⚠️ Uyarı: Yok</p>
+                <p> Durum: Aktif</p>
+                <p> Son bakım: 12.03.2026</p>
+                <p> Çalışma süresi: 148 saat</p>
+                <p> Uyarı: Yok</p>
             </div>
         </div>
     );

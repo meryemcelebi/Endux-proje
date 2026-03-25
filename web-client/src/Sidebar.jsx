@@ -1,9 +1,7 @@
-import React from "react";
+
 import { Link } from "react-router-dom";
 
 const Sidebar = () => {
-  const role = localStorage.getItem("role") || "guest";
-
   return (
     <div
       style={{
@@ -11,7 +9,7 @@ const Sidebar = () => {
         background: "darkslategray",
         color: "white",
         height: "100vh",
-        padding: "20px",
+        padding: "20px"
       }}
     >
       <h3>Menü</h3>
@@ -21,20 +19,16 @@ const Sidebar = () => {
           display: "flex",
           flexDirection: "column",
           gap: "15px",
-          marginTop: "20px",
+          marginTop: "20px"
         }}
       >
-        {/* HERKES */}
-        <Link to="/dashboard" style={linkStyle}>
-          Dashboard
+        <Link to="/" style={linkStyle}>
+          Ana Kontrol Paneli
         </Link>
 
-        {/* SADECE ADMIN */}
-        {role === "admin" && (
-          <Link to="/makineler" style={linkStyle}>
-            Makineler
-          </Link>
-        )}
+        <Link to="/makineler" style={linkStyle}>
+          Makineler
+        </Link>
       </nav>
     </div>
   );
@@ -42,7 +36,7 @@ const Sidebar = () => {
 
 const linkStyle = {
   color: "white",
-  textDecoration: "none",
+  textDecoration: "none"
 };
 
 export default Sidebar;

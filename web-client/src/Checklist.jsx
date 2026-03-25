@@ -1,61 +1,38 @@
-/*import React from "react";
-import { useParams } from "react-router-dom";
 
-export default function Checklist() {
-  const { id } = useParams();
-
-  return (
-    <div style={{ padding: 20 }}>
-      <h2>🔧 Makine Checklist</h2>
-      <p>Makine ID: {id}</p>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <p>Makine çalışıyor mu?</p>
-        <p>Ses normal mi?</p>
-        <p>Titreşim var mı?</p>
-        <p>Yağ seviyesi yeterli mi?</p>
-      </div>
-
-      <button onClick={() => alert("Kaydedildi ✔")}>
-        Tamamla
-      </button>
-    </div>
-  );
-}*/
 import React, { useState } from "react";
 import { useParams } from "react-router-dom";
 
-export default function Checklist() {
-  const { id } = useParams();
+export default function Checklist() { /*Checklist adında component oluşturulur*/
+  const { id } = useParams();        /*urlden gelen id alınır*/
 
-  const [items, setItems] = useState([
+  const [items, setItems] = useState([   /*checklist sorularını tutar*/
     { text: "Makine çalışıyor mu?", value: null },
     { text: "Ses normal mi?", value: null },
     { text: "Titreşim var mı?", value: null },
     { text: "Yağ seviyesi yeterli mi?", value: null },
   ]);
 
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(false); /*kaydedildi mi bilgisini tutar*/
 
-  const setValue = (index, val) => {
-    const copy = [...items];
-    copy[index].value = val;
-    setItems(copy);
+  const setValue = (index, val) => {  /*Bir sorunun cevabını güncelleyen fonksiyon*/
+    const copy = [...items];     /*tems array'inin kopyası alınır (direkt değiştirmemek için)*/
+    copy[index].value = val;     /*seçilen sorunun value'su değiştirilir*/
+    setItems(copy);              /*state güncellenir*/
     setSaved(false); // değişiklik olunca tekrar kaydedilmemiş olur
   };
 
-  const saveChecklist = () => {
-    const data = {
-      machineId: id,
-      date: new Date().toISOString(),
-      results: items,
-    };
+  const saveChecklist = () => {   // Checklist'i kaydeden fonksiyon
+    const data = {                // kaydedilecek veri hazırlanır
+      machineId: id,               // hangi makineye ait (URL'den gelen id)
+      date: new Date().toISOString(),  // kaydedilme zamanı 
+      results: items,                // tüm sorular ve cevaplar
+    }; 
 
-    // 💾 şimdilik localStorage'a kaydediyoruz
-    localStorage.setItem(`checklist-${id}`, JSON.stringify(data));
+    //  şimdilik localStorage'a kaydediyoruz
+    localStorage.setItem(`checklist-${id}`, JSON.stringify(data));   // veriyi tarayıcıya kaydeder
 
-    setSaved(true);
-    alert("Checklist kaydedildi ✔");
+    setSaved(true);                    // kaydedildi durumunu true yapar
+    alert("Checklist kaydedildi ✔");  // kullanıcıya uyarı verir
   };
 
   return (
@@ -64,15 +41,15 @@ export default function Checklist() {
       <h2>Checklist</h2>
       <p>Makine ID: {id}</p>
 
-      {items.map((item, i) => (
-        <div key={i} style={{ marginBottom: 15 }}>
-          <p>{item.text}</p>
+      {items.map((item, i) => (       // tüm sorular üzerinde dönülür
+        <div key={i} style={{ marginBottom: 15 }}>   
+          <p>{item.text}</p>           {/* soru metni gösterilir*/}
 
           <button
             onClick={() => setValue(i, "EVET")}
             style={{
               marginRight: 10,
-              background: item.value === "EVET" ? "green" : "#d8d5e5ff",
+              background: item.value === "EVET" ? "green" : "#d8d5e5ff",  // eğer EVET seçildiyse yeşil olur
               color: item.value === "EVET" ? "white" : "black",
               padding: 8
             }}
@@ -83,7 +60,7 @@ export default function Checklist() {
           <button
             onClick={() => setValue(i, "HAYIR")}
             style={{
-              background: item.value === "HAYIR" ? "red" : "#d8d5e5ff",
+              background: item.value === "HAYIR" ? "red" : "#d8d5e5ff",  
               color: item.value === "HAYIR" ? "white" : "black",
               padding: 8
             }}
@@ -93,9 +70,9 @@ export default function Checklist() {
         </div>
       ))}
 
-      {/* 🔥 KAYDET BUTONU */}
+      {/*  KAYDET BUTONU */}  
       <button
-        onClick={saveChecklist}
+        onClick={saveChecklist}     // tıklanınca kaydet fonksiyonu çalışır
         style={{
           marginTop: 20,
           padding: "10px 20px",
