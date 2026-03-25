@@ -276,7 +276,7 @@ docker compose up --build
 # Servisleri durdur
 docker compose down
 
-# Servisleri durdur + verileri sil (TEMİZ BAŞLANGIÇ)
+# Servisleri durdur + verileri sil (TEMİZ BAŞLANGIÇ) // (veri tabnını sıfırlar)
 docker compose down -v
 
 # Tek bir servisin loglarını gör

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { makineEkle, qrileMakineGetir } from "../controllers/makineKontrol";
-import{oturumKontrol, rolKontrol }from "../middlewares/yetki";
+import { oturumKontrol, rolKontrol } from "../middlewares/yetki";
 
 const router = Router();
 
@@ -8,6 +8,6 @@ const router = Router();
 router.post("/makine-ekle", oturumKontrol, rolKontrol("admin", "yönetici"), makineEkle);
 
 
-router.get("qr/:qr_uuid", oturumKontrol, rolKontrol("admin", "yönetici", "operatör"), qrileMakineGetir);
+router.get("/qr/:qr_uuid", oturumKontrol, rolKontrol("admin", "yönetici", "operatör"), qrileMakineGetir);
 
 export default router;

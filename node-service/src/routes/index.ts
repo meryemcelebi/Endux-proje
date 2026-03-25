@@ -1,8 +1,9 @@
 import { Router } from "express";
 import { login, benKimim } from '../controllers/oturumYonetici';
 import { kullaniciOlustur } from '../controllers/kullaniciYonetici';
-import { oturumKontrol,rolKontrol } from '../middlewares/yetki';
+import { oturumKontrol, rolKontrol } from '../middlewares/yetki';
 import { formKaydet, sablonGetir } from '../controllers/checklistYonetici';
+import makineRoutes from './makineRoutes';
 
 
 const router = Router();
@@ -20,7 +21,7 @@ router.post("/checklist/form", oturumKontrol, formKaydet);
 router.get("/checklist/sablon/:sablon_id", oturumKontrol, sablonGetir);
 
 
-
+router.use("/makineler", makineRoutes);
 
 
 
