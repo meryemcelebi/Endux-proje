@@ -33,13 +33,27 @@ regresyon_kolonlari = joblib.load('model_2_kolonlari.pkl')
 print("Modeller Başarıyla Yüklendi! ✅")
 
 # --- 2. PYDANTIC GÜVENLİK ZIRHI (BİZİM KOD) ---
+
+# Gelen Veri Şeması (Input)
 class MakineVerisi(BaseModel):
+    makine_id: int = Field(..., description="Veritabanındaki makine ID'si") # YENİ EKLENDİ
+    form_id: int = Field(..., description="Günlük kontrol formunun ID'si")   # YENİ EKLENDİ
     makine_turu: str
     tahmini_omur_saati: int = Field(..., gt=0, description="Makinenin fabrika ömrü (Sıfırdan büyük olmalı)")
     toplam_calisma_saati: float = Field(..., ge=0, description="Mevcut çalışma saati (Eksi olamaz)")
     sicaklik: float = Field(..., ge=-20, le=200, description="Sıcaklık değeri -20 ile 200 derece arasında olmalıdır.")
     titresim: int = Field(..., ge=0, le=10, description="Titreşim şiddeti 0 ile 10 arasında olmalıdır.")
     makine_degeri: float = Field(..., gt=0)
+
+# Giden Yanıt Şeması (Output) - YENİ EKLENDİ
+class TahminSonucu(BaseModel):
+    makine_id: int
+    form_id: int
+    makine: str
+    ariza_riski: bool
+    tahmini_durus_suresi_saat: float
+    tahmini_onarim_maliyeti_tl: float
+    mesaj: str
 
 # Meryem'in Sağlık Kontrolü (Health Check - DOKUNMUYORUZ)
 @app.get("/health")
@@ -52,10 +66,10 @@ def read_health():
     }
 
 # --- 3. BÜYÜK YAPAY ZEKA MOTORU (BİZİM KOD) ---
-@app.post("/predict")
+@app.post("/predict", response_model=TahminSonucu) # YENİ EKLENDİ: Çıktı formatını zorunlu kıldık
 def make_prediction(veri: MakineVerisi):
     # Meryem'in log sistemini kullanarak konsola bilgi düşüyoruz
-    logger.info(f"Yeni AI tahmini yapiliyor: {veri.makine_turu}") 
+    logger.info(f"Yeni AI tahmini yapiliyor: Makine ID {veri.makine_id} - {veri.makine_turu}") 
     
     # 1. Gelen Veriyi Tabloya Çevir
     girdi_df = pd.DataFrame([veri.model_dump()])
@@ -84,11 +98,13 @@ def make_prediction(veri: MakineVerisi):
         tahmini_maliyet = 0.0
         mesaj = "✅ Makine sağlıklı çalışıyor."
         
-    # 7. Sonucu Fırlat
-    return {
-        "makine": veri.makine_turu,
-        "ariza_riski": bool(ariza_tahmini),
-        "tahmini_durus_suresi_saat": tahmini_durus,
-        "tahmini_onarim_maliyeti_tl": tahmini_maliyet,
-        "mesaj": mesaj
-    }
+    # 7. Sonucu Fırlat (Yeni şemaya uygun şekilde IDs ile birlikte)
+    return TahminSonucu(
+        makine_id=veri.makine_id,
+        form_id=veri.form_id,
+        makine=veri.makine_turu,
+        ariza_riski=bool(ariza_tahmini),
+        tahmini_durus_suresi_saat=tahmini_durus,
+        tahmini_onarim_maliyeti_tl=tahmini_maliyet,
+        mesaj=mesaj
+    )
