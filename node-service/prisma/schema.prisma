@@ -15,6 +15,7 @@ model kullanici {
   soyad                String                 @db.Char(50)
   telefon              String                 @db.Char(20)
   eposta               String?                @unique(map: "idx_kullanici_eposta") @db.VarChar(100)
+  kullanici_adi        String                 @unique @db.VarChar(100)
   sifre                String                 @db.VarChar(255)
   aktiflik             Boolean?
   baslama_tarihi       DateTime?              @db.Date
@@ -338,9 +339,9 @@ model tedarikci {
 }
 
 enum du_ort_yuk {
-  D___K  @map("DÜŞÜK")
+  DUSUK  @map("DÜŞÜK")
   ORTA
-  Y_KSEK @map("YÜKSEK")
+  YUKSEK @map("YÜKSEK")
 
   @@map("du-ort-yuk")
 }
