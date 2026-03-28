@@ -26,7 +26,7 @@ export default function Checklist() { /*Checklist adında component oluşturulur
       machineId: id,               // hangi makineye ait (URL'den gelen id)
       date: new Date().toISOString(),  // kaydedilme zamanı 
       results: items,                // tüm sorular ve cevaplar
-    }; 
+    };
 
     //  şimdilik localStorage'a kaydediyoruz
     localStorage.setItem(`checklist-${id}`, JSON.stringify(data));   // veriyi tarayıcıya kaydeder
@@ -36,56 +36,143 @@ export default function Checklist() { /*Checklist adında component oluşturulur
   };
 
   return (
-    <div style={{ padding: 20 }}>
+    <div style={sayfaStil}>   {/*arka plan*/}
+      <div style={konteynerStil}> {/*içeriği ortalar*/}
 
-      <h2>Checklist</h2>
-      <p>Makine ID: {id}</p>
+        {/* BAŞLIK */}
+        <div style={baslikStil}>
+          <h2 style={{ margin: 0, color: "white", fontSize: "22px" }}> Operatör Checklist</h2>
+          <div style={etiketStil}>Makine ID: {id}</div>    {/*makine idsini yanda veriri*/}
+        </div>
 
-      {items.map((item, i) => (       // tüm sorular üzerinde dönülür
-        <div key={i} style={{ marginBottom: 15 }}>   
-          <p>{item.text}</p>           {/* soru metni gösterilir*/}
+        {/* CHECKLIST KART */}
+        <div style={kartStil}>
+          <h3 style={{ color: "navy", marginTop: 0, marginBottom: "20px", fontSize: "18px" }}>
+            Kontrol Soruları
+          </h3>
 
+          {items.map((item, i) => (       // tüm sorular üzerinde dönülür
+            <div key={i} style={soruSatirStil}>
+              <span style={soruTextStil}>{i + 1}. {item.text}</span> {/*soru listesi*/}
+
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  onClick={() => setValue(i, "EVET")}
+                  style={{
+                    ...cevapButonStil,
+                    background: item.value === "EVET" ? "#2e7d32" : "#f5f5f5",
+                    color: item.value === "EVET" ? "white" : "#333",
+                    border: item.value === "EVET" ? "2px solid #2e7d32" : "2px solid #ddd",
+                  }}
+                >
+                  ✓ EVET
+                </button>
+
+                <button
+                  onClick={() => setValue(i, "HAYIR")}
+                  style={{
+                    ...cevapButonStil,
+                    background: item.value === "HAYIR" ? "#c62828" : "#f5f5f5",
+                    color: item.value === "HAYIR" ? "white" : "#333",
+                    border: item.value === "HAYIR" ? "2px solid #c62828" : "2px solid #ddd",
+                  }}
+                >
+                  ✗ HAYIR
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {/*  KAYDET BUTONU */}
           <button
-            onClick={() => setValue(i, "EVET")}
+            onClick={saveChecklist}     // tıklanınca kaydet fonksiyonu çalışır
             style={{
-              marginRight: 10,
-              background: item.value === "EVET" ? "green" : "#d8d5e5ff",  // eğer EVET seçildiyse yeşil olur
-              color: item.value === "EVET" ? "white" : "black",
-              padding: 8
+              ...kaydetButonStil,
+              background: saved ? "#2e7d32" : "navy",
             }}
           >
-            EVET
-          </button>
-
-          <button
-            onClick={() => setValue(i, "HAYIR")}
-            style={{
-              background: item.value === "HAYIR" ? "red" : "#d8d5e5ff",  
-              color: item.value === "HAYIR" ? "white" : "black",
-              padding: 8
-            }}
-          >
-            HAYIR
+            {saved ? "✔ Kaydedildi" : "Kaydet"}
           </button>
         </div>
-      ))}
-
-      {/*  KAYDET BUTONU */}  
-      <button
-        onClick={saveChecklist}     // tıklanınca kaydet fonksiyonu çalışır
-        style={{
-          marginTop: 20,
-          padding: "10px 20px",
-          background: saved ? "green" : "#5134e1ff",
-          color: "white",
-          border: "none",
-          borderRadius: 8,
-          cursor: "pointer"
-        }}
-      >
-        {saved ? "Kaydedildi ✔" : "Kaydet"}
-      </button>
-
+      </div>
     </div>
   );
 }
+
+/* STILLER */
+const sayfaStil = {
+  minHeight: "100vh",  //ekran boyu kadar yer kaplar
+  background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
+  padding: "30px",
+  boxSizing: "border-box",
+};
+
+const konteynerStil = {
+  maxWidth: "700px",  //ortalar
+  margin: "0 auto",
+};
+
+const baslikStil = {   //üst başlık
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: "25px",
+  padding: "20px 25px",
+  background: "rgba(255,255,255,0.1)",
+  borderRadius: "12px",
+  backdropFilter: "blur(10px)",
+};
+
+const etiketStil = {
+  padding: "6px 16px",
+  background: "rgba(255,255,255,0.2)",
+  color: "white",
+  borderRadius: "20px",
+  fontSize: "13px",
+  fontWeight: "bold",
+};
+
+const kartStil = {
+  background: "white",
+  padding: "30px",
+  borderRadius: "12px",
+  boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+};
+
+const soruSatirStil = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: "15px 20px",
+  marginBottom: "12px",
+  background: "#f8f9fa",
+  borderRadius: "10px",
+  borderLeft: "4px solid navy",
+};
+
+const soruTextStil = {
+  fontWeight: "bold",
+  color: "#333",
+  fontSize: "15px",
+};
+
+const cevapButonStil = {
+  padding: "8px 18px",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontWeight: "bold",
+  fontSize: "13px",
+  transition: "all 0.2s",
+};
+
+const kaydetButonStil = {
+  width: "100%",
+  padding: "14px",
+  color: "white",
+  border: "none",
+  borderRadius: "8px",
+  fontSize: "16px",
+  fontWeight: "bold",
+  cursor: "pointer",
+  marginTop: "20px",
+};

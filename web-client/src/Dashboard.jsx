@@ -1,32 +1,41 @@
+import { useNavigate } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+
   return (
-    <div>
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* ÜST NAVBAR */}
       <Navbar />
 
-      <div style={{ display: "flex" }}>
-        
+      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+
         {/* SOL MENÜ */}
         <Sidebar />
 
         {/* ANA İÇERİK */}
-        <div style={{ flex: 1, padding: "20px" }}>
-          
-         
+        <div style={{
+          flex: 1,
+          padding: "20px",
+          boxSizing: "border-box",
+          display: "flex",
+          flexDirection: "column",
+          gap: "20px",
+          overflow: "auto"
+        }}>
 
           {/* KPI KUTULARI */}
-          <div style={{ display: "flex", gap: "20px" }}>
+          <div style={{ display: "flex", gap: "20px", width: "100%", minHeight: "120px" }}>
             <div style={kpiBox}>Günlük Kritik Uyarılar</div>
             <div style={kpiBox}>Bekleyen Bakım Onayları</div>
             <div style={kpiBox}>Genel OEE Skoru</div>
           </div>
 
           {/* ALT ALAN */}
-          <div style={{ display: "flex", gap: "20px", marginTop: "20px" }}>
-            
+          <div style={{ display: "flex", gap: "20px", width: "100%", flex: 1, minHeight: "300px" }}>
+
             {/* HARİTA */}
             <div style={mapBox}>
               Buraya Fabrika Haritası Gelecek
@@ -53,12 +62,16 @@ const kpiBox = {
   textAlign: "center",
   borderRadius: "8px",  //Köşeleri yuvarlatır
   fontWeight: "bold",   //Yazıyı kalın yapar
-  color: "navy"         //Yazı rengi lacivert
+  fontSize: "18px",     //Yazı boyutu büyütüldü
+  color: "navy",        //Yazı rengi lacivert
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  boxSizing: "border-box"
 };
 
 const mapBox = { //harita kutusu
-  flex: 2,       
-  height: "300px",
+  flex: 2,
   background: "lightgray",
   display: "flex",  //İçindeki elemanları flex sistemiyle hizalar
   alignItems: "center",  //Dikeyde ortalar (yukarı-aşağı)
@@ -71,7 +84,6 @@ const mapBox = { //harita kutusu
 
 const costBox = { //masraf kutusu
   flex: 1,
-  height: "300px",
   background: "lightgray",
   display: "flex",
   alignItems: "center",
@@ -80,6 +92,6 @@ const costBox = { //masraf kutusu
   fontWeight: "bold",
   textAlign: "center",
   padding: "10px",
-  boxSizing: "border-box" ,// Padding'in kutuyu büyütmesini engellendi
+  boxSizing: "border-box",// Padding'in kutuyu büyütmesini engellendi
   color: "navy"
 };

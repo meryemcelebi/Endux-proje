@@ -43,40 +43,113 @@ export default function ChecklistGiris() {
     // yönlendirme
     if (role === "yönetici") {
       navigate(`/makine/${id}`);
-    } 
+    }
     else if (role === "operatör") {
       navigate(`/checklist/${id}`);
-    } 
+    }
     else if (role === "servis") {
       navigate(`/servis/${id}`);
     }
   };
 
   return (
-    <div style={{ padding: 20 }}>
-      <h2>Makine Girişi</h2>
-      <p>Makine ID: {id}</p>
+    <div style={sayfaStil}>
+      <div style={kartStil}>
+        {/* BAŞLIK */}
+        <div style={{ textAlign: "center", marginBottom: "30px" }}>
+          <h1 style={{ color: "navy", margin: 0, fontSize: "28px" }}>ENDUX</h1>
+          <p style={{ color: "gray", marginTop: "5px" }}>Makine Giriş Paneli</p>
+          <div style={etiketStil}>Makine ID: {id}</div>
+        </div>
 
-      {/*  kullanıcı adı (rol yazılıyor) */}
-      <input
-        type="text"
-        placeholder="operatör / yönetici / servis"
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}   // kullanıcı yazdıkça username güncellenir
+        {/*  kullanıcı adı (rol yazılıyor) */}
+        <div style={{ marginBottom: "15px" }}>
+          <label style={etiketYaziStil}>Kullanıcı Rolü</label>
+          <input
+            type="text"
+            placeholder="operatör / yönetici / servis"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            style={inputStil}
+          />
+        </div>
 
-        style={{ display: "block", marginBottom: 10 }}   // alt alta gelsin diye block + boşluk
-      />
+        {/*  şifre */}
+        <div style={{ marginBottom: "20px" }}>
+          <label style={etiketYaziStil}>Şifre</label>
+          <input
+            type="password"
+            placeholder="Şifrenizi girin"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={inputStil}
+          />
+        </div>
 
-      {/*  şifre */}
-      <input
-        type="password"
-        placeholder="Şifre gir"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}   // yazdıkça password güncellenir
-        style={{ display: "block", marginBottom: 10 }}
-      />
-
-      <button onClick={handleLogin}>Giriş</button>      
-          </div>
+        <button onClick={handleLogin} style={butonStil}>Giriş Yap</button>
+      </div>
+    </div>
   );
 }
+
+/* STILLER - Login sayfasıyla uyumlu */
+const sayfaStil = {
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  height: "100vh",
+  background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
+  margin: 0,
+};
+
+const kartStil = {
+  background: "white",
+  padding: "40px",
+  borderRadius: "12px",
+  boxShadow: "0 8px 30px rgba(0, 0, 0, 0.3)",
+  width: "380px",
+  maxWidth: "90%",
+};
+
+const etiketStil = {
+  display: "inline-block",
+  marginTop: "10px",
+  padding: "6px 16px",
+  background: "#e8eaf6",
+  color: "navy",
+  borderRadius: "20px",
+  fontSize: "13px",
+  fontWeight: "bold",
+};
+
+const etiketYaziStil = {
+  display: "block",
+  marginBottom: "6px",
+  fontWeight: "bold",
+  color: "#333",
+  fontSize: "14px",
+};
+
+const inputStil = {
+  width: "100%",
+  padding: "12px",
+  border: "2px solid #ddd",
+  borderRadius: "8px",
+  fontSize: "14px",
+  boxSizing: "border-box",
+  outline: "none",
+  color: "#333",
+  background: "#fafafa",
+};
+
+const butonStil = {
+  width: "100%",
+  padding: "14px",
+  background: "navy",
+  color: "white",
+  border: "none",
+  borderRadius: "8px",
+  fontSize: "16px",
+  fontWeight: "bold",
+  cursor: "pointer",
+};

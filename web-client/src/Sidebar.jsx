@@ -22,12 +22,16 @@ const Sidebar = () => {
           marginTop: "20px"
         }}
       >
-        <Link to="/" style={linkStyle}>
+        <Link to="/dashboard" style={linkStyle}>
           Ana Kontrol Paneli
         </Link>
 
         <Link to="/makineler" style={linkStyle}>
           Makineler
+        </Link>
+
+        <Link to="/kisi-ekle" style={linkStyle}>
+          Kişi Ekle
         </Link>
       </nav>
     </div>
