@@ -16,38 +16,40 @@ export default function ChecklistGiris() {
   const [password, setPassword] = useState("");   // şifre state'i
 
 
-  const PASSWORDS = {   // rol → şifre eşleşmeleri
-    operatör: "1111",
-    yönetici: "9999",
-    servis: "5555",
-  };
-
-  const handleLogin = () => {   // giriş kontrol fonksiyonu
+  const handleLogin = () => {  
     if (!username || !password) {
       alert("Lütfen tüm alanları doldur !");
       return;
     }
 
-    const role = username.toLowerCase();    // kullanıcı adını küçük harfe çevirir
+    const roleString = username.toLowerCase();    
+    let assignedRoleId = 0;
 
-    if (!PASSWORDS[role]) {
-      alert("Geçersiz kullanıcı adı !");
+    // JWT Otorizasyon / Rol Yönetimi Mock'u
+    if (roleString === "yönetici") assignedRoleId = 1;
+    else if (roleString === "servis" || roleString === "teknisyen") assignedRoleId = 2;
+    else if (roleString === "operatör") assignedRoleId = 3;
+    else {
+      alert("Geçersiz kullanıcı adı türü (Mevcut roller: yönetici, servis, operatör)");
       return;
     }
 
-    if (PASSWORDS[role] !== password) {
-      alert("Şifre yanlış !");
-      return;
-    }
+    // Backend (Prisma auth) Simülasyonu
+    const mockToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.machinelogintoken.key";
+    const userPayload = { kullanici_id: 2, rol_id: assignedRoleId, isim: "Saha Elemanı" };
+    
+    localStorage.setItem("auth_token", mockToken);
+    localStorage.setItem("user_payload", JSON.stringify(userPayload));
+    localStorage.setItem("girisYapildi", "true");
 
-    // yönlendirme
-    if (role === "yönetici") {
+    // Yönlendirme
+    if (assignedRoleId === 1) { // Yönetici Detay Görür
       navigate(`/makine/${id}`);
     }
-    else if (role === "operatör") {
+    else if (assignedRoleId === 3) { // Operatör Checklist Yanıtlar
       navigate(`/checklist/${id}`);
     }
-    else if (role === "servis") {
+    else if (assignedRoleId === 2) { // Teknisyen Servis kaydı girer
       navigate(`/servis/${id}`);
     }
   };
@@ -64,7 +66,7 @@ export default function ChecklistGiris() {
 
         {/*  kullanıcı adı (rol yazılıyor) */}
         <div style={{ marginBottom: "15px" }}>
-          <label style={etiketYaziStil}>Kullanıcı Rolü</label>
+          <label style={etiketYaziStil}>Kullanıcı Adı</label>
           <input
             type="text"
             placeholder="operatör / yönetici / servis"

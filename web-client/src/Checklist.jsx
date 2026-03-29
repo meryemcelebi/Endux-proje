@@ -1,48 +1,61 @@
-
 import React, { useState } from "react";
 import { useParams } from "react-router-dom";
 
-export default function Checklist() { /*Checklist adında component oluşturulur*/
-  const { id } = useParams();        /*urlden gelen id alınır*/
+export default function Checklist() { 
+  const { id } = useParams();
 
-  const [items, setItems] = useState([   /*checklist sorularını tutar*/
-    { text: "Makine çalışıyor mu?", value: null },
-    { text: "Ses normal mi?", value: null },
-    { text: "Titreşim var mı?", value: null },
-    { text: "Yağ seviyesi yeterli mi?", value: null },
+  const FORM_ID = 1; // Backend için örnek form kimliği
+  
+  // Mock 'kontrol_maddesi' array (Veritabanı bazlı yapı)
+  const [kontrolMaddeleri] = useState([
+    { madde_id: 101, metin: "Makine çalışıyor mu?" },
+    { madde_id: 102, metin: "Ses normal mi?" },
+    { madde_id: 103, metin: "Titreşim var mı?" },
+    { madde_id: 104, metin: "Yağ seviyesi yeterli mi?" },
   ]);
 
-  const [saved, setSaved] = useState(false); /*kaydedildi mi bilgisini tutar*/
+  // Prisma 'form_madde_cevap' formatına uyumlu state listesi 
+  const [cevaplar, setCevaplar] = useState([]);
+  const [saved, setSaved] = useState(false);
 
-  const setValue = (index, val) => {  /*Bir sorunun cevabını güncelleyen fonksiyon*/
-    const copy = [...items];     /*tems array'inin kopyası alınır (direkt değiştirmemek için)*/
-    copy[index].value = val;     /*seçilen sorunun value'su değiştirilir*/
-    setItems(copy);              /*state güncellenir*/
-    setSaved(false); // değişiklik olunca tekrar kaydedilmemiş olur
+  const setCevap = (madde_id, cevapBool) => {
+    const existing = cevaplar.find(c => c.madde_id === madde_id);
+    if (existing) {
+      setCevaplar(cevaplar.map(c => c.madde_id === madde_id ? { ...c, cevap: cevapBool } : c));
+    } else {
+      setCevaplar([...cevaplar, { form_id: FORM_ID, madde_id: madde_id, cevap: cevapBool }]);
+    }
+    setSaved(false);
   };
 
-  const saveChecklist = () => {   // Checklist'i kaydeden fonksiyon
-    const data = {                // kaydedilecek veri hazırlanır
-      machineId: id,               // hangi makineye ait (URL'den gelen id)
-      date: new Date().toISOString(),  // kaydedilme zamanı 
-      results: items,                // tüm sorular ve cevaplar
+  const saveChecklist = () => {
+    if (cevaplar.length !== kontrolMaddeleri.length) {
+      alert("Lütfen tüm soruları yanıtlayın!");
+      return;
+    }
+    
+    // Backend API'a iletilmesi planlanan yapı
+    const payload = {
+      makine_id: id,
+      tarih: new Date().toISOString(),
+      form_madde_cevap: cevaplar
     };
 
-    //  şimdilik localStorage'a kaydediyoruz
-    localStorage.setItem(`checklist-${id}`, JSON.stringify(data));   // veriyi tarayıcıya kaydeder
+    localStorage.setItem(`checklist-${id}`, JSON.stringify(payload));
+    console.log("Backend'e Gönderilecek Payload:", payload);
 
-    setSaved(true);                    // kaydedildi durumunu true yapar
-    alert("Checklist kaydedildi ✔");  // kullanıcıya uyarı verir
+    setSaved(true);
+    alert("Checklist formatlanarak kaydedildi ✔");
   };
 
   return (
-    <div style={sayfaStil}>   {/*arka plan*/}
-      <div style={konteynerStil}> {/*içeriği ortalar*/}
+    <div style={sayfaStil}>
+      <div style={konteynerStil}>
 
         {/* BAŞLIK */}
         <div style={baslikStil}>
           <h2 style={{ margin: 0, color: "white", fontSize: "22px" }}> Operatör Checklist</h2>
-          <div style={etiketStil}>Makine ID: {id}</div>    {/*makine idsini yanda veriri*/}
+          <div style={etiketStil}>Makine ID: {id}</div>
         </div>
 
         {/* CHECKLIST KART */}
@@ -51,41 +64,44 @@ export default function Checklist() { /*Checklist adında component oluşturulur
             Kontrol Soruları
           </h3>
 
-          {items.map((item, i) => (       // tüm sorular üzerinde dönülür
-            <div key={i} style={soruSatirStil}>
-              <span style={soruTextStil}>{i + 1}. {item.text}</span> {/*soru listesi*/}
+          {kontrolMaddeleri.map((madde, i) => {
+            const mevcutCevap = cevaplar.find(c => c.madde_id === madde.madde_id)?.cevap;
 
-              <div style={{ display: "flex", gap: "10px" }}>
-                <button
-                  onClick={() => setValue(i, "EVET")}
-                  style={{
-                    ...cevapButonStil,
-                    background: item.value === "EVET" ? "#2e7d32" : "#f5f5f5",
-                    color: item.value === "EVET" ? "white" : "#333",
-                    border: item.value === "EVET" ? "2px solid #2e7d32" : "2px solid #ddd",
-                  }}
-                >
-                  ✓ EVET
-                </button>
+            return (
+              <div key={madde.madde_id} style={soruSatirStil}>
+                <span style={soruTextStil}>{i + 1}. {madde.metin}</span>
 
-                <button
-                  onClick={() => setValue(i, "HAYIR")}
-                  style={{
-                    ...cevapButonStil,
-                    background: item.value === "HAYIR" ? "#c62828" : "#f5f5f5",
-                    color: item.value === "HAYIR" ? "white" : "#333",
-                    border: item.value === "HAYIR" ? "2px solid #c62828" : "2px solid #ddd",
-                  }}
-                >
-                  ✗ HAYIR
-                </button>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button
+                    onClick={() => setCevap(madde.madde_id, true)}
+                    style={{
+                      ...cevapButonStil,
+                      background: mevcutCevap === true ? "#2e7d32" : "#f5f5f5",
+                      color: mevcutCevap === true ? "white" : "#333",
+                      border: mevcutCevap === true ? "2px solid #2e7d32" : "2px solid #ddd",
+                    }}
+                  >
+                    ✓ EVET
+                  </button>
+
+                  <button
+                    onClick={() => setCevap(madde.madde_id, false)}
+                    style={{
+                      ...cevapButonStil,
+                      background: mevcutCevap === false ? "#c62828" : "#f5f5f5",
+                      color: mevcutCevap === false ? "white" : "#333",
+                      border: mevcutCevap === false ? "2px solid #c62828" : "2px solid #ddd",
+                    }}
+                  >
+                    ✗ HAYIR
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
-          {/*  KAYDET BUTONU */}
           <button
-            onClick={saveChecklist}     // tıklanınca kaydet fonksiyonu çalışır
+            onClick={saveChecklist}
             style={{
               ...kaydetButonStil,
               background: saved ? "#2e7d32" : "navy",
