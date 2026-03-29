@@ -28,7 +28,7 @@ catch (error) {
 }
 }
 
-//Rol bazlı yetkilendirme|| "admin","yönetici","operatör" 
+// Rol bazlı yetkilendirme — Geçerli roller: "YONETICI", "OPERATOR", "TEKNISYEN"
 export function rolKontrol(...roles: string[]) {
     return (req: Request, res: Response, next: NextFunction) => {
         if (!req.user || !roles.includes(req.user.rol)) {

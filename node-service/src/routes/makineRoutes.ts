@@ -1,13 +1,21 @@
 import { Router } from "express";
 import { makineEkle, qrileMakineGetir } from "../controllers/makineKontrol";
-import{oturumKontrol, rolKontrol }from "../middlewares/yetki";
+import { oturumKontrol, rolKontrol } from "../middlewares/yetki";
 
 const router = Router();
 
-//Makine ekleme route'u (Sadece admin ve yönetici erişebilir)
-router.post("/makine-ekle", oturumKontrol, rolKontrol("admin", "yönetici"), makineEkle);
+// Makine ekleme (Sadece yönetici erişebilir)
+router.post("/makine-ekle",
+    oturumKontrol,
+    rolKontrol("YONETICI"),
+    makineEkle
+);
 
-
-router.get("qr/:qr_uuid", oturumKontrol, rolKontrol("admin", "yönetici", "operatör"), qrileMakineGetir);
+// QR ile makine bilgisi getir (Tüm roller erişebilir)
+router.get("/qr/:qr_uuid",
+    oturumKontrol,
+    rolKontrol("YONETICI", "OPERATOR", "TEKNISYEN"),
+    qrileMakineGetir
+);
 
 export default router;

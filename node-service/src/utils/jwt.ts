@@ -4,7 +4,7 @@ import {config} from '../config';
 
 export interface TokenPayload {
     userId: string;
-    email: string;
+    kullanici_adi: string;
     rol: string;
 
 

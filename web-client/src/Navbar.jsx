@@ -1,16 +1,18 @@
+
 import React from "react";
 
 const Navbar = () => {
   return (
     <div
       style={{
-        background: "navy",
+        background: "blue",
         color: "white",
         padding: "15px 20px",
         fontWeight: "bold",
+        textAlign: "center"
       }}
     >
-      SanayiAI - Kestirimci Bakım Yönetimi
+      ENDUX
     </div>
   );
 };
