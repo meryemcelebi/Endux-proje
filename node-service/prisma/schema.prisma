@@ -15,10 +15,10 @@ model kullanici {
   soyad                String                 @db.Char(50)
   telefon              String                 @db.Char(20)
   eposta               String?                @unique(map: "idx_kullanici_eposta") @db.VarChar(100)
-  kullanici_adi        String                 @unique @db.VarChar(100)
   sifre                String                 @db.VarChar(255)
   aktiflik             Boolean?
   baslama_tarihi       DateTime?              @db.Date
+  kullanici_adi        String                 @unique @db.VarChar(100)
   ai_model_log         ai_model_log[]
   bakim_kaydi          bakim_kaydi[]
   gunluk_kontrol_formu gunluk_kontrol_formu[]
@@ -106,7 +106,7 @@ model bakim_kaydi {
   bakim_turu      String[]        @db.VarChar
   bakim_tarihi    DateTime[]      @db.Date
   durus_suresi    DateTime?       @db.Date
-  bakim_maliyet   Decimal[]       @db.Decimal(6, 3)
+  bakim_maliyet   Decimal[]         @db.Decimal(6, 3)
   aciklama        String?
   ariza_id        Int
   ariza_kaydi     ariza_kaydi     @relation(fields: [ariza_id], references: [ariza_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ariza")
