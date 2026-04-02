@@ -8,14 +8,20 @@ export default function Login() {
   const [hata, setHata] = useState("");
 
   const handleGiris = (e) => {
-    e.preventDefault(); /*sayfanın yenilenmesini engeller*/
+    e.preventDefault(); 
 
-    /* Basit doğrulama - istersen burayı backend'e bağlarsın */
-    if (kullaniciAdi === "yönetici" && sifre === "1234") {
-      localStorage.setItem("girisYapildi", "true"); /*giriş bilgisini kaydet*/
-      navigate("/dashboard"); /*dashboard'a yönlendir*/
+    if (kullaniciAdi && sifre) {
+      // Backend (Prisma & Node.js auth işlemi simülasyonu)
+      const mockToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.mock_token.signature";
+      const userPayload = { kullanici_id: 1, rol_id: 1, isim: "Admin" };
+      
+      localStorage.setItem("auth_token", mockToken);
+      localStorage.setItem("user_payload", JSON.stringify(userPayload));
+      localStorage.setItem("girisYapildi", "true"); 
+      
+      navigate("/dashboard"); 
     } else {
-      setHata("Kullanıcı adı veya şifre hatalı!");
+      setHata("Kullanıcı adı veya şifre boş bırakılamaz!");
     }
   };
 

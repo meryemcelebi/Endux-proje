@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import prisma from "../config/prisma";
+import { IMakineOzellikleri } from '../interfaces/makine.types';
 
 // Makine Ekle — POST /api/makineler/makine-ekle
 export const makineEkle = async (req: Request, res: Response) => {
@@ -12,8 +13,11 @@ export const makineEkle = async (req: Request, res: Response) => {
             seri_no,
             satin_alma_tarihi,
             satin_alma_maliyeti,
-            aktiflik_durumu
+            aktiflik_durumu,
+            makine_ozellikleri
         } = req.body;
+
+        const ozellikler = makine_ozellikleri as IMakineOzellikleri;
 
         if (!makine_ad || !firma_id || !m_tur_id || !seri_no || !satin_alma_tarihi || !satin_alma_maliyeti || aktiflik_durumu === undefined) {
             return res.status(400).json({ hata: "Tüm alanlar zorunludur." });
@@ -43,7 +47,7 @@ export const makineEkle = async (req: Request, res: Response) => {
                 makine_qr: uuidv4(),
                 mevcut_risk_skoru: 0,
                 top_cal_sma_saati: [],
-                makine_ozellikleri: []
+                makine_ozellikleri: ozellikler ? [ozellikler as any] : []
             }
         });
 
@@ -178,6 +182,71 @@ export const qrileMakineGetir = async (req: Request, res: Response) => {
         res.status(500).json({
             success: false,
             message: "Makine bilgileri getirilirken bir hata oluştu."
+        });
+    }
+};
+
+export async function tumMakineBilgileriGetir(req: Request, res: Response) {
+    try {
+        const makineler = await prisma.makine.findMany({
+            include: {
+                firma: true,
+                makine_turu: true
+            }
+        });
+        res.status(200).json({
+            success: true,
+            message: "Tüm makineler başarıyla getirildi.",
+            data: makineler
+        });
+    } catch (error) {
+        console.error("Tüm makine bilgileri getirme hatası:", error);
+        res.status(500).json({
+            success: false,
+            message: "Tüm makine bilgileri getirilirken bir hata oluştu."
+        });
+    }
+};
+
+ export async function makineDetayGetir(req: Request, res: Response) {
+    try {
+        const makine_id=parseInt(req.params.id);
+        if (!makine_id) {
+            return res.status(400).json({
+                success: false,
+                message: "Geçersiz makine ID'si."
+            });
+        }
+        const makine = await prisma.makine.findUnique({
+            where: { makine_id },
+            include: {
+                firma: true,
+                makine_turu: true,
+                bakim_kaydi: true,
+                gunluk_kontrol_formu: true,
+                makine_kullanim: true,
+                ariza_kaydi: true
+            }
+
+        });
+        if (!makine) {
+            return res.status(404).json({
+                success: false,
+                message: "Belirtilen ID ile makine bulunamadı."
+            });
+            
+        }
+        res.status(200).json({
+            success: true,
+            message: "Makine detayları başarıyla getirildi.",
+            data: makine
+        });
+
+    } catch (error) {
+        console.error("Makine detayları getirme hatası:", error);
+        res.status(500).json({
+            success: false,
+            message: "Makine detayları getirilirken bir hata oluştu."
         });
     }
 };

@@ -4,39 +4,54 @@ import { useParams } from "react-router-dom";
 export default function Servis() {
   const { id } = useParams();
 
-  //  geçmiş kayıtlar (örnek veri)
-  const [history, setHistory] = useState([  //servis geçmişi listesi
+  const [history, setHistory] = useState([
     {
       date: "2026-03-20",
-      action: "Motor bakımı yapıldı",
-      note: "Yağ değişimi ve genel kontrol tamamlandı",
+      kullanici_id: 1,
+      firma_id: 2,
+      ariza_sebebi: "Genel Bakım",
+      bakim_maliyeti: 1500,
+      aciklama: "Yağ değişimi ve genel kontrol tamamlandı",
     },
     {
       date: "2026-03-10",
-      action: "Sensör değişimi",
-      note: "Hatalı sensör yenisi ile değiştirildi",
+      kullanici_id: 2,
+      firma_id: 1,
+      ariza_sebebi: "Sensör Hatası",
+      bakim_maliyeti: 800,
+      aciklama: "Hatalı sensör yenisi ile değiştirildi",
     },
   ]);
 
-  //  yeni kayıt
-  const [action, setAction] = useState(""); //işlem adı
-  const [note, setNote] = useState("");     //detay
+  const [form, setForm] = useState({
+    kullanici_id: "",
+    firma_id: "",
+    ariza_sebebi: "",
+    bakim_maliyeti: "",
+    aciklama: ""
+  });
 
-  const addRecord = () => {                //yeni servis ekleme fonksiyonu
-    if (!action || !note) {
-      alert("Tüm alanları doldur !");
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const addRecord = () => {
+    if (!form.kullanici_id || !form.firma_id || !form.ariza_sebebi || !form.bakim_maliyeti || !form.aciklama) {
+      alert("Tüm alanları doldur!");
       return;
     }
 
     const newRecord = {
-      date: new Date().toISOString().split("T")[0],     //.split("T")[0]sadece gün kısmını alır
-      action,
-      note,
+      date: new Date().toISOString().split("T")[0],
+      kullanici_id: Number(form.kullanici_id),
+      firma_id: Number(form.firma_id),
+      ariza_sebebi: form.ariza_sebebi,
+      bakim_maliyeti: Number(form.bakim_maliyeti),
+      aciklama: form.aciklama,
     };
 
     setHistory([newRecord, ...history]);
-    setAction("");
-    setNote("");
+    setForm({ kullanici_id: "", firma_id: "", ariza_sebebi: "", bakim_maliyeti: "", aciklama: "" });
   };
 
   return (
@@ -56,34 +71,79 @@ export default function Servis() {
               {history.map((item, index) => (
                 <div key={index} style={kayitKartStil}>
                   <div style={tarihStil}>{item.date}</div>
-                  <div style={{ fontWeight: "bold", color: "navy", fontSize: "15px", marginTop: "8px" }}>{item.action}</div>
-                  <p style={{ margin: 0, color: "#555", fontSize: "14px", marginTop: "6px" }}>{item.note}</p>
+                  <div style={{ fontWeight: "bold", color: "navy", fontSize: "15px", marginTop: "8px" }}>
+                    Firma: {item.firma_id} | Sebep: {item.ariza_sebebi} | Maliyet: {item.bakim_maliyeti} ₺
+                  </div>
+                  <p style={{ margin: 0, color: "#555", fontSize: "14px", marginTop: "6px" }}>{item.aciklama}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* SAĞ - YENİ KAYIT */}
+          {/* SAĞ - YENİ BAKIM KAYDI */}
           <div style={yeniKayitAlaniStil}>
-            <h3 style={baslikStil}>Yeni Servis Kaydı</h3>
+            <h3 style={baslikStil}>Yeni Bakım Kaydı</h3>
 
+            {/* 1. İşlemi Yapan (kullanici_id) */}
             <div style={{ marginBottom: "15px" }}>
-              <label style={labelStil}>Yapılan İşlem</label>
+              <label style={labelStil}>İşlemi Yapan (Kullanıcı ID)</label>
               <input
-                type="text"
-                placeholder="örn: motor değişimi"
-                value={action}
-                onChange={(e) => setAction(e.target.value)}
+                type="number"
+                name="kullanici_id"
+                placeholder="Kullanıcı ID giriniz"
+                value={form.kullanici_id}
+                onChange={handleChange}
                 style={inputStil}
               />
             </div>
 
+            {/* 2. Servis Şirketi (firma_id) */}
+            <div style={{ marginBottom: "15px" }}>
+              <label style={labelStil}>Servis Şirketi (Firma ID)</label>
+              <input
+                type="number"
+                name="firma_id"
+                placeholder="Firma ID giriniz"
+                value={form.firma_id}
+                onChange={handleChange}
+                style={inputStil}
+              />
+            </div>
+
+            {/* 3. Neden Yapıldığı (ariza_sebebi) */}
+            <div style={{ marginBottom: "15px" }}>
+              <label style={labelStil}>Arıza Sebebi</label>
+              <input
+                type="text"
+                name="ariza_sebebi"
+                placeholder="Örn: Sensör Hatası, Periyodik Bakım"
+                value={form.ariza_sebebi}
+                onChange={handleChange}
+                style={inputStil}
+              />
+            </div>
+
+            {/* 4. Maliyet (bakim_maliyeti) */}
+            <div style={{ marginBottom: "15px" }}>
+              <label style={labelStil}>Maliyet (Bakım Maliyeti)</label>
+              <input
+                type="number"
+                name="bakim_maliyeti"
+                placeholder="₺ maliyet giriniz"
+                value={form.bakim_maliyeti}
+                onChange={handleChange}
+                style={inputStil}
+              />
+            </div>
+
+            {/* 5. Açıklama */}
             <div style={{ marginBottom: "20px" }}>
-              <label style={labelStil}>Detay Not</label>
+              <label style={labelStil}>Açıklama</label>
               <textarea
-                placeholder="İşlem hakkında detay yazın..."
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
+                name="aciklama"
+                placeholder="Bakım hakkında açıklama yazın..."
+                value={form.aciklama}
+                onChange={handleChange}
                 style={{ ...inputStil, height: "100px", resize: "vertical" }}
               />
             </div>

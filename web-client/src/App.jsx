@@ -9,16 +9,16 @@ import Checklist from "./Checklist";
 import Makineler from "./Makineler";
 import MakineDetay from "./MakineDetay";
 import KisiEkle from "./KisiEkle";
+import Bakim from "./Bakim";
+import TedarikciListesi from "./TedarikciListesi";
 
 /* Giriş yapılmadıysa login'e yönlendir */
-function KorumaliRoute({ children }) {   // KorumaliRoute adında bir component (route guard) oluşturulur
-  // children = bu component'in içine sarılan sayfa (örneğin Dashboard)
-
-  const girisYapildi = localStorage.getItem("girisYapildi");   // Tarayıcının localStorage'ından "girisYapildi" değeri alınır login olunca true olur
-  if (!girisYapildi) {    // Kullanıcıyı "/" yani login sayfasına yönlendirir
+function KorumaliRoute({ children }) {   
+  const token = localStorage.getItem("auth_token");   
+  if (!token) {    
     return <Navigate to="/" replace />;
   }
-  return children; // Eğer giriş yapılmışsa, içindeki sayfayı gösterir (erişim izinli)
+  return children; 
 }
 
 export default function App() {
@@ -51,6 +51,12 @@ export default function App() {
 
         {/* TEKNİK SERVİS */}
         <Route path="/servis/:id" element={<KorumaliRoute><Servis /></KorumaliRoute>} />
+
+        {/* BAKIM */}
+        <Route path="/bakim" element={<KorumaliRoute><Bakim /></KorumaliRoute>} />
+
+        {/* TEDARIKÇİLER */}
+        <Route path="/tedarikciler" element={<KorumaliRoute><TedarikciListesi /></KorumaliRoute>} />
 
       </Routes>
 

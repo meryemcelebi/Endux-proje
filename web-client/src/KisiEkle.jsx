@@ -7,14 +7,15 @@ export default function KisiEkle() {
   const [kisiler, setKisiler] = useState([]);
 
   const [form, setForm] = useState({
-    ad: "",
-    soyad: "",
-    telefon: "",
-    eposta: "",
-    kullaniciAdi: "",
+    kullanici_adi: "",
     sifre: "",
-    baslamaTarihi: "",
-    rol: "",
+    email: "",
+    telefon: "",
+    isim: "",
+    soyisim: "",
+    baslama_tarihi: "",
+    firma_id: "",
+    rol_id: "",
   });
 
   const handleChange = (e) => {
@@ -22,46 +23,43 @@ export default function KisiEkle() {
   };
 
   const addKisi = () => {
-    if (!form.ad || !form.soyad) return; /*Ad ve soyad zorunlu*/
+    if (!form.isim || !form.soyisim) return;
 
     const yeniKisi = {
       ...form,
-      kullaniciId: Date.now().toString(), /*otomatik benzersiz Kullanıcı ID*/
-      rolId: Math.floor(Math.random() * 9000 + 1000).toString(), /*otomatik Rol ID*/
+      firma_id: Number(form.firma_id),
+      rol_id: Number(form.rol_id),
+      kullanici_id: Date.now() // Mock ID
     };
 
     setKisiler([yeniKisi, ...kisiler]);
 
     setForm({
-      ad: "",
-      soyad: "",
-      telefon: "",
-      eposta: "",
-      kullaniciAdi: "",
+      kullanici_adi: "",
       sifre: "",
-      baslamaTarihi: "",
-      rol: "",
+      email: "",
+      telefon: "",
+      isim: "",
+      soyisim: "",
+      baslama_tarihi: "",
+      firma_id: "",
+      rol_id: "",
     });
   };
 
   return (
-    <div>
-      {/* ÜST NAVBAR */}
-      <Navbar />
-
-      <div style={{ display: "flex" }}>
-
-        {/* SOL MENÜ */}
-        <Sidebar />
-
-        {/* ANA İÇERİK */}
-        <div style={{ flex: 1, padding: "20px" }}>
-
-          <div style={{ display: "flex", gap: "20px" }}>
+    <div style={{ display: "flex", background: "#f5f6fa", minHeight: "100vh" }}>
+      <Sidebar />
+      
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+        <Navbar />
+        
+        <div style={{ padding: "25px", flex: 1, overflowY: "auto" }}>
+          <div style={{ display: "flex", gap: "25px", flexWrap: "wrap" }}>
 
             {/* SOL - LİSTE */}
-            <div style={{ flex: 1 }}>
-              <h2>Kişi Listesi</h2>
+            <div style={{ flex: 2, minWidth: "400px", background: "white", padding: "25px", borderRadius: "10px", boxShadow: "0 2px 10px rgba(0,0,0,0.05)" }}>
+              <h2 style={{ margin: "0 0 20px 0", color: "#0f3460", borderBottom: "1px solid #eee", paddingBottom: "12px" }}>Kişi Listesi</h2>
 
               {kisiler.length === 0 && (
                 <p style={{ color: "gray" }}>Henüz kişi eklenmedi.</p>
@@ -69,68 +67,68 @@ export default function KisiEkle() {
 
               {kisiler.map((k) => (
                 <div
-                  key={k.kullaniciId}
+                  key={k.kullanici_id}
                   style={{
-                    border: "1px solid #f5f6faff",
-                    padding: 10,
-                    marginBottom: 10,
+                    borderLeft: "4px solid #3498db",
+                    padding: "15px",
+                    marginBottom: 15,
                     borderRadius: 8,
-                    background: "#f9f9f9",
-                    color: "black"
+                    background: "#f8f9fa",
+                    color: "#555"
                   }}
                 >
-                  <h3>{k.ad} {k.soyad}</h3>
+                  <h3 style={{ margin: "0 0 10px 0", color: "#333", fontSize: "16px" }}>{k.isim} {k.soyisim}</h3>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <div>Kullanıcı ID: {k.kullaniciId}</div>
-                    <div>Rol ID: {k.rolId}</div>
-                    <div>Ad: {k.ad}</div>
-                    <div>Soyad: {k.soyad}</div>
-                    <div>Telefon: {k.telefon}</div>
-                    <div>E-Posta: {k.eposta}</div>
-                    <div>Kullanıcı Adı: {k.kullaniciAdi}</div>
-                    <div>Başlama Tarihi: {k.baslamaTarihi}</div>
-                    <div>Rol: {k.rol}</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: "13px" }}>
+                    <div><strong>Kullanıcı ID:</strong> {k.kullanici_id}</div>
+                    <div><strong>Firma ID:</strong> {k.firma_id}</div>
+                    <div><strong>Rol ID:</strong> {k.rol_id}</div>
+                    <div><strong>Telefon:</strong> {k.telefon}</div>
+                    <div><strong>E-Posta:</strong> {k.email}</div>
+                    <div><strong>Kullanıcı Adı:</strong> {k.kullanici_adi}</div>
+                    <div><strong>Başlama Tarihi:</strong> {k.baslama_tarihi}</div>
                   </div>
                 </div>
               ))}
             </div>
 
             {/* SAĞ - FORM */}
-            <div style={{ flex: 1 }}>
-              <h2>Kişi Ekle</h2>
+            <div style={{ flex: 1, minWidth: "300px", background: "white", padding: "25px", borderRadius: "10px", boxShadow: "0 2px 10px rgba(0,0,0,0.05)" }}>
+              <h2 style={{ margin: "0 0 20px 0", color: "#0f3460", borderBottom: "1px solid #eee", paddingBottom: "12px" }}>Yeni Kişi Ekle</h2>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-
-                <input name="ad" placeholder="Ad" value={form.ad} onChange={handleChange} />
-                <input name="soyad" placeholder="Soyad" value={form.soyad} onChange={handleChange} />
-                <input name="telefon" placeholder="Telefon" value={form.telefon} onChange={handleChange} />
-                <input name="eposta" placeholder="E-Posta" type="email" value={form.eposta} onChange={handleChange} />
-                <input name="kullaniciAdi" placeholder="Kullanıcı Adı" value={form.kullaniciAdi} onChange={handleChange} />
-                <input name="sifre" placeholder="Şifre" type="password" value={form.sifre} onChange={handleChange} />
-                <input name="baslamaTarihi" placeholder="Başlama Tarihi" type="date" value={form.baslamaTarihi} onChange={handleChange} />
-                <input name="rol" placeholder="Rol (örn: Yönetici, Teknisyen, Operatör)" value={form.rol} onChange={handleChange} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
+                <input name="isim" placeholder="Ad" value={form.isim} onChange={handleChange} style={inputStyle} />
+                <input name="soyisim" placeholder="Soyad" value={form.soyisim} onChange={handleChange} style={inputStyle} />
+                <input name="telefon" placeholder="Telefon" value={form.telefon} onChange={handleChange} style={inputStyle} />
+                <input name="email" placeholder="E-Posta" type="email" value={form.email} onChange={handleChange} style={inputStyle} />
+                <input name="kullanici_adi" placeholder="Kullanıcı Adı" value={form.kullanici_adi} onChange={handleChange} style={inputStyle} />
+                <input name="sifre" placeholder="Şifre" type="password" value={form.sifre} onChange={handleChange} style={inputStyle} />
+                <input name="baslama_tarihi" placeholder="Başlama Tarihi" type="date" value={form.baslama_tarihi} onChange={handleChange} style={inputStyle} />
+                <input name="firma_id" placeholder="Firma ID" type="number" value={form.firma_id} onChange={handleChange} style={inputStyle} />
+                <select name="rol_id" value={form.rol_id} onChange={handleChange} style={inputStyle}>
+                  <option value="" disabled>Rol seçin</option>
+                  <option value="1">Yönetici (1)</option>
+                  <option value="2">Teknisyen (2)</option>
+                  <option value="3">Operatör (3)</option>
+                </select>
 
                 <button
                   onClick={addKisi}
-                  style={{
-                    padding: "10px",
-                    background: "blue",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer"
-                  }}
+                  style={buttonStyle}
+                  onMouseOver={(e) => e.target.style.background = "#1a467a"} 
+                  onMouseOut={(e) => e.target.style.background = "#0f3460"}
                 >
-                  Kaydet
+                  Kişiyi Kaydet
                 </button>
               </div>
             </div>
 
           </div>
-
         </div>
       </div>
     </div>
   );
 }
+
+const inputStyle = { padding: "14px", border: "1px solid #e1e5eb", borderRadius: "8px", fontSize: "14px", outline: "none", width: "100%", boxSizing: "border-box", background: "#fafafa", color: "#333", fontFamily: "inherit" };
+const buttonStyle = { padding: "14px", background: "#0f3460", color: "white", border: "none", borderRadius: "8px", fontSize: "16px", fontWeight: "bold", cursor: "pointer", transition: "0.2s", marginTop: "10px" };

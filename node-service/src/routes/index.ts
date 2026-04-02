@@ -3,6 +3,8 @@ import authRoutes from "./authRoutes";
 import kullaniciRoutes from "./kullaniciRoutes";
 import makineRoutes from "./makineRoutes";
 import checklistRoutes from "./checklistRoutes";
+import sistemRoutes from "./sistemRoutes";
+
 
 const router = Router();
 
@@ -17,5 +19,7 @@ router.use("/makineler", makineRoutes);
 
 // Checklist route'ları — /api/checklist/*
 router.use("/checklist", checklistRoutes);
+
+router.use("/sistem", sistemRoutes);
 
 export default router;
