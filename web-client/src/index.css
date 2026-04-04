@@ -1,3 +1,7 @@
+/**
+ * Uygulama Genelindeki CSS Değişkenleri ve Temel Stiller
+ * Renk paleti, yazı tipleri ve temel resetleme ayarlarını içerir.
+ */
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;  /*satır aralığı*/

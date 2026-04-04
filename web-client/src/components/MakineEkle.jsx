@@ -19,7 +19,8 @@ const MakineEkle = ({ onEkle }) => { /*makine eklenince listeye gönder*/
     geciciFirmaAdi: '',
     seriNo: '',
     geciciRiskKatsayisi: '',
-    geciciTurAciklama: ''
+    geciciTurAciklama: '',
+    garantiSuresi: ''
   });
 
   const [qrId, setQrId] = useState(null); /*Makine kaydedilince oluşan ID burada tutulur qr bu id ile oluşur*/
@@ -57,7 +58,8 @@ const MakineEkle = ({ onEkle }) => { /*makine eklenince listeye gönder*/
       geciciFirmaAdi: '',
       seriNo: '',
       geciciRiskKatsayisi: '',
-      geciciTurAciklama: ''
+      geciciTurAciklama: '',
+      garantiSuresi: ''
     });
   };
 
@@ -82,6 +84,7 @@ const MakineEkle = ({ onEkle }) => { /*makine eklenince listeye gönder*/
       <input name="seriNo" placeholder="Seri No" value={form.seriNo} onChange={handleChange} /><br />
       <input name="geciciRiskKatsayisi" placeholder="Geçici Risk Katsayısı" value={form.geciciRiskKatsayisi} onChange={handleChange} /><br />
       <input name="geciciTurAciklama" placeholder="Geçici Tür Açıklama" value={form.geciciTurAciklama} onChange={handleChange} /><br />
+      <input name="garantiSuresi" placeholder="Garanti Süresi (Ay/Yıl)" value={form.garantiSuresi} onChange={handleChange} /><br />
       <button onClick={handleSubmit} style={{ marginTop: '10px' }}>
         Kaydet
       </button>
