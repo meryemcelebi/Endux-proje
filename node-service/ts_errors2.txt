@@ -1,0 +1,6 @@
+src/controllers/checklistYonetici.ts(28,17): error TS2322: Type '{ makine_id: number; kullanici_id: number; sablon_id: number; genel_not: any; }' is not assignable to type '(Without<gunluk_kontrol_formuCreateInput, gunluk_kontrol_formuUncheckedCreateInput> & gunluk_kontrol_formuUncheckedCreateInput) | (Without<...> & gunluk_kontrol_formuCreateInput)'.
+  Type '{ makine_id: number; kullanici_id: number; sablon_id: number; genel_not: any; }' is not assignable to type 'Without<gunluk_kontrol_formuCreateInput, gunluk_kontrol_formuUncheckedCreateInput> & gunluk_kontrol_formuUncheckedCreateInput'.
+    Property 'kontrol_tarihi' is missing in type '{ makine_id: number; kullanici_id: number; sablon_id: number; genel_not: any; }' but required in type 'gunluk_kontrol_formuUncheckedCreateInput'.
+src/controllers/checklistYonetici.ts(44,21): error TS2322: Type '{ form_id: number; madde_id: number; girilen_deger: any; durum: any; }[]' is not assignable to type 'form_madde_cevapCreateManyInput | form_madde_cevapCreateManyInput[]'.
+  Type '{ form_id: number; madde_id: number; girilen_deger: any; durum: any; }[]' is not assignable to type 'form_madde_cevapCreateManyInput[]'.
+    Property 'soru_referans_id' is missing in type '{ form_id: number; madde_id: number; girilen_deger: any; durum: any; }' but required in type 'form_madde_cevapCreateManyInput'.

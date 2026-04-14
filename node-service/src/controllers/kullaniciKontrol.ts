@@ -90,3 +90,53 @@ export async function personelEkle(req: Request, res: Response, next: NextFuncti
         });
     }
 }
+
+
+
+    
+ 
+
+export async function tumKullanicilariGetir(req: Request, res: Response): Promise<void> {
+    try {
+        const kullanicilar = await prisma.kullanici.findMany({
+            select: {
+                kullanici_id: true,
+                kullanici_adi: true,
+                firma_id: true,
+                rol_id: true,
+                ad: true,
+                soyad: true,
+                telefon: true,
+                eposta: true,
+                aktiflik: true,
+                baslama_tarihi: true,
+                //sifre:false, //select kullanıldığında eklenmediği sürece gelmez
+                firma: {
+                    select: {
+                        firma_id: true,
+                        firma_adi: true
+                    }
+                },
+                rol: {
+                    select: {
+                        rol_id: true,
+                        rol_adi: true
+                    }   
+                }
+            }
+        });
+        res.status(200).json({
+            success: true,
+            message: "Kullanıcılar başarıyla getirildi.",
+            kullanicilar: kullanicilar
+        });
+    } catch (error) {
+        console.error("Kullanıcıları getirme hatası:", error);
+        res.status(500).json({
+            success: false,
+            message: "Kullanıcılar getirilirken bir hata oluştu."
+        });
+
+}
+    
+}

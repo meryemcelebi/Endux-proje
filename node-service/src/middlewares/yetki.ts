@@ -1,5 +1,6 @@
 import {Request,Response, NextFunction} from 'express';
 import { verifyToken, TokenPayload } from '../utils/jwt';
+import jwt from 'jsonwebtoken'
 
 declare global {
     namespace Express {
@@ -12,8 +13,12 @@ declare global {
 //JWT tokenini doğrulayan ve geçerliyse req.user'a kullanıcı bilgilerini ekleyen middleware
 export function oturumKontrol(req:Request, res:Response, next: NextFunction){
     const yetkiHeader = req.headers.authorization;
-    if(!yetkiHeader || !yetkiHeader.startsWith('Bearer ')) {
-        res.status(401).json({success: false, message: 'Erisim reddedildi. Token bulunamadı.'});
+    if (!yetkiHeader || !yetkiHeader.startsWith('Bearer ')) {
+        res.status(401).json({
+            success: false,
+            code: 'TOKEN_MISSING',
+            message: 'Token bulunamadı. Lütfen tekrar giriş yapın.'
+        });
         return;
     }
 
@@ -24,11 +29,23 @@ try {
     next();
 }
 catch (error) {   
-     res.status(401).json({success: false, message: 'Geçersiz token veya token süresi dolmuş.'});
+     // Token expired mi yoksa geçersiz mi ayır
+        if (error instanceof jwt.TokenExpiredError) {
+            res.status(401).json({
+                success: false,
+                code: 'TOKEN_EXPIRED',
+                message: 'Oturum süreniz doldu. Lütfen tekrar giriş yapın.'
+            });
+        } else {
+            res.status(401).json({
+                success: false,
+                code: 'TOKEN_INVALID',
+                message: 'Geçersiz token. Lütfen tekrar giriş yapın.'
+            });
 }
-}
+}}
 
-// Rol bazlı yetkilendirme — Geçerli roller: "YONETICI", "OPERATOR", "TEKNISYEN"
+// Rol bazlı yetkilendirme — Geçerli roller: "YONETICI", "OPERATOR", "TEKNISYEN" , SERVIS
 export function rolKontrol(...roles: string[]) {
     return (req: Request, res: Response, next: NextFunction) => {
         if (!req.user || !roles.includes(req.user.rol)) {

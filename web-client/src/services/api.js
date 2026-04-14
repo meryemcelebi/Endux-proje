@@ -478,3 +478,38 @@ export const api = {
     };
   }
 };
+if (!makine) throw new Error("Makine bulunamadı!");
+if (makine.pin !== pin) throw new Error("Geçersiz Makine PIN Kodu!");
+
+// 2. ADIM: Telefon Numarası Kontrolü
+let kisi = api.mockServisSorumlulari.find(s => s.telefon === telefon);
+let isNew = false;
+
+if (!kisi) {
+  // (A) Kayıt yoksa: Yeni kayıt oluştur (INSERT)
+  isNew = true;
+  kisi = {
+    id: Math.floor(Math.random() * 1000) + 100,
+    ad_soyad,
+    telefon,
+    unvan,
+    firma_id: parseInt(firma_id)
+  };
+  api.mockServisSorumlulari.push(kisi);
+  console.log("Yeni Servis Sorumlusu Kaydedildi:", kisi);
+}
+
+// 3. ADIM: Giriş Başarılı (Mock Token ve User verisi)
+return {
+  success: true,
+  isNew: isNew,
+  user: {
+    kullanici_id: kisi.id,
+    ad: kisi.ad_soyad,
+    rol_id: 2, // Misafir Servis/Teknisyen rolü
+    firma_id: kisi.firma_id
+  },
+  token: "mock-jwt-service-guest-" + Date.now()
+};
+  }
+};
