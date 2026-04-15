@@ -10,17 +10,17 @@ import { api } from "./services/api";
 export default function KisiEkle() {
   const [kisiler, setKisiler] = useState([]); // Mevcut kullanıcı listesi
 
-  // Form alanlarındaki verileri tutan state
+  // --- FORM STATE (Yeni Personel Bilgileri) ---
   const [form, setForm] = useState({
-    kullanici_adi: "",
-    sifre: "",
-    eposta: "",
-    telefon: "",
-    ad: "",
-    soyad: "",
-    baslama_tarihi: "",
-    firma_id: "",
-    rol_id: "",
+    kullanici_adi: "", // Giriş için kullanılacak kimlik
+    sifre: "", // Kullanıcı parolası
+    eposta: "", // İletişim e-postası
+    telefon: "", // İletişim numarası
+    ad: "", // Personel adı
+    soyad: "", // Personel soyadı
+    baslama_tarihi: "", // İşe giriş / sistem kayıt tarihi
+    firma_id: "", // Bağlı olduğu firma (Fabrika içi veya Dış Servis)
+    rol_id: "", // Yetki seviyesi (Admin, Teknisyen, Operatör)
   });
 
   // Load mock data on mount
@@ -40,13 +40,16 @@ export default function KisiEkle() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
+  // --- YENİ KİŞİ KAYDETME ---
   const addKisi = async () => {
+    // Gerekli alanların doluluk kontrolü
     if (!form.ad || !form.soyad || !form.firma_id || !form.rol_id) {
        alert("Lütfen ad, soyad, firma ve rol alanlarını doldurun.");
        return;
     }
 
     try {
+      // API'ye gönderilecek sayısal değerleri dönüştür
       const payload = {
         ...form,
         firma_id: Number(form.firma_id),
@@ -55,18 +58,13 @@ export default function KisiEkle() {
 
       const addedUser = await api.addUser(payload);
       
+      // Kaydedilen kişiyi listeye en başa ekle
       setKisiler([addedUser, ...kisiler]);
 
+      // Formu temizle
       setForm({
-        kullanici_adi: "",
-        sifre: "",
-        eposta: "",
-        telefon: "",
-        ad: "",
-        soyad: "",
-        baslama_tarihi: "",
-        firma_id: "",
-        rol_id: "",
+        kullanici_adi: "", sifre: "", eposta: "", telefon: "",
+        ad: "", soyad: "", baslama_tarihi: "", firma_id: "", rol_id: "",
       });
     } catch (err) {
       console.error("Kullanıcı eklenirken hata!", err);

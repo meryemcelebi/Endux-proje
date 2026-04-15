@@ -1,515 +1,396 @@
-// Mock API Service for adapting Frontend to Prisma schema
-// This file simulates backend HTTP requests.
+const API_BASE = "/api"; // Vite proxy ile backend'e yönlendirilir
 
-const delay = (ms) => new Promise((res) => setTimeout(res, ms));
+const getHeaders = () => ({
+  "Content-Type": "application/json",
+  Authorization: `Bearer ${localStorage.getItem("auth_token")}`,
+});
+
+const handleResponse = async (res) => {
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || json.hata || json.error || "İstek başarısız");
+  return json;
+};
 
 export const api = {
-  // --- AUTHENTICATION ---
+
+  // ═══════════════ 1. LOGIN ═══════════════
+  // POST /api/auth/login
   login: async (credentials) => {
-    await delay(500);
-    const { kullanici_adi, sifre } = credentials;
-    const cleanUser = kullanici_adi?.trim().toLowerCase();
-
-    // Mock authentication logic
-    if (cleanUser === "admin" && sifre === "1234") {
-      return {
-        success: true,
-        token: "mock-jwt-token-admin",
-        user: { kullanici_id: 0, ad: "Sistem Yöneticisi", rol_id: 1, firma_id: 1 }
-      };
-    } else if ((cleanUser === "yönetici" || cleanUser === "yonetici") && sifre === "1234") {
-      return {
-        success: true,
-        token: "mock-jwt-token-12345",
-        user: { kullanici_id: 1, ad: "yönetici", rol_id: 1, firma_id: 1 }
-      };
-    } else if ((cleanUser === "operatör" || cleanUser === "operator") && sifre === "1111") {
-      return {
-        success: true,
-        token: "mock-jwt-token-operator",
-        user: { kullanici_id: 2, ad: "operatör", rol_id: 3, firma_id: 1 }
-      };
-    } else if (cleanUser === "servis" && sifre === "2222") {
-      return {
-        success: true,
-        token: "mock-jwt-token-servis",
-        user: { kullanici_id: 3, ad: "servis", rol_id: 2, firma_id: 2 }
-      };
-    }
-    throw new Error("Geçersiz kullanıcı adı veya şifre!");
-  },
-  // --- KULLANICILAR (Kişi Ekle) ---
-  getUsers: async () => {
-    await delay(300);
-    return [
-      {
-        kullanici_id: 1,
-        firma_id: 1,
-        rol_id: 1,
-        ad: "Ali",
-        soyad: "Yılmaz",
-        telefon: "5551234567",
-        eposta: "ali@example.com",
-        kullanici_adi: "ali.yilmaz",
-        baslama_tarihi: "2023-01-15",
-      }
-    ];
-  },
-  addUser: async (userData) => {
-    await delay(500);
-    // Prisma modeline uyan veri alınıyor:
-    console.log("POST /api/kullanicilar", userData);
-    return { ...userData, kullanici_id: Math.floor(Math.random() * 1000) + 100 };
-  },
-
-  // --- MAKİNELER (Merkezi Mock Veri) ---
-  mockMachines: [
-    {
-      makine_id: 1,
-      firma_id: 1,
-      m_tur_id: 1,
-      makine_ad: "Pres Makinesi - A101",
-      seri_no: ["SN-A101"],
-      satin_alma_tarihi: "2022-05-12",
-      satin_alma_maliyeti: 50000,
-
-      top_cal_sma_saati: [1200],
-      makine_ozellikleri: ["Kapasite: 50 Ton", "Hız: 60 Devir/dk"],
-      mevcut_risk_skoru: 0.82, // Yüksek Riskli yapıldı
-      aktiflik_durumu: "Aktif",
-      makine_qr: "UUID-1001",
-      pin: "1234",
-      tedarikci: {
-        firma_id: 1,
-        firma_adi: "Kaan Makine ve Otomasyon A.Ş.",
-        telefon: "0850 123 4567",
-        email: "iletisim@kaanmakine.com",
-        adres: "Ostim OSB, Maltepe Sok. No:5 Ankara"
-      }
-    },
-    {
-      makine_id: 2,
-      firma_id: 1,
-      m_tur_id: 2,
-      makine_ad: "CNC Lazer Kesim - L202",
-      seri_no: ["SN-B202-X"],
-      satin_alma_tarihi: "2023-11-20",
-      satin_alma_maliyeti: 85000,
-      garanti_suresi: 36,
-      top_cal_sma_saati: [450],
-      makine_ozellikleri: ["Hassasiyet: 0.001mm", "Güç: 15kW"],
-      mevcut_risk_skoru: 0.95, // Yüksek Riskli yapıldı
-      aktiflik_durumu: "Aktif",
-      makine_qr: "UUID-2002",
-      pin: "2222",
-      tedarikci: {
-        firma_id: 1,
-        firma_adi: "Kaan Makine ve Otomasyon A.Ş.",
-        telefon: "0850 123 4567",
-        email: "iletisim@kaanmakine.com",
-        adres: "Ostim OSB, Maltepe Sok. No:5 Ankara"
-      }
-    },
-    {
-      makine_id: 3,
-      firma_id: 2,
-      m_tur_id: 3,
-      makine_ad: "Enjeksiyon Makinesi - E500",
-      seri_no: ["SN-ENJ-500"],
-      satin_alma_tarihi: "2021-02-15",
-      satin_alma_maliyeti: 120000,
-      garanti_suresi: 48,
-      top_cal_sma_saati: [8900],
-      makine_ozellikleri: ["Kalıp Kapama: 500 Ton"],
-      mevcut_risk_skoru: 0.85,
-      aktiflik_durumu: "Arızalı", // Tekrar Arızalı yapıldı
-      makine_qr: "UUID-3003",
-      pin: "3333",
-      tedarikci: {
-        firma_id: 2,
-        firma_adi: "Marmara Endüstriyel Yağlar",
-        telefon: "0216 444 8899",
-        email: "satis@marmarayag.com",
-        adres: "Gebze OSB, Kocaeli"
-      }
-    },
-    {
-      makine_id: 4,
-      firma_id: 1,
-      m_tur_id: 1,
-      makine_ad: "Robotik Kol - R10",
-      seri_no: ["SN-ROB-10"],
-      satin_alma_tarihi: "2024-01-05",
-      satin_alma_maliyeti: 45000,
-
-      top_cal_sma_saati: [200],
-      makine_ozellikleri: ["Taşıma: 10kg", "Erişim: 1100mm"],
-      mevcut_risk_skoru: 0.02,
-      aktiflik_durumu: "Bakımda",
-      makine_qr: "UUID-4004",
-      pin: "4444",
-      tedarikci: {
-        firma_id: 1,
-        firma_adi: "Kaan Makine ve Otomasyon A.Ş.",
-        telefon: "0850 123 4567",
-        email: "iletisim@kaanmakine.com",
-        adres: "Ostim OSB, Maltepe Sok. No:5 Ankara"
-      }
-    },
-    {
-      makine_id: 5,
-      firma_id: 3,
-      m_tur_id: 2,
-      makine_ad: "Hidrolik Güç Ünitesi - H05",
-      seri_no: ["SN-5X-001", "SN-5X-001-MOD"],
-      satin_alma_tarihi: "2023-06-10",
-      satin_alma_maliyeti: 250000,
-      garanti_suresi: 60,
-      top_cal_sma_saati: [1500],
-      makine_ozellikleri: ["X Ekseni: 800mm", "Y Ekseni: 600mm", "Z Ekseni: 500mm", "İş Mili Hızı: 18000 rpm"],
-      mevcut_risk_skoru: 0.15,
-      aktiflik_durumu: "Bakımda", // Kategoriyle eşleşti
-      makine_qr: "UUID-5005",
-      pin: "5555",
-      tedarikci: {
-        firma_id: 3,
-        firma_adi: "Gama Otomasyon",
-        telefon: "0312 333 4455",
-        email: "destek@gamaotomasyon.com",
-        adres: "Kemalpaşa, İzmir"
-      }
-    }
-  ],
-
-  getMachines: async () => {
-    await delay(300);
-    return api.mockMachines;
-  },
-  getMachineDetails: async (makine_id) => {
-    await delay(400);
-    const mId = parseInt(makine_id);
-    return api.mockMachines.find(m => m.makine_id === mId) || api.mockMachines[0];
-  },
-  addMachine: async (machineData) => {
-    await delay(500);
-    console.log("POST /api/makineler", machineData);
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(credentials),
+    });
+    const json = await handleResponse(res);
+    const rolMap = { YONETICI: 1, TEKNISYEN: 2, OPERATOR: 3 };
     return {
-      ...machineData,
-      makine_id: Math.floor(Math.random() * 1000) + 100,
-      makine_qr: "UUID-" + Date.now(),
-      mevcut_risk_skoru: 0
-    };
-  },
-
-  // --- CHECKLIST / OPERATOR FORMU (gunluk_kontrol_formu) ---
-  getChecklistQuestions: async (sablon_id) => {
-    await delay(300);
-    // Mock kontrol_maddesi entries
-    return [
-      { madde_id: 101, madde_adi: ["Makine çalışıyor mu?"], veri_tipi: ["Boolean"] },
-      { madde_id: 102, madde_adi: ["Yağ seviyesi yeterli mi?"], veri_tipi: ["Boolean"] },
-      { madde_id: 103, madde_adi: ["Basınç değeri (Bar)"], veri_tipi: ["Number"], birim: ["Bar"] },
-    ];
-  },
-  submitChecklist: async (formData) => {
-    await delay(500);
-    console.log("POST /api/kontrol-formu", formData);
-    // formData expected format matching Prisma 'gunluk_kontrol_formu':
-    // { makine_id: X, kullanici_id: Y, sablon_id: Z, kontrol_tarihi: [...], genel_not: [...], 
-    //   cevaplar: [ { madde_id: X, girilen_deger: [...], durum: [...] } ] }
-    return { success: true, form_id: Math.floor(Math.random() * 1000) + 100 };
-  },
-
-  // --- BAKIM / TEKNIK SERVIS KAYDI ---
-  getServiceHistory: async (makine_id) => {
-    await delay(300);
-    return [
-      {
-        bakim_id: 2,
-        makine_id: makine_id || 1,
-        kullanici_id: 3,
-        servis_firma_id: 2,
-        bakim_turu: ["Ağır Bakım"],
-        bakim_tarihi: ["2026-03-25T00:00:00.000Z"],
-        bakim_maliyet: [3200],
-        aciklama: "Ana motor rulman değişimi yapıldı.",
-        ariza_id: 2,
-        ariza_sebebi: "Gürültülü Çalışma",
-        servis_firmasi: "Marmara Endüstriyel",
-        degisen_parcalar: ["Motor Rulmanı Seti", "Dişli Yağı (5L)"],
-        puan: 5
-      },
-      {
-        bakim_id: 1,
-        makine_id: makine_id || 1,
-        kullanici_id: 1,
-        servis_firma_id: 2,
-        bakim_turu: ["Planlı Bakım"],
-        bakim_tarihi: ["2026-01-20T00:00:00.000Z"],
-        bakim_maliyet: [1500],
-        aciklama: "Yağ değişimi ve genel kontrol tamamlandı",
-        ariza_id: 1,
-        ariza_sebebi: "Genel Bakım",
-        servis_firmasi: "ABC Makine Parçaları",
-        degisen_parcalar: ["Hava Filtresi", "Sızdırmazlık Contası"],
-        puan: 3
-      }
-    ];
-  },
-  // --- TEKNİK SERVİS MERKEZİ (DASHBOARD) ---
-  getAllServiceHistory: async () => {
-    await delay(300);
-    // Temsili tüm makinelerin bakım geçmişi (Dashboard için)
-    return [
-      {
-        bakim_id: 2,
-        makine_id: 1,
-        makine_ad: "Pres Makinesi - A101",
-        bakim_turu: ["Ağır Bakım"],
-        bakim_tarihi: ["2026-03-25T00:00:00.000Z"],
-        bakim_maliyet: [3200],
-        servis_firmasi: "Marmara Endüstriyel",
-        ariza_sebebi: "Gürültülü Çalışma",
-        aciklama: "Ana motor rulman değişimi yapıldı.",
-        puan: 5
-      },
-      {
-        bakim_id: 1,
-        makine_id: 2,
-        makine_ad: "CNC Lazer Kesim - L202",
-        bakim_turu: ["Planlı Bakım"],
-        bakim_tarihi: ["2026-01-20T00:00:00.000Z"],
-        bakim_maliyet: [1500],
-        servis_firmasi: "ABC Makine Parçaları",
-        ariza_sebebi: "Genel Bakım",
-        aciklama: "Yağ değişimi ve genel kontrol tamamlandı",
-        puan: 0
-      },
-      {
-        bakim_id: 3,
-        makine_id: 1,
-        makine_ad: "Pres Makinesi - A101",
-        bakim_turu: ["Acil Müdahale"],
-        bakim_tarihi: ["2026-04-01T10:00:00.000Z"],
-        bakim_maliyet: [850],
-        servis_firmasi: "Kaan Makine",
-        ariza_sebebi: "Sensör Arızası",
-        aciklama: "Basınç sensörü yenisi ile değiştirildi.",
-        puan: 4
-      }
-    ];
-  },
-
-  getTechTasks: async () => {
-    await delay(300);
-    // Teknisyene atanmış aktif veya tamamlanmış bekleyen işler
-    return [
-      { id: 101, makine_ad: "Pres Makinesi - A101", ariza_notu: "Basınç sensörü geç okuyor, kontrol edilecek.", durum: "BEKLEYEN", tarih: "2026-04-01" },
-      { id: 102, makine_ad: "CNC Lazer Kesim - L202", ariza_notu: "Periyodik yağlama zamanı geldi.", durum: "TAMAMLANDI", tarih: "2026-03-29" },
-    ];
-  },
-
-  // Puanlanacak firmaları getiren fonksiyon (Dashboard'daki puanlama kartı için)
-  getFirmsToRate: async () => {
-    await delay(300);
-    return [
-      { id: 1, ad: "Marmara Endüstriyel", islem_sayisi: 5, ort_puan: 4.2, tip: "Servis" },
-      { id: 2, ad: "Kaan Makine", islem_sayisi: 2, ort_puan: 3.0, tip: "Tedarikçi" },
-      { id: 3, ad: "ABC Makine Parçaları", islem_sayisi: 3, ort_puan: 1.5, tip: "Servis" },
-    ];
-  },
-
-  // Tüm kayıtlı servis ve tedarikçi firmalarını getiren fonksiyon (Dropdown listeleri için)
-  getFirms: async () => {
-    await delay(300);
-    // Farklı mock verilerden gelen firmaları birleştirerek döner
-    return [
-      {
-        id: 1,
-        ad: "Alfa Teknik Servis",
-        tip: "Servis",
-        telefon: "0216 111 2233",
-        email: "info@alfateknik.com",
-        adres: "İstanbul, Kartal",
-        uzmanlik_alani: "CNC Mekaniği ve Robotik",
-        sorumlu_ad: "Hasan",
-        sorumlu_soyad: "Demir",
-        sorumlu_tel: "0532 111 2233",
-        aktiflik: true,
-        ortalama_puan: 4.8,
-        kayit_tarihi: "2024-01-10T09:00:00Z"
-      },
-      {
-        id: 2,
-        ad: "Beta Endüstriyel Tamir",
-        tip: "Servis",
-        telefon: "0212 444 5566",
-        email: "destek@beta.com",
-        adres: "Gebze, Kocaeli",
-        uzmanlik_alani: "Elektronik & PCB Tamiri",
-        sorumlu_ad: "Kemal",
-        sorumlu_soyad: "Yıldız",
-        sorumlu_tel: "0544 555 6677",
-        aktiflik: true,
-        ortalama_puan: 3.2,
-        kayit_tarihi: "2024-02-15T11:30:00Z"
-      },
-      {
-        id: 3,
-        ad: "Kaan Makine",
-        tip: "Tedarikçi",
-        telefon: "0850 123 4567",
-        email: "info@kaan.com",
-        adres: "İzmir, Kemalpaşa",
-        aktiflik: true,
-        ortalama_puan: 4.2,
-        guvenilirlik_skoru: 95,
-        veri_no: "TR9876543210",
-        yetkili_kisi: "Kaan Demir",
-        kayit_tarihi: "2023-05-20T14:45:00Z"
-      },
-      {
-        id: 4,
-        ad: "ABC Makine Parçaları",
-        tip: "Servis",
-        telefon: "0312 333 4455",
-        email: "info@abc.com",
-        adres: "Ankara, Ostim",
-        uzmanlik_alani: "Pres Makineleri Bakımı",
-        sorumlu_ad: "Ayhan",
-        sorumlu_soyad: "Can",
-        sorumlu_tel: "0555 333 4455",
-        aktiflik: true,
-        ortalama_puan: 4.5,
-        kayit_tarihi: "2024-03-01T10:00:00Z"
-      },
-      {
-        id: 5,
-        ad: "Gama Otomasyon",
-        tip: "Tedarikçi",
-        telefon: "0232 555 6677",
-        email: "info@gama.com",
-        adres: "Bursa, Nilüfer",
-        aktiflik: true,
-        ortalama_puan: 3.8,
-        guvenilirlik_skoru: 82,
-        veri_no: "TR1122334455",
-        yetkili_kisi: "Zeynep Aydın",
-        kayit_tarihi: "2023-11-12T16:20:00Z"
-      }
-    ];
-  },
-
-  // Sisteme yeni bir firma (tedarikçi veya servis) ekleyen fonksiyon
-  addFirm: async (firmData) => {
-    await delay(500);
-    // Simüle edilen POST isteği
-    console.log("POST /api/firmalar", firmData);
-    return { ...firmData, id: Math.floor(Math.random() * 1000) + 100, islem_sayisi: 0, ort_puan: 0 };
-  },
-
-  // Bir bakım kaydı ekleyen fonksiyon
-  addServiceRecord: async (recordData) => {
-    await delay(500);
-    console.log("POST /api/bakim-kaydi", recordData);
-    return {
-      ...recordData,
-      bakim_id: Math.floor(Math.random() * 1000) + 100,
-    };
-  },
-
-  // Bir firmaya puan veren fonksiyon
-  rateFirm: async (firmaId, puan) => {
-    await delay(400);
-    console.log(`Firma ${firmaId} için ${puan} yıldız verildi.`);
-    return { success: true, yeni_puan: puan };
-  },
-
-  // Spesifik bir bakım kaydını puanlayan fonksiyon
-  rateServiceRecord: async (bakim_id, puan) => {
-    await delay(300);
-    console.log(`Bakım Kaydı ${bakim_id} için ${puan} puan verildi.`);
-    return { success: true, yeni_puan: puan };
-  },
-
-  // --- YENİ SERVİS GİRİŞ AKIŞI (PIN + TELEFON) ---
-  mockServisSorumlulari: [
-    { id: 1, ad_soyad: "Ahmet Usta", telefon: "05321112233", unvan: "Mekanikçi", firma_id: 1 }
-  ],
-
-  checkServiceLogin: async (data) => {
-    await delay(800);
-    const { makine_id, telefon, ad_soyad, unvan, firma_id, pin } = data;
-
-    // 1. ADIM: PIN Kontrolü
-    const makine = api.mockMachines.find(m => m.makine_id === parseInt(makine_id));
-    if (!makine) throw new Error("Makine bulunamadı!");
-    if (makine.pin !== pin) throw new Error("Geçersiz Makine PIN Kodu!");
-
-    // 2. ADIM: Telefon Numarası Kontrolü
-    let kisi = api.mockServisSorumlulari.find(s => s.telefon === telefon);
-    let isNew = false;
-
-    if (!kisi) {
-      // (A) Kayıt yoksa: Yeni kayıt oluştur (INSERT)
-      isNew = true;
-      kisi = {
-        id: Math.floor(Math.random() * 1000) + 100,
-        ad_soyad,
-        telefon,
-        unvan,
-        firma_id: parseInt(firma_id)
-      };
-      api.mockServisSorumlulari.push(kisi);
-      console.log("Yeni Servis Sorumlusu Kaydedildi:", kisi);
-    }
-
-    // 3. ADIM: Giriş Başarılı (Mock Token ve User verisi)
-    return {
-      success: true,
-      isNew: isNew,
+      success: json.success,
+      token: json.token,
       user: {
-        kullanici_id: kisi.id,
-        ad: kisi.ad_soyad,
-        rol_id: 2, // Misafir Servis/Teknisyen rolü
-        firma_id: kisi.firma_id
+        kullanici_id: json.data.kullanici_id,
+        ad: json.data.ad,
+        rol_id: rolMap[json.data.rol] ?? json.data.rol_id ?? 3,
+        firma_id: json.data.firma_id,
       },
-      token: "mock-jwt-service-guest-" + Date.now()
     };
-  }
-};
-if (!makine) throw new Error("Makine bulunamadı!");
-if (makine.pin !== pin) throw new Error("Geçersiz Makine PIN Kodu!");
-
-// 2. ADIM: Telefon Numarası Kontrolü
-let kisi = api.mockServisSorumlulari.find(s => s.telefon === telefon);
-let isNew = false;
-
-if (!kisi) {
-  // (A) Kayıt yoksa: Yeni kayıt oluştur (INSERT)
-  isNew = true;
-  kisi = {
-    id: Math.floor(Math.random() * 1000) + 100,
-    ad_soyad,
-    telefon,
-    unvan,
-    firma_id: parseInt(firma_id)
-  };
-  api.mockServisSorumlulari.push(kisi);
-  console.log("Yeni Servis Sorumlusu Kaydedildi:", kisi);
-}
-
-// 3. ADIM: Giriş Başarılı (Mock Token ve User verisi)
-return {
-  success: true,
-  isNew: isNew,
-  user: {
-    kullanici_id: kisi.id,
-    ad: kisi.ad_soyad,
-    rol_id: 2, // Misafir Servis/Teknisyen rolü
-    firma_id: kisi.firma_id
   },
-  token: "mock-jwt-service-guest-" + Date.now()
+
+  // ═══════════════ 2. MAKİNE LİSTELE ═══════════════
+  // GET /api/makineler
+  getMachines: async () => {
+    const res = await fetch(`${API_BASE}/makineler`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return (json.data || []).map((m) => ({
+      ...m,
+      aktiflik_durumu: m.aktiflik_durumu === true ? "Aktif" : "Pasif",
+      mevcut_risk_skoru: Number(m.mevcut_risk_skoru || 0),
+      satin_alma_maliyeti: Number(m.satin_alma_maliyeti || 0),
+      top_calisma_saati: Number(m.toplam_calisma_saati || 0),
+    }));
+  },
+
+  // ═══════════════ 3. MAKİNE DETAY ═══════════════
+  // GET /api/makineler/:id
+  getMachineDetails: async (makine_id) => {
+    const res = await fetch(`${API_BASE}/makineler/${makine_id}`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    const m = json.data;
+    return {
+      ...m,
+      aktiflik_durumu: m.aktiflik_durumu === true ? "Aktif" : "Pasif",
+      mevcut_risk_skoru: Number(m.mevcut_risk_skoru || 0),
+      satin_alma_maliyeti: Number(m.satin_alma_maliyeti || 0),
+      top_calisma_saati: Number(m.toplam_calisma_saati || 0),
+      tedarikci: m.firma ? { firma_id: m.firma.firma_id, firma_adi: m.firma.firma_adi } : null,
+    };
+  },
+
+  // ═══════════════ 4. MAKİNE EKLE ═══════════════
+  // POST /api/makineler
+  addMachine: async (machineData) => {
+    const res = await fetch(`${API_BASE}/makineler`, {
+      method: "POST", headers: getHeaders(),
+      body: JSON.stringify({
+        makine_adi: machineData.makine_ad || machineData.makine_adi,
+        firma_id: Number(machineData.firma_id),
+        makine_tur_id: Number(machineData.m_tur_id || machineData.makine_tur_id),
+        seri_no: String(machineData.seri_no),
+        satin_alma_tarihi: machineData.satin_alma_tarihi,
+        satin_alma_maliyeti: Number(machineData.satin_alma_maliyeti),
+        aktiflik_durumu: machineData.aktiflik_durumu === "Aktif" || machineData.aktiflik_durumu === true,
+        garanti_firma_id: machineData.garanti_firma_id ? Number(machineData.garanti_firma_id) : undefined,
+        lokasyon_id: machineData.lokasyon_id ? Number(machineData.lokasyon_id) : undefined,
+      }),
+    });
+    return handleResponse(res);
+  },
+
+  // ═══════════════ 5. CHECKLIST SORULARI ═══════════════
+  // GET /api/checklist/sablon/:sablon_id
+  getChecklistQuestions: async (sablon_id) => {
+    const res = await fetch(`${API_BASE}/checklist/sablon/${sablon_id}`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json.data?.kontrol_maddesi || [];
+  },
+
+  // ═══════════════ 6. CHECKLIST KAYDET ═══════════════
+  // POST /api/checklist/form
+  submitChecklist: async (formData) => {
+    const res = await fetch(`${API_BASE}/checklist/form`, {
+      method: "POST", headers: getHeaders(),
+      body: JSON.stringify({
+        makine_id: Number(formData.makine_id),
+        sablon_id: Number(formData.sablon_id),
+        genel_not: formData.genel_not || "",
+        cevaplar: formData.cevaplar || formData.form_madde_cevap || [],
+      }),
+    });
+    return handleResponse(res);
+  },
+
+  // ═══════════════ 7. BAKIM KAYDI EKLEME ═══════════════
+  // POST /api/bakimlar
+  addServiceRecord: async (recordData) => {
+    const res = await fetch(`${API_BASE}/bakimlar`, {
+      method: "POST", headers: getHeaders(),
+      body: JSON.stringify({
+        makine_id: Number(recordData.makine_id),
+        bakim_tur_id: recordData.bakim_tur_id ? Number(recordData.bakim_tur_id) : undefined,
+        aciklama: recordData.aciklama || "",
+        durus_suresi: recordData.durus_suresi || null,
+        servis_firma_id: Number(recordData.servis_firma_id),
+        ariza_id: recordData.ariza_id ? Number(recordData.ariza_id) : undefined,
+        bakim_maliyet: Number(recordData.bakim_maliyet),
+        teknisyen_id: Number(recordData.teknisyen_id),
+        degisen_Parcalar: recordData.degisen_Parcalar || [],
+      }),
+    });
+    return handleResponse(res);
+  },
+
+  // ═══════════════ 8. BAKIM GEÇMİŞİ (TEK MAKİNE) ═══════════════
+  // GET /api/bakimlar?makine_id=:id
+  getServiceHistory: async (makine_id) => {
+    const res = await fetch(`${API_BASE}/bakimlar?makine_id=${makine_id}`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return (json.data || []).map((b) => ({
+      ...b,
+      bakim_maliyet: Number(b.bakim_maliyet || 0),
+      servis_firmasi: b.servis_firma?.firma_adi || `Firma #${b.servis_firma_id}`,
+    }));
+  },
+
+  // ═══════════════ 9. TÜM BAKIM GEÇMİŞİ (DASHBOARD) ═══════════════
+  getAllServiceHistory: async () => {
+    try {
+      const makineler = await api.getMachines();
+      const tumBakimlar = [];
+      for (const m of makineler) {
+        try {
+          const bakimlar = await api.getServiceHistory(m.makine_id);
+          bakimlar.forEach((b) => {
+            tumBakimlar.push({ ...b, makine_ad: m.makine_adi || m.makine_ad });
+          });
+        } catch { /* Tek bir makinenin bakımı yoksa devam et */ }
+      }
+      return tumBakimlar;
+    } catch { return []; }
+  },
+
+  // ═══════════════ 10. PERSONEL EKLE ═══════════════
+  // POST /api/kullanicilar
+  addUser: async (userData) => {
+    const rolIdToStr = { 1: "YONETICI", 2: "TEKNISYEN", 3: "OPERATOR" };
+    const res = await fetch(`${API_BASE}/kullanicilar`, {
+      method: "POST", headers: getHeaders(),
+      body: JSON.stringify({
+        ad: userData.ad, soyad: userData.soyad,
+        rol: rolIdToStr[userData.rol_id] || "OPERATOR",
+        sifre: userData.sifre,
+        telefon: userData.telefon,
+        eposta: userData.eposta || null,
+        firma_id: Number(userData.firma_id),
+      }),
+    });
+    return handleResponse(res);
+  },
+
+  // ═══════════════ 11. TÜM KULLANICILARI GETİR ═══════════════
+  // GET /api/kullanicilar
+  getUsers: async () => {
+    const res = await fetch(`${API_BASE}/kullanicilar`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json.kullanicilar || [];
+  },
+
+  // ═══════════════ 12. SİSTEM DROPDOWN VERİLERİ ═══════════════
+  getSystemFirms: async () => {
+    const res = await fetch(`${API_BASE}/sistem/firmalar`, { headers: getHeaders() });
+    return (await handleResponse(res)).firmalar || [];
+  },
+  getSystemRoles: async () => {
+    const res = await fetch(`${API_BASE}/sistem/roller`, { headers: getHeaders() });
+    return (await handleResponse(res)).roller || [];
+  },
+  getSystemMachineTypes: async () => {
+    const res = await fetch(`${API_BASE}/sistem/makine-turleri`, { headers: getHeaders() });
+    return (await handleResponse(res)).makineTurleri || [];
+  },
+
+  // ═══════════════ 13. TEDARİKÇİLER ═══════════════
+  // GET /api/tedarikciler
+  getSuppliers: async () => {
+    const res = await fetch(`${API_BASE}/tedarikciler`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json.data || [];
+  },
+  // POST /api/tedarikciler
+  addSupplier: async (supplierData) => {
+    const res = await fetch(`${API_BASE}/tedarikciler`, {
+      method: "POST", headers: getHeaders(),
+      body: JSON.stringify({
+        firma_adi: supplierData.firma_adi || supplierData.ad,
+        aktiflik: supplierData.aktiflik !== undefined ? supplierData.aktiflik : true,
+        yetkili_kisi: supplierData.yetkili_kisi || null,
+        vergi_no: supplierData.vergi_no || null,
+        telefon: supplierData.telefon || null,
+        email: supplierData.email || null,
+        adres: supplierData.adres || null,
+        il: supplierData.il || null,
+        ilce: supplierData.ilce || null,
+      }),
+    });
+    return handleResponse(res);
+  },
+
+  // ═══════════════ 14. SERVİS FİRMALARI ═══════════════
+  // GET /api/servis-firmalari
+  getServiceFirms: async () => {
+    const res = await fetch(`${API_BASE}/servis-firmalari`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json.data || [];
+  },
+  // POST /api/servis-firmalari
+  addServiceFirm: async (firmData) => {
+    const res = await fetch(`${API_BASE}/servis-firmalari`, {
+      method: "POST", headers: getHeaders(),
+      body: JSON.stringify({
+        firma_adi: firmData.firma_adi || firmData.ad,
+        telefon: firmData.telefon || null,
+        email: firmData.email || null,
+        adres: firmData.adres || null,
+        il: firmData.il || null,
+        ilce: firmData.ilce || null,
+        uzmanlik_alani: firmData.uzmanlik_alani || null,
+      }),
+    });
+    return handleResponse(res);
+  },
+
+  // ═══════════════ 15. TÜM FİRMALAR (BİRLEŞİK) ═══════════════
+  getFirms: async () => {
+    try {
+      const [servisFirmalari, tedarikciler] = await Promise.all([
+        api.getServiceFirms(),
+        api.getSuppliers(),
+      ]);
+      const mapped = [];
+      for (const sf of servisFirmalari) {
+        mapped.push({
+          id: sf.servis_firma_id, ad: sf.firma_adi, tip: "Servis",
+          telefon: sf.iletisim?.telefon || null,
+          email: sf.iletisim?.email || null,
+          adres: sf.iletisim?.acik_adres || null,
+          uzmanlik_alani: sf.servis_firma_uzmanlik?.uzmanlik_adi || null,
+          sorumlu_ad: sf.servis_sorumlusu?.[0]?.ad || null,
+          sorumlu_soyad: sf.servis_sorumlusu?.[0]?.soyad || null,
+          aktiflik: sf.aktiflik,
+        });
+      }
+      for (const t of tedarikciler) {
+        mapped.push({
+          id: t.tedarikci_id, ad: t.firma_adi, tip: "Tedarikçi",
+          telefon: t.iletisim?.telefon || null,
+          email: t.iletisim?.email || null,
+          adres: t.iletisim?.acik_adres || null,
+          aktiflik: t.aktiflik,
+          guvenilirlik_skoru: t.guvenilirlik_skoru ? Number(t.guvenilirlik_skoru) : null,
+          vergi_no: t.vergi_no || null,
+          yetkili_kisi: t.yetkili_kisi || null,
+        });
+      }
+      return mapped;
+    } catch { return []; }
+  },
+
+  // ═══════════════ 16. FİRMA EKLE (TİP BAZLI) ═══════════════
+  addFirm: async (firmData) => {
+    if (firmData.tip === "Tedarikçi" || firmData.tip === "tedarikci") {
+      return api.addSupplier(firmData);
+    } else {
+      return api.addServiceFirm(firmData);
+    }
+  },
+
+  // ═══════════════ 17. SERVİS PUANlama ═══════════════
+  // POST /api/servis-puan
+  rateFirm: async (firmaId, puanData) => {
+    const puan = typeof puanData === "object" ? puanData.puan : puanData;
+    const yorum = typeof puanData === "object" ? puanData.yorum : undefined;
+    const res = await fetch(`${API_BASE}/servis-puan`, {
+      method: "POST", headers: getHeaders(),
+      body: JSON.stringify({
+        servis_firma_id: Number(firmaId),
+        puan: Number(puan),
+        yorum: yorum || null,
+      }),
+    });
+    return handleResponse(res);
+  },
+
+  // ═══════════════ 18. TEDARİKÇİ PUANlama ═══════════════
+  // POST /api/tedarikci-puan
+  rateSupplier: async (tedarikciId, puanData) => {
+    const puan = typeof puanData === "object" ? puanData.puan : puanData;
+    const yorum = typeof puanData === "object" ? puanData.yorum : undefined;
+    const res = await fetch(`${API_BASE}/tedarikci-puan`, {
+      method: "POST", headers: getHeaders(),
+      body: JSON.stringify({
+        tedarikci_id: Number(tedarikciId),
+        puan: Number(puan),
+        yorum: yorum || null,
+      }),
+    });
+    return handleResponse(res);
+  },
+
+  // ═══════════════ 19. BAKIM KAYDI PUANlama ═══════════════
+  rateServiceRecord: async (servis_firma_id, puan, yorum) => {
+    const res = await fetch(`${API_BASE}/servis-puan`, {
+      method: "POST", headers: getHeaders(),
+      body: JSON.stringify({
+        servis_firma_id: Number(servis_firma_id),
+        puan: Number(puan),
+        yorum: yorum || null,
+      }),
+    });
+    return handleResponse(res);
+  },
+
+  // ═══════════════ 20. TEKNİSYEN GÖREVLERİ ═══════════════
+  // GET /api/gorevler
+  getTechTasks: async () => {
+    const res = await fetch(`${API_BASE}/gorevler`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json.data || [];
+  },
+
+  // ═══════════════ 21. PUANLANACAK FİRMALAR ═══════════════
+  getFirmsToRate: async () => {
+    try {
+      const firmalar = await api.getFirms();
+      return firmalar.map((f) => ({
+        id: f.id, ad: f.ad, tip: f.tip, aktiflik: f.aktiflik,
+      }));
+    } catch { return []; }
+  },
+
+  // ═══════════════ 22. SERVİS GİRİŞ (PIN + TELEFON) ═══════════════
+  // POST /api/auth/servis-giris
+  checkServiceLogin: async (data) => {
+    const res = await fetch(`${API_BASE}/auth/servis-giris`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        telefon: data.telefon,
+        servis_pin: data.pin || data.servis_pin,
+        ad: data.ad || data.ad_soyad?.split(" ")[0],
+        soyad: data.soyad || data.ad_soyad?.split(" ").slice(1).join(" "),
+        unvan: data.unvan || null,
+        servis_firma_id: data.firma_id || data.servis_firma_id,
+      }),
+    });
+    const json = await handleResponse(res);
+    return {
+      success: json.success,
+      isNew: json.yeniKayit,
+      user: {
+        kullanici_id: json.data.sorumlu_id,
+        ad: `${json.data.ad} ${json.data.soyad}`,
+        rol_id: 2,
+        firma_id: json.data.servis_firma?.servis_firma_id,
+      },
+      token: json.token,
+      makine: json.data.makine,
+    };
+  },
+
+  // ═══════════════ 23. MALİYET ANALİZİ ═══════════════
+  // GET /api/makineler/:id/maliyet-analizi
+  getMachineCostAnalysis: async (makine_id) => {
+    const res = await fetch(`${API_BASE}/makineler/${makine_id}/maliyet-analizi`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json.data;
+  },
 };
-  }
-};
+

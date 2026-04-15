@@ -6,18 +6,22 @@ import FirmModal from "./components/FirmModal";
 export default function Servis() {
   const { id } = useParams();
 
-  const [history, setHistory] = useState([]);
-  const [firms, setFirms] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState("Servis");
+  const [history, setHistory] = useState([]); // Makineye ait eski servis kayıtları
+  const [firms, setFirms] = useState([]); // Sistemdeki tüm kayıtlı firmalar (Servis/Tedarikçi)
+  const [isModalOpen, setIsModalOpen] = useState(false); // Yeni firma ekleme modalı durumu
+  const [modalType, setModalType] = useState("Servis"); // Eklenecek firmanın türü
 
-  // Verileri API'den çeken useEffect
+  // Giriş yapmış kullanıcı bilgisini al
+  const currentUser = JSON.parse(localStorage.getItem("user_payload") || "{}");
+
+  // --- VERİ ÇEKME SÜRECİ ---
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Makineye özel servis geçmişini ve genel firma listesini çek (Paralel istek)
         const [histData, firmData] = await Promise.all([
           api.getServiceHistory(id),
-          api.getFirms() // Tüm firmaları (servis/tedarikçi) getirir
+          api.getFirms()
         ]);
         setHistory(histData);
         setFirms(firmData);
@@ -41,10 +45,9 @@ export default function Servis() {
   const sortedHistory = [...history].sort((a,b) => (b.puan || 0) - (a.puan || 0));
 
   const [form, setForm] = useState({
-    kullanici_id: "",
-    servis_firma_id: "",
     ariza_sebebi: "",
     bakim_maliyet: "",
+    durus_suresi: "", // Yeni alan
     aciklama: "",
     bakim_turu: ""
   });
@@ -53,19 +56,22 @@ export default function Servis() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
+  // --- YENİ SERVİS KAYDI EKLEME ---
   const addRecord = async () => {
-    if (!form.kullanici_id || !form.servis_firma_id || !form.bakim_maliyet) {
-      alert("Zorunlu alanları doldur!");
+    if (!form.bakim_maliyet || !form.ariza_sebebi) {
+      alert("Lütfen arıza sebebi ve maliyet alanlarını doldurun!");
       return;
     }
 
+    // API'ye gönderilecek servis kaydı objesi (Payload)
     const payload = {
       makine_id: Number(id),
-      kullanici_id: Number(form.kullanici_id),
-      servis_firma_id: Number(form.servis_firma_id),
-      ariza_id: 1, // Mock data for Backend compatibility
+      kullanici_id: Number(currentUser.kullanici_id || 0),
+      servis_firma_id: Number(currentUser.firma_id || 1),
+      ariza_id: 1, 
       ariza_sebebi: form.ariza_sebebi,
       bakim_maliyet: [parseFloat(form.bakim_maliyet)],
+      durus_suresi: Number(form.durus_suresi), // Makinenin ne kadar süre devre dışı kaldığı
       bakim_tarihi: [new Date().toISOString()],
       aciklama: form.aciklama,
       bakim_turu: form.bakim_turu ? [form.bakim_turu] : ["Planlı Bakım"]
@@ -73,12 +79,10 @@ export default function Servis() {
 
     try {
       const savedRecord = await api.addServiceRecord(payload);
-      // Backend should return the firm name, but since we're mock, let's find it
-      const selectedFirm = firms.find(f => f.id === Number(form.servis_firma_id));
-      const recordWithFirmName = { ...savedRecord, servis_firmasi: selectedFirm?.ad || `ID: ${form.servis_firma_id}` };
-      
-      setHistory([recordWithFirmName, ...history]);
-      setForm({ kullanici_id: "", servis_firma_id: "", ariza_sebebi: "", bakim_maliyet: "", aciklama: "", bakim_turu: "" });
+      // Yerel listeyi güncelle (UI'da anlık görünmesi için)
+      setHistory([savedRecord, ...history]);
+      // Formu temizle
+      setForm({ ariza_sebebi: "", bakim_maliyet: "", durus_suresi: "", aciklama: "", bakim_turu: "" });
     } catch (err) {
       console.error("Kayıt eklenemedi:", err);
     }
@@ -128,10 +132,10 @@ export default function Servis() {
                       <div>
                         <div style={tarihStil}>{formatTarih}</div>
                         <div style={{ fontWeight: "bold", color: "navy", fontSize: "16px", marginTop: "10px" }}>
-                          Firma: {item.servis_firmasi || `ID: ${item.servis_firma_id}`}
+                          İşlem: {item.bakim_turu?.[0] || "Bakım"}
                         </div>
                         <div style={{ color: "#34495e", fontSize: "14px", marginTop: "4px" }}>
-                          Sebep: {item.ariza_sebebi || "Belirtilmedi"} | Maliyet: {formatMaliyet} ₺
+                          Duruş Süresi: <span style={{color: "#e74c3c", fontWeight: "bold"}}>{item.durus_suresi || 0} Saat</span> | Maliyet: {formatMaliyet} ₺
                         </div>
                         <p style={{ margin: 0, color: "#555", fontSize: "14px", marginTop: "8px", fontStyle: "italic" }}>"{item.aciklama}"</p>
                       </div>
@@ -166,38 +170,12 @@ export default function Servis() {
           <div style={yeniKayitAlaniStil}>
             <h3 style={baslikStil}>Yeni Bakım Kaydı</h3>
 
-            {/* 1. İşlemi Yapan (kullanici_id) */}
+            {/* İşlemi Yapan Kişi Bilgisi (Salt Okunur) */}
             <div style={{ marginBottom: "15px" }}>
-              <label style={labelStil}>İşlemi Yapan (Kullanıcı ID)</label>
-              <input
-                type="number"
-                name="kullanici_id"
-                placeholder="Kullanıcı ID giriniz"
-                value={form.kullanici_id}
-                onChange={handleChange}
-                style={inputStil}
-              />
-            </div>
-
-            {/* 2. Servis Şirketi / Firma Seçimi (Açılır Liste) */}
-            <div style={{ marginBottom: "15px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                <label style={{ ...labelStil, marginBottom: 0 }}>Servis Şirketi / Firma</label>
-                <div style={{ display: "flex", gap: "5px" }}>
-                  <button onClick={() => openAddFirm("Servis")} style={miniButonStil}>+ Servis Firması Ekle</button>
-                </div>
+              <label style={labelStil}>Teknisyen / Sorumlu</label>
+              <div style={{ ...inputStil, background: "#f0f0f0", color: "navy", fontWeight: "bold" }}>
+                {currentUser.ad || "Bilinmeyen Teknisyen"}
               </div>
-              <select
-                name="servis_firma_id"
-                value={form.servis_firma_id}
-                onChange={handleChange}
-                style={inputStil}
-              >
-                <option value="">Firma Seçiniz</option>
-                {firms.map(f => (
-                  <option key={f.id} value={f.id}>{f.ad} ({f.tip})</option>
-                ))}
-              </select>
             </div>
 
             {/* Sistem Tarafından Kaydedilen Tarih (Salt Okunur) */}
@@ -237,13 +215,26 @@ export default function Servis() {
               />
             </div>
 
-            {/* 4. Maliyet (bakim_maliyet) */}
+            {/* 4. Makine Duruş Süresi (Yeni) */}
             <div style={{ marginBottom: "15px" }}>
-              <label style={labelStil}>Maliyet (Bakım Maliyeti)</label>
+              <label style={labelStil}>Makine Duruş Süresi (Saat)</label>
+              <input
+                type="number"
+                name="durus_suresi"
+                placeholder="Kaç saat sürdü?"
+                value={form.durus_suresi}
+                onChange={handleChange}
+                style={{ ...inputStil, border: "2px solid #e74c3c" }}
+              />
+            </div>
+
+            {/* 5. Maliyet (bakim_maliyet) */}
+            <div style={{ marginBottom: "15px" }}>
+              <label style={labelStil}>Maliyet (₺)</label>
               <input
                 type="number"
                 name="bakim_maliyet"
-                placeholder="₺ maliyet giriniz"
+                placeholder="Örn: 1500"
                 value={form.bakim_maliyet}
                 onChange={handleChange}
                 style={inputStil}

@@ -13,8 +13,9 @@ export default function Login() {
   const [sifre, setSifre] = useState(""); // Şifre state'i
   const [hata, setHata] = useState(""); // Hata mesajlarını tutar
 
+  // --- GİRİŞ İŞLEMİ (FORM SUBMIT) ---
   const handleGiris = async (e) => {
-    e.preventDefault(); 
+    e.preventDefault();
 
     if (!kullaniciAdi || !sifre) {
       setHata("Kullanıcı adı veya şifre boş bırakılamaz!");
@@ -22,26 +23,31 @@ export default function Login() {
     }
 
     try {
-      const result = await api.login({ kullanici_adi: kullaniciAdi, sifre });
-      
+      // API'ye giriş isteği at (Kullanıcı adını küçük harfe zorla)
+      const result = await api.login({ kullanici_adi: kullaniciAdi.toLowerCase(), sifre });
+
       if (result.success) {
-        // Dashboard ve Teknik Servis girişi için (0, 1, 2)
+        // Dashboard ve Teknik Servis girişi için yetki kontrolü (Rol 0, 1 veya 2 olmalı)
         if (result.user.rol_id !== 0 && result.user.rol_id !== 1 && result.user.rol_id !== 2) {
           throw new Error("Bu panele Operatörler giriş yapamaz. Sadece Yönetici ve Teknik Servis girebilir.");
         }
 
+        // Kimlik doğrulama verilerini tarayıcı hafızasına (Local Storage) kaydet
         localStorage.setItem("auth_token", result.token);
         localStorage.setItem("user_payload", JSON.stringify(result.user));
-        localStorage.setItem("girisYapildi", "true"); 
-        
+        localStorage.setItem("girisYapildi", "true");
+
+        // ROL BAZLI YÖNLENDİRME:
+        // Eğer kullanıcı Teknik Servis ise (rol_id = 2) servis sayfasına, 
+        // Yönetici ise (rol_id = 0, 1) dashboard paneline yönlendir.
         if (result.user.rol_id === 2) {
           navigate("/teknik-servis");
         } else {
-          navigate("/dashboard"); 
+          navigate("/dashboard");
         }
       }
     } catch (error) {
-       setHata(error.message || "Giriş başarısız oldu.");
+      setHata(error.message || "Giriş başarısız oldu.");
     }
   };
 
@@ -50,7 +56,7 @@ export default function Login() {
       <div style={kartStil}>
         {/* LOGO / BAŞLIK */}
         <div style={{ textAlign: "center", marginBottom: "30px" }}>
-          <h1 style={{ color: "navy", margin: 0, fontSize: "28px" }}>ENDUX</h1>
+          <h1 style={{ color: "navy", margin: 0, fontSize: "28px" }}>MAİNTFY</h1>
           <p style={{ color: "gray", marginTop: "5px" }}>Yönetici Giriş Paneli</p>
         </div>
 

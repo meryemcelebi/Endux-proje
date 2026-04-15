@@ -17,10 +17,11 @@ const Sidebar = () => {
   const userPayload = payloadStr ? JSON.parse(payloadStr) : { ad: "Yönetici", rol_id: 1 };
   const kullaniciAdi = userPayload.ad || "Kullanıcı";
   const userRole = userPayload.rol_id;
-  
+
   // Yetki Kontrolü: Sadece rolü 0 (Süper Admin) ve 1 (Yönetici) olanlar tüm menüleri görebilir
   const isAdmin = userRole === 0 || userRole === 1;
 
+  // Çıkış yaparken tarayıcıdaki oturum bilgilerini temizler ve giriş sayfasına döner.
   const handleCikis = () => {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("user_payload");
@@ -28,8 +29,10 @@ const Sidebar = () => {
     navigate("/");
   };
 
+  // Aktif menü öğesini belirlemek için URL kontrolü yapar
   const isActive = (path) => currentPath === path || currentPath.startsWith(path + "/");
 
+  // Menü öğeleri için dinamik stil oluşturur (Aktifse vurgular)
   const getLinkStyle = (path) => ({
     ...linkStyle,
     background: isActive(path) ? "rgba(233, 69, 96, 0.15)" : "rgba(255,255,255,0.05)",
@@ -55,7 +58,7 @@ const Sidebar = () => {
     >
       {/* ENDUX LOGO ALANI */}
       <div style={{ textAlign: "center", marginBottom: "30px", paddingBottom: "20px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-        <h2 style={{ margin: 0, fontSize: "32px", fontWeight: "bold", letterSpacing: "3px", color: "#e94560" }}>ENDUX</h2>
+        <h2 style={{ margin: 0, fontSize: "32px", fontWeight: "bold", letterSpacing: "3px", color: "#e94560" }}>MAİNTFY</h2>
         <span style={{ fontSize: "12px", color: "#a0a5b1", letterSpacing: "1px" }}>
           {isAdmin ? "YÖNETİM PANELİ" : "SERVİS PANELİ"}
         </span>
@@ -87,7 +90,7 @@ const Sidebar = () => {
             </Link>
 
             <Link to="/kisi-ekle" style={getLinkStyle("/kisi-ekle")}>
-              Kişi Ekle
+              Personel Ekle
             </Link>
           </>
         )}
@@ -99,14 +102,14 @@ const Sidebar = () => {
 
       {/* YÖNETİCİ/PERSONEL PROFİLİ (EN ALTTA) */}
       <div style={{ marginTop: "auto", position: "relative" }}>
-        <div 
-          style={{ 
-            background: "rgba(255,255,255,0.05)", 
-            padding: "15px", 
-            borderRadius: "10px", 
-            display: "flex", 
-            alignItems: "center", 
-            gap: "12px", 
+        <div
+          style={{
+            background: "rgba(255,255,255,0.05)",
+            padding: "15px",
+            borderRadius: "10px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
             cursor: "pointer",
             border: "1px solid rgba(255,255,255,0.1)"
           }}
@@ -148,7 +151,7 @@ const Sidebar = () => {
             overflow: "hidden",
             zIndex: 10
           }}>
-            <div 
+            <div
               style={{ padding: "12px 15px", color: "#e94560", fontSize: "14px", cursor: "pointer", fontWeight: "bold", textAlign: "center" }}
               onClick={handleCikis}
             >
