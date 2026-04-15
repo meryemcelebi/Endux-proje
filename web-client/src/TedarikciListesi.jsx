@@ -5,20 +5,23 @@ import { api } from "./services/api";
 import FirmModal from "./components/FirmModal";
 
 export default function TedarikciListesi() {
-  const [activeTab, setActiveTab] = useState("tedarikciler");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [tedarikciRatingId, setTedarikciRatingId] = useState(null);
-  const [tedarikciRatingValue, setTedarikciRatingValue] = useState(0);
-  const [tedarikciRatingComment, setTedarikciRatingComment] = useState("");
+  // --- STATE TANIMLAMALARI ---
+  const [activeTab, setActiveTab] = useState("tedarikciler"); // Aktif sekme (Tedarikçiler veya Stok)
+  const [searchTerm, setSearchTerm] = useState(""); // Firma arama terimi
+  const [isModalOpen, setIsModalOpen] = useState(false); // Yeni firma ekleme modalı durumu
+  const [tedarikciRatingId, setTedarikciRatingId] = useState(null); // Puanlanan tedarikçi ID'si
+  const [tedarikciRatingValue, setTedarikciRatingValue] = useState(0); // Yıldız puanı
+  const [tedarikciRatingComment, setTedarikciRatingComment] = useState(""); // Puan yorumu
 
-  const [tedarikciler, setTedarikciler] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [tedarikciler, setTedarikciler] = useState([]); // API'den gelen tedarikçi firmalar
+  const [loading, setLoading] = useState(true); // Yüklenme durumu
 
+  // --- VERİ ÇEKME ---
   useEffect(() => {
     const fetchSuppliers = async () => {
       try {
         const allFirms = await api.getFirms();
+        // Sadece 'Tedarikçi' tipindeki firmaları filtrele
         const suppliersOnly = allFirms.filter(f => f.tip === "Tedarikçi");
         setTedarikciler(suppliersOnly);
       } catch (error) {
@@ -50,7 +53,9 @@ export default function TedarikciListesi() {
     }
   };
 
+  // --- TEDARİKÇİ PUANLAMA KAYDI ---
   const handleTedarikciRateSave = (id) => {
+    // Listede ilgili tedarikçiyi bulup puanını ve yorumunu güncelle
     setTedarikciler(tedarikciler.map(t => (t.tedarikci_id || t.id) === id ? { ...t, ortalama_puan: tedarikciRatingValue, yorum: tedarikciRatingComment } : t));
     setTedarikciRatingId(null);
     setTedarikciRatingValue(0);
@@ -60,7 +65,8 @@ export default function TedarikciListesi() {
 
 
 
-  // bozulmaSayisi >= 3 is the critical alert trigger
+  // --- PARÇA STOK VE PERFORMANS TABLOSU (MOCK VERİ) ---
+  // Uygulama genelinde 'bozulmaSayisi' 3 ve üzeri olanlar kritik hata/risk kabul edilir.
   const [parcaStoklari] = useState([
     { id: 201, ad: "M6 Rulman", makineTuru: "CNC Lazer Kesim - L202", tedarikci: "ABC Makine Parçaları A.Ş.", stok: 150, bozulmaSayisi: 0, tahminiOmur: 5000, parcaMaliyeti: 450, tedarikSuresi: 2 },
     { id: 202, ad: "Hidrolik Filtre", makineTuru: "Pres Makinesi - A101", tedarikci: "Marmara Endüstriyel Yağlar", stok: 20, bozulmaSayisi: 1, tahminiOmur: 2000, parcaMaliyeti: 1200, tedarikSuresi: 5 },

@@ -1,7 +1,12 @@
 import React, { useState } from 'react'; /*useState:form verisini tutmak için*/
 import QRCodeOlustur from './QRCodeOlustur';
 
-const MakineEkle = ({ onEkle }) => { /*makine eklenince listeye gönder*/
+/**
+ * Makine Ekleme Bileşeni
+ * Yeni makine verilerini toplar, ana listeye (onEkle) gönderir 
+ * ve başarılı kayıt sonrası QR kod oluşturma ekranını tetikler.
+ */
+const MakineEkle = ({ onEkle }) => {
 
   const [form, setForm] = useState({ /*verileri tutar*/
     makineid: '',

@@ -5,19 +5,21 @@ import { api } from "./services/api";
 import FirmModal from "./components/FirmModal";
 
 export default function ServisMerkezi() {
-  const [tasks, setTasks] = useState([]);
+  // --- STATE TANIMLAMALARI ---
+  const [tasks, setTasks] = useState([]); // Teknik servis görev listesi (Bekleyen/Tamamlanan)
+  const [firms, setFirms] = useState([]); // Sistemde kayıtlı servis firmaları ve tedarikçiler
+  const [loading, setLoading] = useState(true); // Veri yükleme durumu
+  const [activeTab, setActiveTab] = useState("gorevler"); // Aktif sekme kontrolü (gorevler, firmalar, onay-merkezi, disServis)
+  const [isModalOpen, setIsModalOpen] = useState(false); // Firma ekleme modali durumu
+  const [modalType, setModalType] = useState("Servis"); // Modal tipi (Servis Firması mı yoksa Parça Tedarikçisi mi?)
+  const [allHistory, setAllHistory] = useState([]); // Tüm servis geçmişi (Onay merkezi puanlamaları için)
 
-  const [firms, setFirms] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("gorevler"); // gorevler, firmalar, arsiv
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState("Servis");
-
-
-  // Dış Servis Puanlamaları state
-  const [disRatingId, setDisRatingId] = useState(null);
-  const [disRatingValue, setDisRatingValue] = useState(0);
-  const [disRatingComment, setDisRatingComment] = useState("");
+  // --- DIŞ SERVİS PUANLAMA STATE'LERİ ---
+  const [disRatingId, setDisRatingId] = useState(null); // Puanlanan dış servis ID'si
+  const [disRatingValue, setDisRatingValue] = useState(0); // Verilen yıldız puanı
+  const [disRatingComment, setDisRatingComment] = useState(""); // Servis hakkında yorum
+  
+  // Statik dış servis listesi (Simüle edilmiş veriler)
   const [disServisler, setDisServisler] = useState([
     { id: 1, firma: "Alfa Teknik Servis", uzmanlik: "Genel Mekanik", telefon: "0216 111 2233", email: "info@alfateknik.com", sorumlu_ad: "Hasan", sorumlu_soyad: "Demir", sorumlu_tel: "0532 111 2233", islem: 15, puan: 4.8, yorum: "" },
     { id: 2, firma: "Beta Endüstriyel Tamir", uzmanlik: "Elektronik & PCB", telefon: "0212 444 5566", email: "destek@beta.com", sorumlu_ad: "Kemal", sorumlu_soyad: "Yıldız", sorumlu_tel: "0544 555 6677", islem: 4, puan: 3.2, yorum: "" },
@@ -29,15 +31,19 @@ export default function ServisMerkezi() {
   const userPayload = payloadStr ? JSON.parse(payloadStr) : { ad: "Bilinmeyen", rol_id: 2 };
   const isAdmin = userPayload.rol_id === 0 || userPayload.rol_id === 1;
 
+  // --- VERİ ÇEKME (API) ---
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [taskData, firmData] = await Promise.all([
+        // Görevler, firmalar ve servis geçmişini eşzamanlı olarak çek
+        const [taskData, firmData, historyData] = await Promise.all([
           api.getTechTasks(),
-          api.getFirms()
+          api.getFirms(),
+          api.getAllServiceHistory()
         ]);
         setTasks(taskData);
         setFirms(firmData);
+        setAllHistory(historyData);
       } catch (err) {
         console.error("Servis verileri yüklenirken hata oluştu:", err);
       } finally {
@@ -114,62 +120,84 @@ export default function ServisMerkezi() {
     </div>
   );
 
-  // RENDER: FİRMALARIMIZ
+  // RENDER: SİSTEM FIRMALARI (Servis Firmaları)
+
+
+
+  // RENDER: SİSTEM FIRMALARI (Servis Firmaları)
+  const [firmRatingId, setFirmRatingId] = useState(null);
+  const [firmRatingValue, setFirmRatingValue] = useState(0);
+  const [firmRatingComment, setFirmRatingComment] = useState("");
+
+  const handleFirmRateSave = (id) => {
+    setFirms(firms.map(f => f.id === id ? { ...f, ortalama_puan: firmRatingValue, yorum: firmRatingComment } : f));
+    setFirmRatingId(null);
+    setFirmRatingValue(0);
+    setFirmRatingComment("");
+    alert("Firma puanlaması ve yorumu kaydedildi!");
+  };
+
   const renderFirmalar = () => {
-    const serviceFirms = firms.filter(f => f.tip === "Servis");
+    const servisFirms = firms.filter(f => f.tip === "Servis");
     return (
       <div style={{ overflowX: "auto" }}>
         <table style={tableStyle}>
           <thead>
             <tr>
-              <th style={thStyle}>Firma & Uzmanlık</th>
+              <th style={thStyle}>Firma Adı & Türü</th>
               <th style={thStyle}>İletişim</th>
-              <th style={thStyle}>Sorumlu Teknisyen</th>
-              <th style={thStyle}>Genel Puanlama</th>
+              <th style={thStyle}>Adres</th>
+              <th style={thStyle}>Ortalama Puan</th>
               <th style={thStyle}>Durum</th>
             </tr>
           </thead>
           <tbody>
-            {serviceFirms.length === 0 ? (
-              <tr><td colSpan="5" style={{ textAlign: "center", padding: "40px", color: "#95a5a6" }}>Servis firması bulunamadı.</td></tr>
-            ) : (
-              serviceFirms.map(f => (
-                <tr key={f.id} style={trStyle}>
-                  <td style={tdStyle}>
-                    <div style={{ fontWeight: "bold", color: "#0f3460", fontSize: "15px" }}>{f.ad}</div>
-                    <div style={uzmanlikBadgeStil}>{f.uzmanlik_alani || "Genel Servis"}</div>
-                  </td>
-                  <td style={tdStyle}>
-                    <div style={{ fontSize: "13px", color: "#333" }}>📞 {f.telefon}</div>
-                    <div style={{ fontSize: "13px", color: "#7f8c8d", marginTop: "2px" }}>✉️ {f.email}</div>
-                  </td>
-                  <td style={tdStyle}>
-                    <div style={{ fontWeight: "bold", color: "#34495e" }}>{f.sorumlu_ad} {f.sorumlu_soyad}</div>
-                    <div style={{ fontSize: "12px", color: "#95a5a6", marginTop: "2px" }}>📱 {f.sorumlu_tel || "-"}</div>
-                  </td>
-                  <td style={tdStyle}>
-                    <div style={{ display: "flex", gap: "2px", alignItems: "center" }}>
-                      {[1, 2, 3, 4, 5].map(star => (
-                        <span key={star} onClick={() => handlePuanla(f.id, star)} style={{ cursor: "pointer", fontSize: "20px", color: Math.round(f.ortalama_puan || 0) >= star ? "#f39c12" : "#dfe6e9", transition: "0.2s" }}>★</span>
-                      ))}
-                      <strong style={{ marginLeft: "10px", color: "#0f3460" }}>{(f.ortalama_puan || 0).toFixed(1)}</strong>
-                    </div>
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={f.aktiflik !== false ? badgeActive : badgeInactive}>
-                      {f.aktiflik !== false ? "Aktif" : "Pasif"}
-                    </span>
-                  </td>
-                </tr>
+            {servisFirms.length > 0 ? (
+              servisFirms.map((f) => (
+                <React.Fragment key={f.id}>
+                  <tr style={trStyle}>
+                    <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>
+                      {f.ad || f.firma_adi}
+                      <div style={{ fontSize: "11px", color: "#95a5a6", fontWeight: "normal", marginTop: "4px" }}>{f.tip}</div>
+                    </td>
+                    <td style={tdStyle}>
+                      <div style={{ fontSize: "13px" }}>📞 {f.telefon}</div>
+                      <div style={{ fontSize: "12px", color: "#7f8c8d" }}>✉️ {f.email}</div>
+                    </td>
+                    <td style={tdStyle}>
+                      <div style={{ fontSize: "13px", color: "#555" }}>{f.adres || "-"}</div>
+                    </td>
+                    <td style={tdStyle}>
+                      <div style={{ display: "flex", gap: "2px", alignItems: "center" }}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <span key={star} style={{ fontSize: "18px", color: star <= Math.round(f.ortalama_puan || 0) ? "#f39c12" : "#dfe6e9" }}>
+                            ★
+                          </span>
+                        ))}
+                        {f.ortalama_puan > 0 && <strong style={{ marginLeft: "6px", color: "#0f3460", fontSize: "13px" }}>{f.ortalama_puan}</strong>}
+                      </div>
+                      {f.yorum && <div style={{ fontSize: "12px", color: "#7f8c8d", marginTop: "4px", fontStyle: "italic" }}>💬 {f.yorum}</div>}
+                    </td>
+                    <td style={tdStyle}>
+                      <span style={f.aktif !== false ? badgeActive : badgeInactive}>
+                        {f.aktif !== false ? "Aktif" : "Pasif"}
+                      </span>
+                    </td>
+                  </tr>
+                </React.Fragment>
               ))
+            ) : (
+              <tr>
+                <td colSpan="6" style={{ padding: "40px", textAlign: "center", color: "#95a5a6" }}>
+                  Servis firması bulunamadı.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
       </div>
     );
   };
-
-
 
   // RENDER: DIŞ SERVİS PUANLAMALARI
   const renderDisServis = () => (
@@ -294,7 +322,7 @@ export default function ServisMerkezi() {
               onMouseOver={(e) => { if (activeTab !== "firmalar") e.target.style.background = "rgba(255,255,255,0.15)"; }}
               onMouseOut={(e) => { if (activeTab !== "firmalar") e.target.style.background = "rgba(255,255,255,0.05)"; }}
             >
-              Firmalarımız
+              Servis Firmaları
             </button>
 
             <button
@@ -313,7 +341,6 @@ export default function ServisMerkezi() {
             <div style={contentCardStyle} className="glass-card-animation" key={activeTab}>
               {activeTab === "gorevler" && renderGorevListesi()}
               {activeTab === "firmalar" && renderFirmalar()}
-
               {activeTab === "disServis" && renderDisServis()}
             </div>
           )}
@@ -434,6 +461,93 @@ const uzmanlikBadgeStil = { display: "inline-block", padding: "2px 8px", backgro
 const badgeActive = { padding: "6px 14px", background: "rgba(46, 204, 113, 0.15)", color: "#2ecc71", borderRadius: "20px", fontSize: "12px", fontWeight: "bold", boxShadow: "0 0 10px rgba(46, 204, 113, 0.2)", border: "1px solid rgba(46, 204, 113, 0.3)" };
 const badgeInactive = { padding: "6px 14px", background: "rgba(231, 76, 60, 0.15)", color: "#e74c3c", borderRadius: "20px", fontSize: "12px", fontWeight: "bold", border: "1px solid rgba(231, 76, 60, 0.3)" };
 
+// --- ONAY MERKEZİ YENİ STİLLER ---
+const graphPanelStyle = {
+  display: "flex",
+  gap: "30px",
+  background: "rgba(15, 52, 96, 0.03)",
+  padding: "30px",
+  borderRadius: "20px",
+  border: "1px solid rgba(15, 52, 96, 0.1)",
+  alignItems: "center"
+};
+
+const chartCenterTextStyle = {
+  position: "absolute",
+  top: "0",
+  left: "0",
+  width: "100%",
+  height: "100%",
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "center",
+  alignItems: "center"
+};
+
+const legendItemStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  padding: "8px 15px",
+  background: "white",
+  borderRadius: "8px",
+  boxShadow: "0 2px 5px rgba(0,0,0,0.05)"
+};
+
+const approvalSummaryCard = {
+  width: "250px",
+  padding: "20px",
+  background: "white",
+  borderRadius: "16px",
+  boxShadow: "0 4px 15px rgba(0,0,0,0.05)",
+  border: "1px solid #f1f2f6"
+};
+
+const onayBolumBaslikStyle = {
+  fontSize: "16px",
+  fontWeight: "800",
+  color: "#0f3460",
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  marginBottom: "15px"
+};
+
+const onayKartStil = {
+  background: "white",
+  padding: "15px 20px",
+  borderRadius: "12px",
+  border: "1px solid #e1e5eb",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "15px",
+  transition: "transform 0.2s"
+};
+
+const onayButonStil = {
+  padding: "8px 15px",
+  background: "#e94560",
+  color: "white",
+  border: "none",
+  borderRadius: "8px",
+  fontSize: "12px",
+  fontWeight: "bold",
+  cursor: "pointer",
+  whiteSpace: "nowrap"
+};
+
+const emptyListStil = {
+  textAlign: "center",
+  padding: "30px",
+  color: "#95a5a6",
+  fontSize: "14px",
+  fontStyle: "italic",
+  background: "#f8f9fa",
+  borderRadius: "12px",
+  border: "1px dashed #ddd"
+};
+
 if (typeof document !== "undefined") {
   const style = document.createElement("style");
   style.innerHTML = `
@@ -446,6 +560,11 @@ if (typeof document !== "undefined") {
     }
     tr:hover {
       background: rgba(255, 255, 255, 0.03) !important;
+    }
+    .onay-kart:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+      border-color: #e94560;
     }
   `;
   document.head.appendChild(style);

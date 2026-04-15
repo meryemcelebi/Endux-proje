@@ -1,3 +1,7 @@
+/**
+ * Notlar ve Veri Yapısı Taslağı
+ * Bu dosya geliştirme aşamasında kullanılan makine ekleme veri yapısı notlarını içermektedir.
+ */
 /*                     ########İSTENEN VERİLER##############
 
     makine_ad, 
