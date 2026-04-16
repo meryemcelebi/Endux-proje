@@ -1,15 +1,17 @@
 import { Router } from "express";
-import { bakimKaydiGir, makineBakimKaytlari } from "../controllers/bakimKontrol";
+import { bakimKaydiGir, makineBakimKayitlari } from "../controllers/bakimKontrol";
 import { oturumKontrol, rolKontrol } from "../middlewares/yetki";
 
 const router = Router();
+//— Makinenin bakım geçmişini getirir
+router.get('/:makine_id', oturumKontrol, makineBakimKayitlari);
 
-router.post('/', oturumKontrol,
-     rolKontrol('TEKNİSYEN', 'YÖNETİCİ'), 
-bakimKaydiGir);
-
-router.get('/',oturumKontrol,
-    makineBakimKaytlari
+// POST /api/bakimlar  — Yeni bakım kaydı oluşturur
+router.post('/',
+    oturumKontrol,
+    rolKontrol('TEKNISYEN', 'YONETICI' , 'SERVIS'),
+    bakimKaydiGir
 );
+
 
 export default router;

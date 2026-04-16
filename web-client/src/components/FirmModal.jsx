@@ -2,20 +2,20 @@ import React, { useState } from "react";
 
 // Yeni firma (Tedarikçi veya Servis) eklemek için kullanılan Modal bileşeni
 export default function FirmModal({ isOpen, onClose, onSave, initialType = "Servis" }) {
-  // Form verilerini tutan state
+  // --- FORM STATE TANIMLAMALARI ---
   const [form, setForm] = useState({
-    ad: "",
-    tip: initialType,
-    telefon: "",
-    email: "",
-    adres: "",
-    uzmanlik_alani: "",
-    sorumlu_ad: "",
-    sorumlu_soyad: "",
-    sorumlu_telefon: "",
-    yetkili_kisi: "",
-    veri_no: "",
-    guvenilirlik_skoru: ""
+    ad: "", // Firma veya Servis adı
+    tip: initialType, // Tedarikçi veya Servis firması ayrımı
+    telefon: "", // Kurumsal iletişim numarası
+    email: "", // Kurumsal e-posta adresi
+    adres: "", // Firmanın açık adresi
+    uzmanlik_alani: "", // Sadece Servis firmaları için uzmanlık detayı (Genel Mekanik vb.)
+    sorumlu_ad: "", // İlgili personelin adı
+    sorumlu_soyad: "", // İlgili personelin soyadı
+    sorumlu_telefon: "", // İlgili personelin doğrudan ulaşım numarası
+    yetkili_kisi: "", // Sadece Tedarikçiler için ana temas kişisi
+    veri_no: "", // Vergi numarası veya resmi sicil no
+    guvenilirlik_skoru: "" // Tedarikçi performans puanı (0-100)
   });
 
   // Modal kapalıysa hiçbir şey render etme

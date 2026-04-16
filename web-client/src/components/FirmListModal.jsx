@@ -1,8 +1,14 @@
 import React from "react";
 
+/**
+ * Kayıtlı Servis Firmaları Listesi Modalı
+ * Sistemdeki 'Servis' tipindeki firmaları listeler, ortalama puanlarına göre sıralar
+ * ve yöneticinin bu firmaları hızlıca puanlamasına olanak tanır.
+ */
 export default function FirmListModal({ isOpen, onClose, firms, onPuanla }) {
   if (!isOpen) return null;
 
+  // Sadece servis firmalarını ayıkla ve puanı en yüksek olandan başlayarak sırala
   const serviceFirms = firms.filter(f => f.tip === "Servis");
   const sortedFirms = [...serviceFirms].sort((a, b) => (b.ortalama_puan || 0) - (a.ortalama_puan || 0));
 

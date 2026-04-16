@@ -18,12 +18,12 @@ export default function ChecklistGiris() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  // Misafir Login State
-  const [phone, setPhone] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [title, setTitle] = useState("");
-  const [firmId, setFirmId] = useState("");
-  const [pin, setPin] = useState("");
+  // --- MİSAFİR (SERVİS) GİRİŞİ STATE'LERİ ---
+  const [phone, setPhone] = useState(""); // Servis elemanı telefon numarası (Zorunlu)
+  const [fullName, setFullName] = useState(""); // Servis elemanı ad soyad
+  const [title, setTitle] = useState(""); // Ünvanı (Teknisyen, Mühendis vb.)
+  const [firmId, setFirmId] = useState(""); // Bağlı olduğu firma ID'si
+  const [pin, setPin] = useState(""); // Makineye özel 4 haneli PIN kodu
 
   const [firms, setFirms] = useState([]);
   const [welcomeMsg, setWelcomeMsg] = useState(null);
@@ -41,6 +41,7 @@ export default function ChecklistGiris() {
     fetchFirms();
   }, []);
 
+  // --- PERSONEL GİRİŞİ (Yönetici / Operatör) ---
   const handleStaffLogin = async () => {
     if (!username || !password) {
       alert("Lütfen tüm alanları doldurun!");
@@ -50,10 +51,26 @@ export default function ChecklistGiris() {
       const result = await api.login({ kullanici_adi: username, sifre: password });
       if (result.success) {
         saveLogin(result);
-        const role = result.user.rol_id;
-        if (role === 1) navigate(`/makine/${id}`);
-        else if (role === 3) navigate(`/checklist/${id}`);
-        else if (role === 2) navigate(`/servis/${id}`);
+        
+        if (id) {
+             try {
+                 // QR Merkezi üzerinden (qrileMakineGetir) AUDIT loglarını yazdır ve gerçek veriyi getir
+                 const qrResult = await api.getMachineByQR(id);
+                 const roleStr = qrResult.rol;
+                 const makineId = qrResult.makine.makine_id;
+
+                 // Dinamik olarak merkezin belirlediği role göre form/panellere yönlendir
+                 if (roleStr === "YONETICI") navigate(`/makine/${makineId}`);
+                 else if (roleStr === "OPERATOR") navigate(`/checklist/${makineId}`);
+                 else if (roleStr === "TEKNISYEN") navigate(`/servis/${makineId}`);
+                 else navigate(`/dashboard`);
+             } catch (err) {
+                 alert("QR kod doğrulanamadı veya bu makineye erişiminiz kısıtlı.");
+             }
+        } else {
+             // Eğer direkt URL'den /checklist-giris yazıp girdiyse (makine yoksa) panele at
+             navigate("/dashboard");
+        }
       }
     } catch (err) {
       alert(err.message || "Giriş başarısız.");
@@ -67,7 +84,7 @@ export default function ChecklistGiris() {
     }
     try {
       const result = await api.checkServiceLogin({
-        makine_id: id,
+        qr_uuid: id,
         telefon: phone,
         ad_soyad: fullName,
         unvan: title,
@@ -76,11 +93,18 @@ export default function ChecklistGiris() {
       });
       if (result.success) {
         setWelcomeMsg(result.isNew
-          ? `Hoş geldiniz, ${result.user.ad}! Kaydınız oluşturuldu.`
+          ? `Hoş geldiniz, ${result.user.ad}! Yeni kaydınız oluşturuldu.`
           : `Tekrar hoş geldin, ${result.user.ad}!`);
 
         saveLogin(result);
-        setTimeout(() => navigate(`/servis/${id}`), 2000);
+        
+        // API'den gelen makine_id'yi (integer) kullan (UUID yerine)
+        const finalId = result.data?.makine?.makine_id || result.makine_id;
+        
+        setTimeout(() => {
+          if (finalId) navigate(`/servis/${finalId}`);
+          else navigate("/dashboard");
+        }, 2000);
       }
     } catch (err) {
       alert(err.message || "Giriş başarısız.");
@@ -101,7 +125,7 @@ export default function ChecklistGiris() {
           <p style={{ color: "#a0a5b1", marginTop: "5px", fontSize: "14px" }}>
             {isGuestMode ? "Misafir (Servis) Girişi" : "Personel Giriş Paneli"}
           </p>
-          <div style={etiketStil}>Makine ID: {id}</div>
+          {id && <div style={etiketStil}>Makine ID: {id}</div>}
         </div>
 
         {welcomeMsg && (
@@ -165,6 +189,23 @@ export default function ChecklistGiris() {
                 onChange={(e) => setFullName(e.target.value)}
                 style={inputStil}
               />
+            </div>
+            <div style={{ marginBottom: "10px" }}>
+              <label style={etiketYaziStil}>Ünvan / Uzmanlık Alanı</label>
+              <select
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                style={inputStil}
+              >
+                <option value="">Ünvan Seçiniz...</option>
+                <option value="Bakım Teknisyeni">Bakım Teknisyeni</option>
+                <option value="Elektrik Teknisyeni">Elektrik Teknisyeni</option>
+                <option value="Mekanik Teknisyeni">Mekanik Teknisyeni</option>
+                <option value="Servis Mühendisi">Servis Mühendisi</option>
+                <option value="Yazılım Destek">Yazılım Destek</option>
+                <option value="Otomasyon Uzmanı">Otomasyon Uzmanı</option>
+                <option value="Diğer">Diğer</option>
+              </select>
             </div>
             <div style={{ marginBottom: "10px" }}>
               <label style={etiketYaziStil}>Firma</label>

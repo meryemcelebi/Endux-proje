@@ -1,6 +1,8 @@
-import React, { useRef } from 'react';
-import { QRCodeCanvas } from 'qrcode.react';
-
+/**
+ * QR Kod Oluşturma ve Yazdırma Bileşeni
+ * Verilen makine ID'sine göre bir URL oluşturur, QR kod haline getirir
+ * ve operatörün bu kodu fiziksel makine üzerine yapıştırması için yazdırma imkanı sunar.
+ */
 const QRCodeOlustur = ({ makinaId }) => {
   // props olarak makinaId alınır (yani dışarıdan gelen veri)
   const qrRef = useRef(null); /*QR alanını referans olarak tutar*/

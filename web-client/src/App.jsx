@@ -1,7 +1,7 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-// Sayfa Bileşenleri (Pages)
+// Sayfa Bileşenleri (Sistemin farklı bölümlerini temsil eden sayfalar)
 import Login from "./Login";
 import Dashboard from "./Dashboard";
 import ChecklistGiris from "./ChecklistGiris";
@@ -15,60 +15,64 @@ import TedarikciListesi from "./TedarikciListesi";
 import ServisMerkezi from "./ServisMerkezi";
 
 /**
- * Giriş Yapılmayan Kullanıcıları Login Ekranına Yönlendiren Component
- * Yerel depolamada (LocalStorage) token yoksa erişimi engeller.
+ * Giriş Yapılmayan Kullanıcıları Login Ekranına Yönlendiren Component (Korumalı Rota)
+ * Yerel depolamada (LocalStorage) geçerli bir 'auth_token' yoksa kullanıcının sayfayı görmesini engeller
+ * ve otomatik olarak giriş (Login) sayfasına geri gönderir.
  */
 function KorumaliRoute({ children }) {
-  const token = localStorage.getItem("auth_token");
+  const token = localStorage.getItem("auth_token"); // Tarayıcı hafızasındaki giriş anahtarını kontrol et
   if (!token) {
+    // Token yoksa ana giriş sayfasına yönlendir
     return <Navigate to="/" replace />;
   }
+  // Token varsa istenen sayfayı (children) göster
   return children;
 }
 
-// Uygulamanın Ana Giriş Noktası ve Router Yapılandırması
+// Uygulamanın Ana Giriş Noktası ve Yönlendirme (Router) Yapılandırması
 export default function App() {
   return (
     <BrowserRouter>
 
       <Routes>
-        {/* Giriş Ekranı - Uygulamanın başlangıç noktası */}
+        {/* Giriş Ekranı - Uygulama açıldığında karşılanacak ilk sayfa */}
         <Route path="/" element={<Login />} />
 
         {/* --- Yönetici ve Personel Panelleri (Korumalı Rotalar) --- */}
+        {/* Aşağıdaki sayfaların hepsi 'KorumaliRoute' içine alınmıştır, giriş yapmadan ulaşılamazlar. */}
 
-        {/* Ana Kontrol Paneli */}
+        {/* Ana Kontrol Paneli (Dashboard): Özet verilerin ve KPI'ların olduğu ana ekran */}
         <Route path="/dashboard" element={<KorumaliRoute><Dashboard /></KorumaliRoute>} />
 
-        {/* Günlük Kontrol Listeleri Giriş Ekranı */}
+        {/* Günlük Kontrol Listeleri Giriş Ekranı (Makine bazlı veya genel liste) */}
         <Route path="/checklist-giris/:id" element={<ChecklistGiris />} />
         <Route path="/checklist-giris" element={<ChecklistGiris />} />
 
-        {/* Teknik Servis Kaydı Girme Ekranı */}
+        {/* Teknik Servis Kaydı Girme Ekranı (Spesifik bir makine arızası için) */}
         <Route path="/servis/:id" element={<KorumaliRoute><Servis /></KorumaliRoute>} />
 
-        {/* Spesifik bir makinenin detay sayfası */}
+        {/* Spesifik bir makinenin detay sayfası: Tüm grafik ve geçmiş verileri barındırır */}
         <Route path="/makine/:id" element={<KorumaliRoute><MakineDetay /></KorumaliRoute>} />
 
-        {/* Belirli bir makine için Checklist formu */}
+        {/* Belirli bir makine için Checklist formu doldurma alanı */}
         <Route path="/checklist/:id" element={<KorumaliRoute><Checklist /></KorumaliRoute>} />
 
-        {/* Tüm makinelerin listelendiği yönetim ekranı */}
+        {/* Tüm makinelerin listelendiği, düzenlendiği ve silindiği yönetim ekranı */}
         <Route path="/makineler" element={<KorumaliRoute><Makineler /></KorumaliRoute>} />
 
-        {/* Yeni personel/kişi ekleme ekranı */}
+        {/* Yeni personel veya teknik kişi ekleme/yönetme ekranı */}
         <Route path="/kisi-ekle" element={<KorumaliRoute><KisiEkle /></KorumaliRoute>} />
 
-        {/* Bakım planlama ve maliyet takip ekranı */}
+        {/* Bakım planlama, takvim ve yıllık maliyet takip ekranı */}
         <Route path="/bakim" element={<KorumaliRoute><Bakim /></KorumaliRoute>} />
 
-        {/* Tedarikçi listesi ve stok performans takip ekranı */}
+        {/* Tedarikçi listesi, stok durumu ve yedek parça performans takip ekranı */}
         <Route path="/tedarikciler" element={<KorumaliRoute><TedarikciListesi /></KorumaliRoute>} />
 
-        {/* Teknik Servis Merkezi - Tüm bakım süreçlerinin yönetildiği pano */}
+        {/* Teknik Servis Merkezi: Tüm bakım ve onarım süreçlerinin tek bir yerden yönetildiği pano */}
         <Route path="/teknik-servis" element={<KorumaliRoute><ServisMerkezi /></KorumaliRoute>} />
 
-        {/* Tanımsız rotalar için ana sayfaya yönlendir */}
+        {/* Tanımsız veya hatalı yazılmış rotalar için kullanıcıyı otomatik olarak ana sayfaya yönlendir */}
         <Route path="*" element={<Navigate to="/" replace />} />
 
       </Routes>

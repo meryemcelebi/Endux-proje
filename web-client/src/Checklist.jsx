@@ -12,8 +12,10 @@ export default function Checklist() {
   const FORM_ID = 1; // Backend için örnek form kimliği
   const SABLON_ID = 1; // Backend için örnek şablon ID
 
-  const [kontrolMaddeleri, setKontrolMaddeleri] = useState([]); // API'den gelen sorular
-  const [cevaplar, setCevaplar] = useState([]); // Kullanıcının verdiği cevaplar
+  // --- STATE TANIMLAMALARI ---
+  const [kontrolMaddeleri, setKontrolMaddeleri] = useState([]); // API'den gelen günlük kontrol soruları listesi
+  const [cevaplar, setCevaplar] = useState([]); // Kullanıcının sorulara verdiği cevaplar (EVET/HAYIR)
+  const [genelNot, setGenelNot] = useState(""); // Operatörün eklemek istediği özel not veya arıza bildirimi
 
   // Sayfa yüklendiğinde kontrol sorularını getir
   useEffect(() => {
@@ -30,17 +32,18 @@ export default function Checklist() {
 
   const [saved, setSaved] = useState(false); // Kayıt durumu kontrolü
 
-  // Bir soruya cevap verildiğinde çalışan fonksiyon
+  // --- CEVAP KAYDETME MANTIĞI ---
+  // Operatör bir soruya tıkladığında cevabı state içinde günceller veya yeni ekler.
   const setCevap = (madde_id, cevapBool) => {
     const girilenDeger = cevapBool ? "EVET" : "HAYIR";
-    const durumDeger = "BEKLEMEDE";
+    const durumDeger = "BEKLEMEDE"; // Varsayılan durum
 
     const existing = cevaplar.find(c => c.madde_id === madde_id);
     if (existing) {
-      // Mevcut cevabı güncelle
+      // Eğer daha önce cevap verilmişse üzerine yaz
       setCevaplar(cevaplar.map(c => c.madde_id === madde_id ? { ...c, girilen_deger: [girilenDeger], durum: [durumDeger], rawVal: cevapBool } : c));
     } else {
-      // Yeni cevap ekle
+      // Yeni madde cevabı ekle
       setCevaplar([...cevaplar, { form_id: FORM_ID, madde_id: madde_id, girilen_deger: [girilenDeger], durum: [durumDeger], rawVal: cevapBool }]);
     }
     setSaved(false);
@@ -67,7 +70,7 @@ export default function Checklist() {
       kullanici_id: 1, // Mock kullanıcı (Login'den gelecek)
       sablon_id: SABLON_ID,
       kontrol_tarihi: [new Date().toISOString()],
-      genel_not: [],
+      genel_not: [genelNot],
       ai_on_risk_durumu: [],
       form_madde_cevap: answersPayload
     };
@@ -134,6 +137,20 @@ export default function Checklist() {
               </div>
             );
           })}
+
+          {/* --- ACİL DURUM / OPERATÖR NOTU KUTUSU --- */}
+          <div style={notKonteynerStil}>
+            <label style={notEtiketStil}>
+              <span style={{ marginRight: "8px" }}>⚠️</span>
+              Acil Durum / Yapılan İşlem Açıklaması
+            </label>
+            <textarea
+              style={notTextareaStil}
+              placeholder="Eğer bir parça değiştirdiyseniz veya acil bir durum oluştuysa buraya detaylıca yazınız..."
+              value={genelNot}
+              onChange={(e) => setGenelNot(e.target.value)}
+            />
+          </div>
 
           {/* Formu Kaydet Butonu */}
           <button
@@ -227,4 +244,34 @@ const kaydetButonStil = {
   fontWeight: "bold",
   cursor: "pointer",
   marginTop: "20px",
+};
+
+const notKonteynerStil = {
+  marginTop: "25px",
+  padding: "15px",
+  background: "#fff3f3",
+  borderRadius: "10px",
+  border: "1px solid #ffcdd2",
+};
+
+const notEtiketStil = {
+  display: "block",
+  marginBottom: "10px",
+  color: "#c62828",
+  fontWeight: "bold",
+  fontSize: "14px",
+};
+
+const notTextareaStil = {
+  width: "100%",
+  height: "100px",
+  padding: "12px",
+  boxSizing: "border-box",
+  borderRadius: "8px",
+  border: "1px solid #ddd",
+  fontSize: "14px",
+  fontFamily: "inherit",
+  resize: "vertical",
+  outline: "none",
+  transition: "border-color 0.2s",
 };

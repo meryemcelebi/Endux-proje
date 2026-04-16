@@ -25,7 +25,10 @@ SET row_security = off;
 -- Name: public; Type: SCHEMA; Schema: -; Owner: -
 --
 
+
 CREATE SCHEMA public;
+CREATE SCHEMA IF NOT EXISTS public;
+
 
 
 --
@@ -278,15 +281,14 @@ DECLARE
     v_parca_id integer;
     v_parca_adi text;
 BEGIN
-    -- ==========================================
+   
     -- 1. MAKİNE KONTROLÜ
-    -- ==========================================
+   
     SELECT makine_id INTO v_makine_id FROM public.makine WHERE UPPER(TRIM(makine_adi)) = v_clean_makine_adi;
     IF v_makine_id IS NULL THEN
         RAISE EXCEPTION 'İşlem durduruldu: "%" adında bir makine bulunamadı!', v_clean_makine_adi;
     END IF;
-
-    -- ==========================================
+     
     -- 2. BAKIM YAPAN KİŞİ (OPERATÖR / SERVİS) KONTROLÜ
    SELECT kullanici_id INTO v_sorumlu_id FROM public.kullanici WHERE UPPER(TRIM(kullanici_adi)) = v_clean_bakim_yapan;
 
@@ -299,9 +301,9 @@ BEGIN
         END IF;
     END IF;
         
-    -- ==========================================
+
     -- 3. SERVİS FİRMASI VE İLETİŞİM KONTROLÜ
-    -- ==========================================
+   
     IF p_firma_telefon IS NOT NULL AND TRIM(p_firma_telefon) <> '' THEN
         SELECT iletisim_id INTO v_iletisim_id FROM public.iletisim WHERE TRIM(telefon) = TRIM(p_firma_telefon);
         
@@ -324,10 +326,9 @@ BEGIN
         v_servis_firma_id := NULL;
     END IF;
 
-    -- ==========================================
+    
     -- 4. ARIZA KAYDI KONTROLÜ
-    -- ==========================================
-	
+   
   IF v_clean_ariza_tanimi IS NOT NULL AND v_clean_ariza_tanimi <> '' THEN
     SELECT ak.ariza_id INTO v_ariza_id 
     FROM public.ariza_kaydi ak
@@ -343,19 +344,17 @@ BEGIN
         v_ariza_id := NULL;
     END IF;
 
-    -- ==========================================
+  
     -- 5. BAKIM TÜRÜ KONTROLÜ
-    -- ==========================================
-    SELECT bakim_tur_id INTO v_bakim_tur_id FROM public.bakim_turu WHERE UPPER(TRIM(bakim_tur_adi)) = v_clean_bakim_turu;
+       SELECT bakim_tur_id INTO v_bakim_tur_id FROM public.bakim_turu WHERE UPPER(TRIM(bakim_tur_adi)) = v_clean_bakim_turu;
     
     IF v_bakim_tur_id IS NULL THEN
         INSERT INTO public.bakim_turu (bakim_tur_adi) VALUES (v_clean_bakim_turu) RETURNING bakim_tur_id INTO v_bakim_tur_id;
     END IF;
 
-    -- ==========================================
+    
     -- 6. BAKIM KAYDINI OLUŞTUR
-    -- ==========================================
-    INSERT INTO public.bakim_kaydi (
+       INSERT INTO public.bakim_kaydi (
         makine_id, 
         sorumlu_id,       
         servis_firma_id,  
@@ -377,10 +376,9 @@ BEGIN
         p_durus_suresi
     ) RETURNING bakim_id INTO v_yeni_bakim_id;
 
-    -- ==========================================
+   
     -- 7. DEĞİŞEN PARÇALARI EKLE (KATI KONTROL)
-    -- ==========================================
-    IF array_length(p_degisen_parcalar, 1) > 0 THEN
+      IF array_length(p_degisen_parcalar, 1) > 0 THEN
         FOREACH v_parca_adi IN ARRAY p_degisen_parcalar
         LOOP
             v_clean_parca_adi := UPPER(TRIM(v_parca_adi)); 

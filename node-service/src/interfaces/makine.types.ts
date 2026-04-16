@@ -23,3 +23,4 @@ export interface IMakineOzellikleri {
     parca_bakim_kurallari: IParcaBakimKurali[];
     otonom_bakim_kriterleri: IOtonomFormMaddesi[];
 }
+

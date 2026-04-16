@@ -4,6 +4,11 @@ import kullaniciRoutes from "./kullaniciRoutes";
 import makineRoutes from "./makineRoutes";
 import checklistRoutes from "./checklistRoutes";
 import sistemRoutes from "./sistemRoutes";
+import bakimRoutes from "./bakimRoutes";
+import { TedarikciRouter, ServisFirmasiRouter } from "./firmaRoutes";
+import gorevRoutes from "./gorevRoutes";
+import { ServisPuanRouter, TedarikciPuanRouter } from "./puanRoute";
+
 
 
 const router = Router();
@@ -21,5 +26,18 @@ router.use("/makineler", makineRoutes);
 router.use("/checklist", checklistRoutes);
 
 router.use("/sistem", sistemRoutes);
+
+router.use("/bakimlar", bakimRoutes);
+
+router.use("/tedarikciler", TedarikciRouter); // /api/tedarikciler/*
+
+router.use("/servis-firmalari", ServisFirmasiRouter); // /api/servis-firmalari/*
+
+router.use("/gorevler", gorevRoutes);  
+
+router.use("/servis-puan", ServisPuanRouter);
+
+router.use("/tedarikci-puan", TedarikciPuanRouter);
+
 
 export default router;

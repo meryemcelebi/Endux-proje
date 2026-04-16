@@ -34,11 +34,11 @@ export default function Bakim() {
   // Yeni bakım kaydı formu için state (Şu an bu sayfada render edilmiyor, Servis.jsx'de kullanılıyor)
   const [form, setForm] = useState({
     makineId: "",
-    kullaniciId: "",
-    firmaId: "",
-    bakimTuru: "",
-    maliyet: "",
-    aciklama: ""
+    kullaniciId: "", // İşlemi yapan personel
+    firmaId: "", // Servis firması
+    bakimTuru: "", // Periyodik, Acil vb.
+    maliyet: "", // İşlem bedeli
+    aciklama: "" // Teknik detaylar
   });
 
   // Form alanlarındaki değişiklikleri yakalar
