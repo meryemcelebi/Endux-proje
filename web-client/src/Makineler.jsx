@@ -348,11 +348,11 @@ export default function Makineler() {
                         <div style={{ marginBottom: "10px", color: "#0f3460", fontWeight: "bold", fontSize: "14px" }}>Detaylı Bilgiler</div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "13px", color: "#555" }}>
                           <div><strong>Maliyet:</strong> {m.satin_alma_maliyeti || "-"} ₺</div>
-                          <div><strong>Çalışma Saatleri/Dizi:</strong> {Array.isArray(m.top_cal_sma_saati) ? m.top_cal_sma_saati.join(", ") : "Yok"}</div>
+                          <div><strong>Çalışma Saatleri:</strong> {m.top_calisma_saati || 0} Saat</div>
                           <div><strong>Lokasyon ID:</strong> {m.lo_id || "-"}</div>
                           <div><strong>Tür ID:</strong> {m.m_tur_id || "-"}</div>
                           <div><strong>Seri No:</strong> {Array.isArray(m.seri_no) ? m.seri_no.join(", ") : m.seri_no || "-"}</div>
-                          <div style={{ color: "#e94560", fontWeight: "bold" }}><strong>Servis PIN:</strong> {m.pin || "####"}</div>
+                          <div style={{ color: "#e94560", fontWeight: "bold" }}><strong>Servis PIN:</strong> {m.servis_pin || "####"}</div>
                           <div><strong>Garanti Süresi:</strong> {m.garanti_suresi ? m.garanti_suresi + " Ay" : "-"}</div>
                           {m.garanti_suresi > 0 && m.tedarikci && (
                             <>
@@ -360,7 +360,7 @@ export default function Makineler() {
                               <div><strong>Garanti Tel:</strong> {m.tedarikci.telefon || "-"}</div>
                             </>
                           )}
-                          <div style={{ gridColumn: "span 2" }}><strong>Özellikler:</strong> {Array.isArray(m.makine_ozellikleri) ? m.makine_ozellikleri.join(", ") : "Belirtilmemiş"}</div>
+                          <div style={{ gridColumn: "span 2" }}><strong>Özellikler:</strong> {m.makine_ozellikleri?.teknik_ozellikler ? Object.entries(m.makine_ozellikleri.teknik_ozellikler).map(([k,v]) => `${k}: ${v}`).join(" | ") : "Belirtilmemiş"}</div>
                         </div>
                       </div>
                     )}
@@ -368,7 +368,7 @@ export default function Makineler() {
                     {/* QR KOD VE AKSİYONLAR: Her makine için dinamik QR kod oluşturma */}
                     <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", alignItems: "center", background: "#f8f9fa", padding: "15px", borderRadius: "8px" }} onClick={(e) => e.stopPropagation()}>
                       <div className={`qr-container-${m.id}`}>
-                        <QRCodeCanvas value={JSON.stringify({ id: m.makineid, ad: m.makine_ad })} size={100} />
+                        <QRCodeCanvas value={`${window.location.origin}/checklist-giris/${m.makine_qr}`} size={100} />
                       </div>
                       
                       {/* QR Çıktı Al: QR kodu yeni pencerede yazdırılabilir formatta açar */}

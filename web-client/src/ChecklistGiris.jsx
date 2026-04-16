@@ -48,16 +48,29 @@ export default function ChecklistGiris() {
       return;
     }
     try {
-      // Backend girişi doğrular ve kullanıcı nesnesini döner
-      const result = await api.login({ kullanici_adi: username.toLowerCase(), sifre: password });
+      const result = await api.login({ kullanici_adi: username, sifre: password });
       if (result.success) {
         saveLogin(result);
-        const role = result.user.rol_id;
         
-        // Rol Bazlı Yönlendirme:
-        if (role === 1) navigate(`/makine/${id}`); // Yönetici ise doğrudan makine detayına
-        else if (role === 3) navigate(`/checklist/${id}`); // Operatör ise günlük checklist formuna
-        else if (role === 2) navigate(`/servis/${id}`); // Dahili teknisyen ise servis kayıt sayfasına
+        if (id) {
+             try {
+                 // QR Merkezi üzerinden (qrileMakineGetir) AUDIT loglarını yazdır ve gerçek veriyi getir
+                 const qrResult = await api.getMachineByQR(id);
+                 const roleStr = qrResult.rol;
+                 const makineId = qrResult.makine.makine_id;
+
+                 // Dinamik olarak merkezin belirlediği role göre form/panellere yönlendir
+                 if (roleStr === "YONETICI") navigate(`/makine/${makineId}`);
+                 else if (roleStr === "OPERATOR") navigate(`/checklist/${makineId}`);
+                 else if (roleStr === "TEKNISYEN") navigate(`/servis/${makineId}`);
+                 else navigate(`/dashboard`);
+             } catch (err) {
+                 alert("QR kod doğrulanamadı veya bu makineye erişiminiz kısıtlı.");
+             }
+        } else {
+             // Eğer direkt URL'den /checklist-giris yazıp girdiyse (makine yoksa) panele at
+             navigate("/dashboard");
+        }
       }
     } catch (err) {
       alert(err.message || "Giriş başarısız.");
@@ -71,7 +84,7 @@ export default function ChecklistGiris() {
     }
     try {
       const result = await api.checkServiceLogin({
-        makine_id: id,
+        qr_uuid: id,
         telefon: phone,
         ad_soyad: fullName,
         unvan: title,
@@ -85,11 +98,12 @@ export default function ChecklistGiris() {
 
         saveLogin(result);
         
-        // API'den gelen makine_id'yi veya URL'deki id'yi kullan
-        const finalId = result.makine_id || id;
+        // API'den gelen makine_id'yi (integer) kullan (UUID yerine)
+        const finalId = result.data?.makine?.makine_id || result.makine_id;
         
         setTimeout(() => {
-          navigate(`/servis/${finalId}`);
+          if (finalId) navigate(`/servis/${finalId}`);
+          else navigate("/dashboard");
         }, 2000);
       }
     } catch (err) {

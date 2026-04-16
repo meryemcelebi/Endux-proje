@@ -243,7 +243,8 @@ export async function tumMakineBilgileriGetir(req: Request, res: Response) {
         const makineler = await prisma.makine.findMany({
             include: {
                 firma: true,
-                makine_turu: true
+                makine_turu: true,
+                makine_ozellikleri: true
             }
         });
         res.status(200).json({

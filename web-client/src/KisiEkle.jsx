@@ -59,15 +59,17 @@ export default function KisiEkle() {
       const addedUser = await api.addUser(payload);
       
       // Kaydedilen kişiyi listeye en başa ekle
-      setKisiler([addedUser, ...kisiler]);
+      setKisiler([addedUser.kullanici ? addedUser.kullanici : addedUser, ...kisiler]);
 
       // Formu temizle
       setForm({
         kullanici_adi: "", sifre: "", eposta: "", telefon: "",
         ad: "", soyad: "", baslama_tarihi: "", firma_id: "", rol_id: "",
       });
+      alert("Kişi başarıyla eklendi!");
     } catch (err) {
       console.error("Kullanıcı eklenirken hata!", err);
+      alert("Kayıt Başarısız: " + (err.message || "Bilinmeyen bir hata oluştu"));
     }
   };
 

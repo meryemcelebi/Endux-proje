@@ -87,11 +87,11 @@ export async function benKimim(req: Request, res: Response, next: NextFunction):
 
 export async function servisGiris(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-        const { telefon, servis_pin, ad, soyad, unvan, servis_firma_id } = req.body;
-        if (!telefon || !servis_pin || !ad || !soyad || !unvan) {
+        const { telefon, servis_pin, ad, soyad, unvan, servis_firma_id, qr_uuid } = req.body;
+        if (!telefon || !ad || !soyad || !unvan) {
             res.status(400).json({
                 success: false,
-                message: 'Tüm alanlar Zorunludur'
+                message: 'Tüm alanlar zorunludur'
             });
             return;
         }
@@ -99,13 +99,13 @@ export async function servisGiris(req: Request, res: Response, next: NextFunctio
         const makine = await prisma.makine.findFirst({
             where : { servis_pin: Number(servis_pin) }
         });
-        if(!makine){
+
+        if(!makine || (qr_uuid && makine.makine_qr !== qr_uuid)){
             res.status(401).json({
                 success: false,
                 message: 'Geçersiz Pin Kodu.'
             });
             return;
-
         }
 
         const servisFirma = await prisma.servis_firma.findUnique({

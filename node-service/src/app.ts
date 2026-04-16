@@ -29,6 +29,34 @@ app.get("/api/health", (_req, res) => {
 // API route'ları
 app.use("/api", routes);
 
+// 404 Catch-All (Bulunamayan rotalar için JSON döndür)
+app.use((_req, res, _next) => {
+  res.status(404).json({
+    success: false,
+    message: "İstek yapılan API rotası bulunamadı."
+  });
+});
 
+// Global Error Handler (Hata durumlarında HTML yerine JSON döndürmek için)
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("🚀 Sistem Hatası Yakalandı: ", err);
+
+  // Veritabanı (Prisma) kaynaklı hataları tespit et
+  if (err.name === "PrismaClientKnownRequestError" || err.name === "PrismaClientInitializationError") {
+    res.status(500).json({
+      success: false,
+      message: "Veritabanına ulaşılamıyor veya veritabanı bağlantısında bir hata oluştu. Lütfen servislerin çalıştığından emin olun.",
+      error: config.nodeEnv === "development" ? err.message : undefined
+    });
+    return;
+  }
+
+  // Varsayılan kaba sistem hata fırlatıcısı
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Sunucu tarafında beklenmeyen bir hata oluştu.",
+    error: config.nodeEnv === "development" ? err.stack : undefined
+  });
+});
 
 export default app;

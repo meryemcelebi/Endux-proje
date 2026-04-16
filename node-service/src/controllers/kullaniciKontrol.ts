@@ -17,7 +17,7 @@ export async function personelEkle(req: Request, res: Response, next: NextFuncti
         }
 
         // Geçerli rol kontrolü
-        const gecerliRoller = ["OPERATOR", "TEKNISYEN", "YONETICI"];
+        const gecerliRoller = ["OPERATOR", "TEKNISYEN", "YONETICI", "SERVIS"];
         if (!gecerliRoller.includes(rol)) {
             res.status(400).json({
                 success: false,
@@ -93,8 +93,8 @@ export async function personelEkle(req: Request, res: Response, next: NextFuncti
 
 
 
-    
- 
+
+
 
 export async function tumKullanicilariGetir(req: Request, res: Response): Promise<void> {
     try {
@@ -121,7 +121,7 @@ export async function tumKullanicilariGetir(req: Request, res: Response): Promis
                     select: {
                         rol_id: true,
                         rol_adi: true
-                    }   
+                    }
                 }
             }
         });
@@ -137,6 +137,6 @@ export async function tumKullanicilariGetir(req: Request, res: Response): Promis
             message: "Kullanıcılar getirilirken bir hata oluştu."
         });
 
-}
-    
+    }
+
 }

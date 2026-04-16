@@ -24,7 +24,7 @@ export default function Login() {
 
     try {
       // API'ye giriş isteği at (Kullanıcı adını küçük harfe zorla)
-      const result = await api.login({ kullanici_adi: kullaniciAdi.toLowerCase(), sifre });
+      const result = await api.login({ kullanici_adi: kullaniciAdi, sifre });
 
       if (result.success) {
         // Dashboard ve Teknik Servis girişi için yetki kontrolü (Rol 0, 1 veya 2 olmalı)

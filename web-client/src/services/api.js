@@ -65,6 +65,14 @@ export const api = {
     };
   },
 
+  // ═══════════════ 3.5. MAKİNE QR GETİR ═══════════════
+  // GET /api/makineler/qr/:qr_uuid
+  getMachineByQR: async (qr_uuid) => {
+    const res = await fetch(`${API_BASE}/makineler/qr/${qr_uuid}`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json;
+  },
+
   // ═══════════════ 4. MAKİNE EKLE ═══════════════
   // POST /api/makineler
   addMachine: async (machineData) => {
@@ -93,7 +101,29 @@ export const api = {
     return json.data?.kontrol_maddesi || [];
   },
 
-  // ═══════════════ 6. CHECKLIST KAYDET ═══════════════
+  // ═══════════════ 6. CHECKLIST KAYDET VE GEÇMİŞ ═══════════════
+  getChecklistHistory: async (makine_id) => {
+    try {
+      const res = await fetch(`${API_BASE}/makineler/${makine_id}`, { headers: getHeaders() });
+      const json = await handleResponse(res);
+      const m = json.data || {};
+      
+      if (!m.gunluk_kontrol_formu || !Array.isArray(m.gunluk_kontrol_formu)) return [];
+      
+      return m.gunluk_kontrol_formu.map(form => ({
+        tarih: form.kontrol_tarihi?.[0] || form.istek_tarihi_saati,
+        tespit_eden: form.AI_on_risk_durumu?.includes("Yüksek") ? "AI" : "Operatör",
+        risk_sebebi: form.genel_not?.[0] || "Risk Yok",
+        cevaplar: form.form_madde_cevap?.map(c => ({
+          soru: c.kontrol_maddesi?.madde_adi?.[0] || "Bilinmeyen Soru",
+          cevap: c.girilen_deger?.[0] || "-"
+        })) || []
+      }));
+    } catch {
+      return [];
+    }
+  },
+  
   // POST /api/checklist/form
   submitChecklist: async (formData) => {
     const res = await fetch(`${API_BASE}/checklist/form`, {
@@ -129,9 +159,9 @@ export const api = {
   },
 
   // ═══════════════ 8. BAKIM GEÇMİŞİ (TEK MAKİNE) ═══════════════
-  // GET /api/bakimlar?makine_id=:id
+  // GET /api/bakimlar/:makine_id
   getServiceHistory: async (makine_id) => {
-    const res = await fetch(`${API_BASE}/bakimlar?makine_id=${makine_id}`, { headers: getHeaders() });
+    const res = await fetch(`${API_BASE}/bakimlar/${makine_id}`, { headers: getHeaders() });
     const json = await handleResponse(res);
     return (json.data || []).map((b) => ({
       ...b,
@@ -160,7 +190,7 @@ export const api = {
   // ═══════════════ 10. PERSONEL EKLE ═══════════════
   // POST /api/kullanicilar
   addUser: async (userData) => {
-    const rolIdToStr = { 1: "YONETICI", 2: "TEKNISYEN", 3: "OPERATOR" };
+    const rolIdToStr = { 1: "YONETICI", 2: "TEKNISYEN", 3: "OPERATOR", 4: "SERVIS" };
     const res = await fetch(`${API_BASE}/kullanicilar`, {
       method: "POST", headers: getHeaders(),
       body: JSON.stringify({
@@ -364,6 +394,7 @@ export const api = {
       body: JSON.stringify({
         telefon: data.telefon,
         servis_pin: data.pin || data.servis_pin,
+        qr_uuid: data.qr_uuid,
         ad: data.ad || data.ad_soyad?.split(" ")[0],
         soyad: data.soyad || data.ad_soyad?.split(" ").slice(1).join(" "),
         unvan: data.unvan || null,
