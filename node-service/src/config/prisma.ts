@@ -1,7 +1,10 @@
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
-import 'dotenv/config';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+dotenv.config({ path: path.join(__dirname, '../../../.env') }); // It is located at project root C:\Users\LENOVO\bitirme-projesi\.env
+// But __dirname is inside src/config. Let's make it simpler, dotenv looks at cwd.
 
 // Çevresel değişkenlerden bağlantı adresini alıyoruz
 const connectionString = process.env.DATABASE_URL;

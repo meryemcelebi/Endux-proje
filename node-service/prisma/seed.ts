@@ -34,7 +34,7 @@ async function main() {
         { ad: "Pres Makinesi", risk: 2.0 },
         { ad: "Plastik Enjeksiyon Makinesi", risk: 1.8 }
     ];
-    let makineTurleri = [];
+    let makineTurleri: any[] = [];
     for (const t of makineTurleriRaw) {
         let tur = await prisma.makine_turu.findFirst({ where: { makine_tur_adi: t.ad } });
         if (!tur) {
@@ -43,7 +43,7 @@ async function main() {
         makineTurleri.push(tur);
     }
 
-    // 4. Parçalar (Sahte Veriler dosyasındakiler)
+    // 4. Parçalar (Sahte Veriler)
     const parcaListesi = [
         { ad: "Kesici Takım / İş Mili (Spindle) Rulmanları", omur: 8000 },
         { ad: "X-Y-Z Eksen Motorları ve Sürücüleri", omur: 15000 },
@@ -80,7 +80,7 @@ async function main() {
         { ad: "Form Doldurma Süresi (sn)", alan: "form_doldurma_suresi_sn" }
     ];
 
-    const ozelMaddeler = {
+    const ozelMaddeler: Record<string, { ad: string; alan: string }[]> = {
         "CNC Makinesi": [
             { ad: "İş Mili Ses ve Titreşim", alan: "is_mili_ses_ve_titresim" },
             { ad: "Eksen Ölçü Sapması", alan: "eksen_olcu_sapmasi" },
@@ -129,7 +129,6 @@ async function main() {
             });
 
             // Maddeleri ekle
-            // @ts-ignore
             const eklenecekMaddeler = [...ortakMaddeler, ...(ozelMaddeler[mt.makine_tur_adi] || [])];
             for (const mad of eklenecekMaddeler) {
                 await prisma.kontrol_maddesi.create({
@@ -188,8 +187,13 @@ async function main() {
             }
         });
 
-        // Makine özellikleri JSON
-        let teknikSpecs = { araba_kodu: seri.toLowerCase(), montaj_yili: isSifir ? 2024 : 2020 + (i % 5), periyodik_bakim_zorunlu_mu: true, statu: isArizali ? 'ARIZALI/PASİF' : 'AKTİF/ÇALIŞIYOR' };
+        // Makine özellikleri JSON - ayrı tabloya kaydet
+        const teknikSpecs = {
+            araba_kodu: seri.toLowerCase(),
+            montaj_yili: isSifir ? 2024 : 2020 + (i % 5),
+            periyodik_bakim_zorunlu_mu: true,
+            statu: isArizali ? 'ARIZALI/PASİF' : 'AKTİF/ÇALIŞIYOR'
+        };
         await prisma.makine_ozellikleri.create({
             data: {
                 makine_id: m.makine_id,
