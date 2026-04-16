@@ -1,76 +1,111 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
+import { api } from "./services/api";
 
-export default function Checklist() { 
-  const { id } = useParams();
+/**
+ * Operatör Checklist Sayfası
+ * Operatörlerin makineler için günlük kontrol formlarını doldurduğu ekrandır.
+ */
+export default function Checklist() {
+  const { id } = useParams(); // URL'den makine ID'sini al
 
   const FORM_ID = 1; // Backend için örnek form kimliği
-  
-  // Mock 'kontrol_maddesi' array (Veritabanı bazlı yapı)
-  const [kontrolMaddeleri] = useState([
-    { madde_id: 101, metin: "Makine çalışıyor mu?" },
-    { madde_id: 102, metin: "Ses normal mi?" },
-    { madde_id: 103, metin: "Titreşim var mı?" },
-    { madde_id: 104, metin: "Yağ seviyesi yeterli mi?" },
-  ]);
+  const SABLON_ID = 1; // Backend için örnek şablon ID
 
-  // Prisma 'form_madde_cevap' formatına uyumlu state listesi 
-  const [cevaplar, setCevaplar] = useState([]);
-  const [saved, setSaved] = useState(false);
+  const [kontrolMaddeleri, setKontrolMaddeleri] = useState([]); // API'den gelen sorular
+  const [cevaplar, setCevaplar] = useState([]); // Kullanıcının verdiği cevaplar
 
+  // Sayfa yüklendiğinde kontrol sorularını getir
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      try {
+        const data = await api.getChecklistQuestions(SABLON_ID);
+        setKontrolMaddeleri(data);
+      } catch (err) {
+        console.error("Sorular yüklenemedi", err);
+      }
+    };
+    fetchQuestions();
+  }, [SABLON_ID]);
+
+  const [saved, setSaved] = useState(false); // Kayıt durumu kontrolü
+
+  // Bir soruya cevap verildiğinde çalışan fonksiyon
   const setCevap = (madde_id, cevapBool) => {
+    const girilenDeger = cevapBool ? "EVET" : "HAYIR";
+    const durumDeger = "BEKLEMEDE";
+
     const existing = cevaplar.find(c => c.madde_id === madde_id);
     if (existing) {
-      setCevaplar(cevaplar.map(c => c.madde_id === madde_id ? { ...c, cevap: cevapBool } : c));
+      // Mevcut cevabı güncelle
+      setCevaplar(cevaplar.map(c => c.madde_id === madde_id ? { ...c, girilen_deger: [girilenDeger], durum: [durumDeger], rawVal: cevapBool } : c));
     } else {
-      setCevaplar([...cevaplar, { form_id: FORM_ID, madde_id: madde_id, cevap: cevapBool }]);
+      // Yeni cevap ekle
+      setCevaplar([...cevaplar, { form_id: FORM_ID, madde_id: madde_id, girilen_deger: [girilenDeger], durum: [durumDeger], rawVal: cevapBool }]);
     }
     setSaved(false);
   };
 
-  const saveChecklist = () => {
+  // Formu API'ye gönderen fonksiyon
+  const saveChecklist = async () => {
     if (cevaplar.length !== kontrolMaddeleri.length) {
       alert("Lütfen tüm soruları yanıtlayın!");
       return;
     }
-    
-    // Backend API'a iletilmesi planlanan yapı
+
+    // API'nin beklediği veri yapısına dönüştürme
+    const answersPayload = cevaplar.map(c => ({
+      form_id: c.form_id,
+      madde_id: c.madde_id,
+      girilen_deger: c.girilen_deger,
+      durum: c.durum,
+      aciklama: []
+    }));
+
     const payload = {
-      makine_id: id,
-      tarih: new Date().toISOString(),
-      form_madde_cevap: cevaplar
+      makine_id: Number(id),
+      kullanici_id: 1, // Mock kullanıcı (Login'den gelecek)
+      sablon_id: SABLON_ID,
+      kontrol_tarihi: [new Date().toISOString()],
+      genel_not: [],
+      ai_on_risk_durumu: [],
+      form_madde_cevap: answersPayload
     };
 
-    localStorage.setItem(`checklist-${id}`, JSON.stringify(payload));
-    console.log("Backend'e Gönderilecek Payload:", payload);
-
-    setSaved(true);
-    alert("Checklist formatlanarak kaydedildi ✔");
+    try {
+      await api.submitChecklist(payload);
+      setSaved(true);
+      alert("Checklist API'ye gönderildi ve kaydedildi ✔");
+    } catch (err) {
+      console.error("Checklist kaydedileedi", err);
+    }
   };
 
   return (
     <div style={sayfaStil}>
       <div style={konteynerStil}>
 
-        {/* BAŞLIK */}
+        {/* BAŞLIK VE ETİKET */}
         <div style={baslikStil}>
           <h2 style={{ margin: 0, color: "white", fontSize: "22px" }}> Operatör Checklist</h2>
           <div style={etiketStil}>Makine ID: {id}</div>
         </div>
 
-        {/* CHECKLIST KART */}
+        {/* --- KONTROL SORULARI LİSTESİ --- */}
         <div style={kartStil}>
           <h3 style={{ color: "navy", marginTop: 0, marginBottom: "20px", fontSize: "18px" }}>
             Kontrol Soruları
           </h3>
 
           {kontrolMaddeleri.map((madde, i) => {
-            const mevcutCevap = cevaplar.find(c => c.madde_id === madde.madde_id)?.cevap;
+            const soruMetni = Array.isArray(madde.madde_adi) ? madde.madde_adi[0] : madde.madde_adi;
+            const mevcutCevap = cevaplar.find(c => c.madde_id === madde.madde_id)?.rawVal;
 
             return (
               <div key={madde.madde_id} style={soruSatirStil}>
-                <span style={soruTextStil}>{i + 1}. {madde.metin}</span>
+                <span style={soruTextStil}>{i + 1}. {soruMetni || "Soru?"}</span>
 
+                {/* Evet / Hayır Seçenekleri */}
                 <div style={{ display: "flex", gap: "10px" }}>
                   <button
                     onClick={() => setCevap(madde.madde_id, true)}
@@ -100,6 +135,7 @@ export default function Checklist() {
             );
           })}
 
+          {/* Formu Kaydet Butonu */}
           <button
             onClick={saveChecklist}
             style={{
@@ -115,20 +151,20 @@ export default function Checklist() {
   );
 }
 
-/* STILLER */
+// --- GÖRSEL STİLLER ---
 const sayfaStil = {
-  minHeight: "100vh",  //ekran boyu kadar yer kaplar
+  minHeight: "100vh",
   background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
   padding: "30px",
   boxSizing: "border-box",
 };
 
 const konteynerStil = {
-  maxWidth: "700px",  //ortalar
+  maxWidth: "700px",
   margin: "0 auto",
 };
 
-const baslikStil = {   //üst başlık
+const baslikStil = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",

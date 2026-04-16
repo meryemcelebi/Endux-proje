@@ -1,27 +1,47 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { api } from "./services/api";
 
+/**
+ * Ana Giriş Sayfası (Login)
+ * Yöneticilerin ve teknik servis personelinin sisteme giriş yaptığı ekrandır.
+ * Operatörler bu panel yerine makineye özel giriş panelini kullanır.
+ */
 export default function Login() {
   const navigate = useNavigate();
-  const [kullaniciAdi, setKullaniciAdi] = useState("");
-  const [sifre, setSifre] = useState("");
-  const [hata, setHata] = useState("");
+  const [kullaniciAdi, setKullaniciAdi] = useState(""); // Kullanıcı adı state'i
+  const [sifre, setSifre] = useState(""); // Şifre state'i
+  const [hata, setHata] = useState(""); // Hata mesajlarını tutar
 
-  const handleGiris = (e) => {
+  const handleGiris = async (e) => {
     e.preventDefault(); 
 
-    if (kullaniciAdi && sifre) {
-      // Backend (Prisma & Node.js auth işlemi simülasyonu)
-      const mockToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.mock_token.signature";
-      const userPayload = { kullanici_id: 1, rol_id: 1, isim: "Admin" };
-      
-      localStorage.setItem("auth_token", mockToken);
-      localStorage.setItem("user_payload", JSON.stringify(userPayload));
-      localStorage.setItem("girisYapildi", "true"); 
-      
-      navigate("/dashboard"); 
-    } else {
+    if (!kullaniciAdi || !sifre) {
       setHata("Kullanıcı adı veya şifre boş bırakılamaz!");
+      return;
+    }
+
+    try {
+      const result = await api.login({ kullanici_adi: kullaniciAdi, sifre });
+      
+      if (result.success) {
+        // Dashboard ve Teknik Servis girişi için (0, 1, 2)
+        if (result.user.rol_id !== 0 && result.user.rol_id !== 1 && result.user.rol_id !== 2) {
+          throw new Error("Bu panele Operatörler giriş yapamaz. Sadece Yönetici ve Teknik Servis girebilir.");
+        }
+
+        localStorage.setItem("auth_token", result.token);
+        localStorage.setItem("user_payload", JSON.stringify(result.user));
+        localStorage.setItem("girisYapildi", "true"); 
+        
+        if (result.user.rol_id === 2) {
+          navigate("/teknik-servis");
+        } else {
+          navigate("/dashboard"); 
+        }
+      }
+    } catch (error) {
+       setHata(error.message || "Giriş başarısız oldu.");
     }
   };
 

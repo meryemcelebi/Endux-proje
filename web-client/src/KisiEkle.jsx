@@ -1,50 +1,76 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
+import { api } from "./services/api";
 
+/**
+ * Personel / Kişi Ekleme Sayfası
+ * Sisteme yeni kullanıcı, operatör veya teknisyen kaydı yapar.
+ */
 export default function KisiEkle() {
-  const [kisiler, setKisiler] = useState([]);
+  const [kisiler, setKisiler] = useState([]); // Mevcut kullanıcı listesi
 
+  // Form alanlarındaki verileri tutan state
   const [form, setForm] = useState({
     kullanici_adi: "",
     sifre: "",
-    email: "",
+    eposta: "",
     telefon: "",
-    isim: "",
-    soyisim: "",
+    ad: "",
+    soyad: "",
     baslama_tarihi: "",
     firma_id: "",
     rol_id: "",
   });
 
+  // Load mock data on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const users = await api.getUsers();
+        setKisiler(users);
+      } catch (error) {
+        console.error("Kullanıcılar yüklenemedi", error);
+      }
+    };
+    fetchData();
+  }, []);
+
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const addKisi = () => {
-    if (!form.isim || !form.soyisim) return;
+  const addKisi = async () => {
+    if (!form.ad || !form.soyad || !form.firma_id || !form.rol_id) {
+       alert("Lütfen ad, soyad, firma ve rol alanlarını doldurun.");
+       return;
+    }
 
-    const yeniKisi = {
-      ...form,
-      firma_id: Number(form.firma_id),
-      rol_id: Number(form.rol_id),
-      kullanici_id: Date.now() // Mock ID
-    };
+    try {
+      const payload = {
+        ...form,
+        firma_id: Number(form.firma_id),
+        rol_id: Number(form.rol_id)
+      };
 
-    setKisiler([yeniKisi, ...kisiler]);
+      const addedUser = await api.addUser(payload);
+      
+      setKisiler([addedUser, ...kisiler]);
 
-    setForm({
-      kullanici_adi: "",
-      sifre: "",
-      email: "",
-      telefon: "",
-      isim: "",
-      soyisim: "",
-      baslama_tarihi: "",
-      firma_id: "",
-      rol_id: "",
-    });
+      setForm({
+        kullanici_adi: "",
+        sifre: "",
+        eposta: "",
+        telefon: "",
+        ad: "",
+        soyad: "",
+        baslama_tarihi: "",
+        firma_id: "",
+        rol_id: "",
+      });
+    } catch (err) {
+      console.error("Kullanıcı eklenirken hata!", err);
+    }
   };
 
   return (
@@ -77,14 +103,14 @@ export default function KisiEkle() {
                     color: "#555"
                   }}
                 >
-                  <h3 style={{ margin: "0 0 10px 0", color: "#333", fontSize: "16px" }}>{k.isim} {k.soyisim}</h3>
+                  <h3 style={{ margin: "0 0 10px 0", color: "#333", fontSize: "16px" }}>{k.ad} {k.soyad}</h3>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: "13px" }}>
                     <div><strong>Kullanıcı ID:</strong> {k.kullanici_id}</div>
                     <div><strong>Firma ID:</strong> {k.firma_id}</div>
                     <div><strong>Rol ID:</strong> {k.rol_id}</div>
                     <div><strong>Telefon:</strong> {k.telefon}</div>
-                    <div><strong>E-Posta:</strong> {k.email}</div>
+                    <div><strong>E-Posta:</strong> {k.eposta}</div>
                     <div><strong>Kullanıcı Adı:</strong> {k.kullanici_adi}</div>
                     <div><strong>Başlama Tarihi:</strong> {k.baslama_tarihi}</div>
                   </div>
@@ -97,10 +123,10 @@ export default function KisiEkle() {
               <h2 style={{ margin: "0 0 20px 0", color: "#0f3460", borderBottom: "1px solid #eee", paddingBottom: "12px" }}>Yeni Kişi Ekle</h2>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
-                <input name="isim" placeholder="Ad" value={form.isim} onChange={handleChange} style={inputStyle} />
-                <input name="soyisim" placeholder="Soyad" value={form.soyisim} onChange={handleChange} style={inputStyle} />
+                <input name="ad" placeholder="Ad" value={form.ad} onChange={handleChange} style={inputStyle} />
+                <input name="soyad" placeholder="Soyad" value={form.soyad} onChange={handleChange} style={inputStyle} />
                 <input name="telefon" placeholder="Telefon" value={form.telefon} onChange={handleChange} style={inputStyle} />
-                <input name="email" placeholder="E-Posta" type="email" value={form.email} onChange={handleChange} style={inputStyle} />
+                <input name="eposta" placeholder="E-Posta" type="email" value={form.eposta} onChange={handleChange} style={inputStyle} />
                 <input name="kullanici_adi" placeholder="Kullanıcı Adı" value={form.kullanici_adi} onChange={handleChange} style={inputStyle} />
                 <input name="sifre" placeholder="Şifre" type="password" value={form.sifre} onChange={handleChange} style={inputStyle} />
                 <input name="baslama_tarihi" placeholder="Başlama Tarihi" type="date" value={form.baslama_tarihi} onChange={handleChange} style={inputStyle} />
@@ -110,6 +136,7 @@ export default function KisiEkle() {
                   <option value="1">Yönetici (1)</option>
                   <option value="2">Teknisyen (2)</option>
                   <option value="3">Operatör (3)</option>
+                  <option value="4">Dış Servis Sorumlusu (4)</option>
                 </select>
 
                 <button

@@ -1,13 +1,25 @@
 import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
+/**
+ * Yan Menü (Sidebar) Bileşeni
+ * Uygulamanın ana navigasyonunu sağlar. Kullanıcının rolüne (Admin/Yönetici/Teknisyen)
+ * göre menü elemanlarını dinamik olarak gösterir veya gizler.
+ */
 const Sidebar = () => {
-  const location = useLocation();
+  const location = useLocation(); // Mevcut sayfa yolunu belirlemek için
   const currentPath = location.pathname;
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const kullaniciAdi = "Yönetici";
+  // Oturum açan kullanıcının bilgilerini ve yetki seviyesini al
+  const payloadStr = localStorage.getItem("user_payload");
+  const userPayload = payloadStr ? JSON.parse(payloadStr) : { ad: "Yönetici", rol_id: 1 };
+  const kullaniciAdi = userPayload.ad || "Kullanıcı";
+  const userRole = userPayload.rol_id;
+  
+  // Yetki Kontrolü: Sadece rolü 0 (Süper Admin) ve 1 (Yönetici) olanlar tüm menüleri görebilir
+  const isAdmin = userRole === 0 || userRole === 1;
 
   const handleCikis = () => {
     localStorage.removeItem("auth_token");
@@ -44,7 +56,9 @@ const Sidebar = () => {
       {/* ENDUX LOGO ALANI */}
       <div style={{ textAlign: "center", marginBottom: "30px", paddingBottom: "20px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
         <h2 style={{ margin: 0, fontSize: "32px", fontWeight: "bold", letterSpacing: "3px", color: "#e94560" }}>ENDUX</h2>
-        <span style={{ fontSize: "12px", color: "#a0a5b1", letterSpacing: "1px" }}>YÖNETİM PANELİ</span>
+        <span style={{ fontSize: "12px", color: "#a0a5b1", letterSpacing: "1px" }}>
+          {isAdmin ? "YÖNETİM PANELİ" : "SERVİS PANELİ"}
+        </span>
       </div>
 
       <nav
@@ -54,28 +68,36 @@ const Sidebar = () => {
           gap: "12px",
         }}
       >
-        <Link to="/dashboard" style={getLinkStyle("/dashboard")}>
-          Ana Kontrol Paneli
-        </Link>
+        {isAdmin && (
+          <>
+            <Link to="/dashboard" style={getLinkStyle("/dashboard")}>
+              Ana Kontrol Paneli
+            </Link>
 
-        <Link to="/makineler" style={getLinkStyle("/makineler")}>
-          Makine Yönetimi
-        </Link>
+            <Link to="/makineler" style={getLinkStyle("/makineler")}>
+              Makine Yönetimi
+            </Link>
 
-        <Link to="/bakim" style={getLinkStyle("/bakim")}>
-          Bakım Yönetimi
-        </Link>
+            <Link to="/bakim" style={getLinkStyle("/bakim")}>
+              Bakım Yönetimi
+            </Link>
 
-        <Link to="/tedarikciler" style={getLinkStyle("/tedarikciler")}>
-          Tedarikçi Bilgisi
-        </Link>
+            <Link to="/tedarikciler" style={getLinkStyle("/tedarikciler")}>
+              Tedarikçi Bilgisi
+            </Link>
 
-        <Link to="/kisi-ekle" style={getLinkStyle("/kisi-ekle")}>
-          Kişi Ekle
+            <Link to="/kisi-ekle" style={getLinkStyle("/kisi-ekle")}>
+              Kişi Ekle
+            </Link>
+          </>
+        )}
+
+        <Link to="/teknik-servis" style={getLinkStyle("/teknik-servis")}>
+          Teknik Servis
         </Link>
       </nav>
 
-      {/* YÖNETİCİ PROFİLİ (EN ALTTA) */}
+      {/* YÖNETİCİ/PERSONEL PROFİLİ (EN ALTTA) */}
       <div style={{ marginTop: "auto", position: "relative" }}>
         <div 
           style={{ 
@@ -102,11 +124,13 @@ const Sidebar = () => {
             fontWeight: "bold",
             fontSize: "18px"
           }}>
-            {kullaniciAdi.charAt(0)}
+            {kullaniciAdi.charAt(0).toUpperCase()}
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: "bold", fontSize: "14px" }}>{kullaniciAdi}</div>
-            <div style={{ fontSize: "12px", color: "#a0a5b1" }}>Yetkili</div>
+            <div style={{ fontSize: "12px", color: "#a0a5b1" }}>
+              {isAdmin ? "Yetkili Yönetici" : "Dahili Teknisyen"}
+            </div>
           </div>
           <span style={{ fontSize: "10px", color: "#666" }}>▲</span>
         </div>
