@@ -30,7 +30,7 @@ export async function maliyetAnalizi(req: Request, res: Response) {
         });
         if (!makine) {
             return res.status(404).json({
-                succes: false,
+                success: false,
                 message: "Belirtilen ID ile makine bulunamadı"
             });
 
@@ -62,7 +62,7 @@ export async function maliyetAnalizi(req: Request, res: Response) {
             : 0;
 
         res.status(200).json({
-            succes: true,
+            success: true,
             data: {
                 makine_id: makineId,
                 makine_adi: makine.makine_adi,
@@ -77,7 +77,7 @@ export async function maliyetAnalizi(req: Request, res: Response) {
     } catch (error) {
         console.error("Maliyet analizi hatası:", error);
         res.status(500).json({
-            succes: false,
+            success: false,
             message: "Maliyet analizi sırasında bir hata oluştu"
         });
     }

@@ -1,13 +1,13 @@
-import {Request, Response} from 'express';
+import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { Decimal } from '@prisma/client/runtime/client';
 
 
 
-export const bakimKaydiGir=async (req: Request, res: Response) => {
+export const bakimKaydiGir = async (req: Request, res: Response) => {
     try {
         const {
-            makine_id, 
+            makine_id,
             bakim_tur_id,
             aciklama,
             durus_suresi,
@@ -15,16 +15,16 @@ export const bakimKaydiGir=async (req: Request, res: Response) => {
             ariza_id,
             bakim_maliyet,
             sorumlu_id,
-            degisen_Parcalar}=req.body;
+            degisen_Parcalar } = req.body;
 
 
         if (!makine_id || !bakim_maliyet || !sorumlu_id || !servis_firma_id) {
-            return res.status(400).json({error: 'makine_id, bakim_maliyet, teknisyen_id ve servis_firma_id zorunludur.'});
+            return res.status(400).json({ error: 'makine_id, bakim_maliyet, teknisyen_id ve servis_firma_id zorunludur.' });
         }
 
 
-        const sonuc=await prisma.$transaction(async (tx) => {
-            const bakimKaydi=await tx.bakim_kaydi.create({
+        const sonuc = await prisma.$transaction(async (tx) => {
+            const bakimKaydi = await tx.bakim_kaydi.create({
                 data: {
                     makine_id: Number(makine_id),
                     sorumlu_id: Number(sorumlu_id),
@@ -50,31 +50,33 @@ export const bakimKaydiGir=async (req: Request, res: Response) => {
             }
             return bakimKaydi;
         });
-        res.status(201).json({success: true,
+        res.status(201).json({
+            success: true,
             message: 'Bakım kaydı başarıyla oluşturuldu.',
-             data: sonuc});
+            data: sonuc
+        });
     } catch (error) {
         console.error('Bakım kaydı oluşturulurken hata:', error);
-        res.status(500).json({error: 'Bakım kaydı oluşturulurken bir hata oluştu.'});
+        res.status(500).json({ error: 'Bakım kaydı oluşturulurken bir hata oluştu.' });
     }
 };
 
 
 
-export const makineBakimKayitlari=async (req: Request, res: Response) => {
+export const makineBakimKayitlari = async (req: Request, res: Response) => {
     try {
-        const makineIdParam=req.query.makine_id as string;
+        const makineIdParam = req.query.makine_id as string;
         if (!makineIdParam || isNaN(Number(makineIdParam))) {
             return res.status(400).json({
                 success: false,
                 message: 'Geçerli bir makine_id query parametresi gereklidir. Örnek: /api/bakimlar?makine_id=1'
             });
 
-            }
-        const makine_id=Number(makineIdParam);
+        }
+        const makine_id = Number(makineIdParam);
         //makine var mı kontrolü
-        const makineVarMi=await prisma.makine.findUnique({
-            where: {makine_id: makine_id}, 
+        const makineVarMi = await prisma.makine.findUnique({
+            where: { makine_id: makine_id },
         });
         if (!makineVarMi) {
             return res.status(404).json({
@@ -83,8 +85,8 @@ export const makineBakimKayitlari=async (req: Request, res: Response) => {
             });
         }
         ///bakım kayıtlarının çekilmesi, teknisyen ve parça değişim bilgilerinin dahil
-        const bakimKayitlari=await prisma.bakim_kaydi.findMany({
-            where: {makine_id: makine_id},
+        const bakimKayitlari = await prisma.bakim_kaydi.findMany({
+            where: { makine_id: makine_id },
             include: {
                 //bakım yapan teknisyenin bilgileri (servis_sorumlusu tablosundan)
                 servis_sorumlusu: {
@@ -119,7 +121,7 @@ export const makineBakimKayitlari=async (req: Request, res: Response) => {
                         iletisim: {
                             select: {
                                 telefon: true,
-                                email: true,
+                                mail: true,
                             }
                         }
                     }
@@ -156,6 +158,6 @@ export const makineBakimKayitlari=async (req: Request, res: Response) => {
         });
     } catch (error) {
         console.error('Bakım kayıtları getirilirken hata:', error);
-        res.status(500).json({error: 'Bakım kayıtları getirilirken bir hata oluştu.'});
+        res.status(500).json({ error: 'Bakım kayıtları getirilirken bir hata oluştu.' });
     }
 };

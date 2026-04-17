@@ -1,9 +1,68 @@
 import { v4 as uuidv4 } from "uuid";
 import prisma from "../src/config/prisma";
+import { hashSifre } from "../src/utils/hash"; // Backend'deki aynı fonksiyonu çağırıyoruz
 
-async function main() {
-    console.log("Seeding işlemi başlatılıyor...");
 
+async function main(){
+     console.log("Seeding işlemi başlatılıyor...");
+
+
+    const plainPassword = 'q1w2e3Can';
+    const hashliSifre = await hashSifre(plainPassword);
+
+     const kullanicilar = [
+        {
+            firma_id: 1,
+            rol_id: 1, 
+            ad: 'Canan',
+            soyad: 'Yılmaz',
+            telefon: '5551112233',
+            eposta: 'canan.yilmaz@deu.edu.tr',
+            sifre: hashliSifre, // Burası kritik: Artık veritabanına hashli gidiyor
+            aktiflik: true,
+            baslama_tarihi: new Date(),
+            kullanici_adi: 'Canan', 
+        }
+    ];
+for (const kullanici of kullanicilar) {
+    await prisma.kullanici.upsert({
+      where: { eposta: kullanici.eposta || '' }, // Eposta benzersiz olduğu için çakışmayı önler
+      update: {}, // Eğer kullanıcı varsa güncelleme yapma
+      create: kullanici, // Yoksa yeni oluştur
+    });
+  }
+
+  console.log('Seed işlemi başarıyla tamamlandı.');
+
+
+    const rolListesi = [
+    { ad: "YONETICI" },
+    { ad: "BAKIM_SORUMLUSU" },
+    { ad: "OPERATOR" },
+    { ad: "SERVIS" }
+];
+
+for (const r of rolListesi) 
+   {
+    // Önce bu rol veritabanında var mı diye bakıyoruz
+    let mevcutRol = await prisma.rol.findFirst({ 
+        where: { rol_adi: r.ad } 
+    });
+
+    // Eğer yoksa (null dönerse), yeni rolü oluşturuyoruz
+    if (!mevcutRol) {
+        await prisma.rol.create({
+            data: {
+                rol_adi: r.ad
+            }
+        });
+        console.log(`Rol eklendi: ${r.ad}`);
+    } else {
+        console.log(`Rol zaten mevcut, atlandı: ${r.ad}`);
+    }
+ }
+
+    
     // 1. İletişim ve Firma (Varsayılan)
     let firma = await prisma.firma.findFirst();
     if (!firma) {
@@ -27,6 +86,7 @@ async function main() {
             }
         });
     }
+
 
     // 3. Makine Türleri
     const makineTurleriRaw = [
@@ -201,10 +261,15 @@ async function main() {
             }
         });
     }
+    
 
     console.log("✅ Seed işlemi %100 tamamlandı! 100 sahte makine, parçalar ve kontrol şablonları eklendi.");
-}
 
+
+
+}   
+    
+   
 main()
     .catch((e) => {
         console.error(e);
@@ -213,3 +278,4 @@ main()
     .finally(async () => {
         await prisma.$disconnect();
     });
+

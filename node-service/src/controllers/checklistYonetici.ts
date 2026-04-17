@@ -6,8 +6,10 @@ import prisma from "../config/prisma";
 export async function formKaydet(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const { makine_id, sablon_id, genel_not, cevaplar } = req.body;
+
         // Token'dan giriş yapan operatörün ID'sini alıyoruz
         const operator_id = Number(req.user?.userId);
+
         if (!makine_id || !sablon_id) {
             res.status(400).json({ success: false, hata: "Makine ID ve Şablon ID zorunludur." });
             return;
@@ -19,50 +21,49 @@ export async function formKaydet(req: Request, res: Response, next: NextFunction
         }
 
         if (!operator_id) {
-            res.status(401).json({ success: false, message: "Kullanici kimliği bulunamadi." });
+            res.status(401).json({ success: false, message: "Kullanıcı kimliği bulunamadı." });
             return;
         }
-        const yeniForm = await prisma.$transaction(async (tx) => {
-            //Ana form kaydı oluştur
-            const form = await tx.gunluk_kontrol_formu.create({
-                data: {
-                    makine_id: Number(makine_id),
-                    kullanici_id: operator_id,
-                    sablon_id: Number(sablon_id),
-                    genel_not: genel_not || null,
-                    kontrol_tarihi: new Date()
-                }
-            });
 
-            if (cevaplar && cevaplar.length > 0) {
-                const islenecekCevaplar = cevaplar.map((c: any) => ({
-                    form_id: form.form_id,
-                    soru_referans_id: Number(c.madde_id),
-                    girilen_deger: String(c.girilen_deger),
-                    durum: c.durum
-                }));
-                await tx.form_madde_cevap.createMany({
-                    data: islenecekCevaplar
-                });
-            }
-            return form;
-        });
+
+        // jsonb_to_recordset beklentisine göre isimlendiriyoruz
+        // res_id, s_tipi, s_durum, s_deger, s_not
+        const formatliCevaplar = cevaplar.map((c: any) => ({
+            res_id: Number(c.madde_id),
+            s_durum: c.durum,
+            // PostgreSQL NUMERIC beklediği için sayıya çeviriyoruz (veya null bırakıyoruz)
+            s_deger: c.girilen_deger ? Number(c.girilen_deger) : null,
+            s_tipi: c.soru_tipi || 'Bilinmiyor', // Eğer frontend göndermiyorsa varsayılan
+            s_not: c.aciklama || null
+        }));
+
+        // 2. Prisma için JSON dizisini string'e çeviriyoruz
+        const cevaplarJson = JSON.stringify(formatliCevaplar);
+
+        // 3. Transaction ve createMany yerine doğrudan Prosedür çağırıyoruz
+        await prisma.$executeRaw`
+            CALL public.pr_kontrol_kaydet(
+                ${Number(makine_id)}::integer, 
+                ${operator_id}::integer, 
+                ${Number(sablon_id)}::integer, 
+                ${genel_not || null}::text, 
+                ${cevaplarJson}::jsonb
+            )
+        `;
+
         res.status(201).json({
             success: true,
-            message: " Form başarıyla kaydedildi.",
-            data: { form_id: yeniForm.form_id }
+            message: "Form başarıyla kaydedildi."
 
-        })
+        });
 
 
-    }
 
-    catch (error) {
+    } catch (error) {
         console.error("Form kaydetme hatası:", error);
         res.status(500).json({ success: false, message: "Form kaydedilirken bir hata oluştu." });
     }
 }
-
 
 export async function sablonGetir(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
