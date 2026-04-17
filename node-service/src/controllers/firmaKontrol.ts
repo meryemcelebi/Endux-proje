@@ -44,7 +44,7 @@ export async function tedarikciEkle(req: Request, res: Response) {
             const yeniIletisim = await prisma.iletisim.create({
                 data: {
                     telefon: telefon ? String(telefon) : null,
-                    email: email ? String(email) : null,
+                    mail: email ? String(email) : null,
                     acik_adres: adres ? String(adres) : null,
                     il: il ? String(il) : null,
                     ilce: ilce ? String(ilce) : null,
@@ -133,7 +133,7 @@ export async function servisFirmasiEkle(req: Request, res: Response): Promise<vo
             const yeniIletisim = await prisma.iletisim.create({
                 data: {
                     telefon: telefon ? String(telefon) : null,
-                    email: email ? String(email) : null,
+                    mail: email ? String(email) : null,
                     acik_adres: adres ? String(adres) : null,
                     il: il ? String(il) : null,
                     ilce: ilce ? String(ilce) : null,

@@ -119,8 +119,9 @@ model bakim_kaydi {
   ariza_kaydi     ariza_kaydi?    @relation(fields: [ariza_id], references: [ariza_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ariza")
   bakim_turu      bakim_turu?     @relation(fields: [bakim_tur_id], references: [bakim_tur_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_bakim")
   makine          makine          @relation(fields: [makine_id], references: [makine_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_makine")
-  servis_firma    servis_firma    @relation(fields: [servis_firma_id], references: [servis_firma_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_servis")
-  parca_degisim   parca_degisim[]
+  servis_firma     servis_firma      @relation(fields: [servis_firma_id], references: [servis_firma_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_servis")
+  servis_sorumlusu servis_sorumlusu? @relation(fields: [sorumlu_id], references: [sorumlu_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_servis_sorumlu")
+  parca_degisim    parca_degisim[]
 
   @@index([makine_id], map: "idx_bakim_makine")
   @@index([servis_firma_id], map: "idx_bakim_servis")
@@ -396,6 +397,7 @@ model servis_sorumlusu {
   unvan           String?      @db.VarChar
   sorumlu_adi     String?      @db.VarChar(100)
   servis_firma    servis_firma @relation(fields: [servis_firma_id], references: [servis_firma_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_sorumlusu")
+  bakim_kaydi     bakim_kaydi[]
 }
 
 model abonelik_tipi {
