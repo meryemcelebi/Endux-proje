@@ -1,172 +1,168 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-from typing import Dict, Any
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+from typing import Optional, Dict
 import pandas as pd
 import xgboost as xgb
 import pickle
 import os
 
-app = FastAPI()
+app = FastAPI(title="KB-V4 Kestirimci Bakım API", version="4.0", description="Tüm Fabrika Yapay Zeka Merkezi")
 
 # ==========================================
-# 0. İKİ BEYNİ VE ÇEVİRMENİ HAFIZAYA YÜKLEME
+# 1. YAPAY ZEKA MODELLERİNİ YÜKLEME
 # ==========================================
-print("Yapay Zeka Modelleri (BEYİN-1 ve BEYİN-2) API'ye yükleniyor...")
-klasor_yolu = os.path.dirname(os.path.abspath(__file__))
+MODELS_DIR = "models"
+makine_turleri = ["cnc", "pres", "enjeksiyon"]
+modeller = {}
+encoderlar = {}
 
-model_ariza_yolu = os.path.join(klasor_yolu, "beyin1_ariza_siniflandirici.json")
-model_yuzde_yolu = os.path.join(klasor_yolu, "beyin2_yipranma_regresyonu.json")
-encoder_yolu = os.path.join(klasor_yolu, "ariza_label_encoder.pkl")
-
-# BEYİN 1: Arıza Tipi
-beyin1_ariza = xgb.XGBClassifier()
-beyin1_ariza.load_model(model_ariza_yolu)
-
-# BEYİN 2: Yıpranma Yüzdesi (Regressor)
-beyin2_yuzde = xgb.XGBRegressor()
-beyin2_yuzde.load_model(model_yuzde_yolu)
-
-# Çevirmen
-with open(encoder_yolu, "rb") as f:
-    ariza_cevirmen = pickle.load(f)
-
-print("✅ İki beyin de aktif! Sistem Meryem'den gelecek verileri bekliyor...")
-
-# ==========================================
-# 1. PYDANTIC VERİ MODELLERİ (ŞEMALAR)
-# ==========================================
-class OtonomBakimTemel(BaseModel):
-    sicaklik_durumu: str
-    titresim_hissi: str
-    yag_seviyesi: str
-    genel_durum: str
-    sizinti_durumu: str
-    kablo_hasar_durumu: str
-
-class AnaOtonomBakimIstegi(BaseModel):
-    makine_turu: str          
-    calisma_saati: int        
-    genel_bakim_periyodu_saat: float 
-    temel_veriler: OtonomBakimTemel
-    ozel_veriler: Dict[str, Any] 
-
-class AIArizaTespitSonucu(BaseModel):
-    makine_turu: str
-    tahmin_edilen_ariza: str           
-    teorik_yipranma_yuzdesi: str       # Meryem'in aptal kronometresi
-    ai_dinamik_yipranma_yuzdesi: str   # Senin yapay zekanın ±%0.94 sapmalı tahmini!
-    tahmini_durus_suresi: float        
-    tahmini_maliyet: float             
-    planli_bakim_gecikmesi: bool
+print("⚙️ Yapay Zeka Beyinleri Yükleniyor...")
+try:
+    for tur in makine_turleri:
+        # Modeli Yükle
+        model = xgb.XGBClassifier()
+        model.load_model(os.path.join(MODELS_DIR, f"model_{tur}.json"))
+        modeller[tur.upper()] = model
+        
+        # Sözlüğü Yükle
+        with open(os.path.join(MODELS_DIR, f"encoder_{tur}.pkl"), "rb") as f:
+            encoderlar[tur.upper()] = pickle.load(f)
+    print("✅ Tüm Modeller Başarıyla Yüklendi!")
+except Exception as e:
+    print(f"❌ MODEL YÜKLEME HATASI: {e} (Önce eğitim kodunu çalıştırıp modelleri ürettiğinden emin ol!)")
 
 # ==========================================
-# 2. STATİK SÖZLÜKLER VE FATURALAR
+# 2. PYDANTIC ŞEMALARI (Swagger İçin)
 # ==========================================
-MAPPING_SOZLUKLERI = {
-    "sicaklik_durumu": {"Normal Değerde": 0, "Elle Dokunulmayacak Kadar Sıcak": 1, "Aşırı Isınma/Koku Var": 2},
-    "titresim_hissi": {"Stabil/Sessiz Çalışıyor": 0, "Hafif Vuruntu/Titreşim Var": 1, "Anormal Ses/Sarsıntı Var": 2},
-    "yag_seviyesi": {"Normal (Ortada)": 0, "Düşük (Alt Çizgide)": 1, "Kritik (Hiç Yağ Görünmüyor)": 2},
-    "genel_durum": {"İyi": 0, "Orta (Aksaklık Var)": 1, "Kötü (Duruşa Gidebilir)": 2},
-    "sizinti_durumu": {"Kuru ve Temiz": 0, "Hafif Terleme / Yağ İzi Var": 1, "Yere Damlayan Belirgin Sızıntı Var": 2},
-    "kablo_hasar_durumu": {"Hasar Yok / Temiz": 0, "Hafif Aşınma / Sürtünme Var": 1, "Kopuk / Ezilmiş Kablo Var": 2}
+class BakimIstegi(BaseModel):
+    makine_turu: str = Field(..., example="CNC", description="CNC, PRES veya ENJEKSIYON")
+    form_doldurma_suresi_sn: int = Field(..., example=45, description="Operatörün formu doldurma süresi")
+    
+    # Tüm Parametreler (Gönderilmeyenler 0 kabul edilir)
+    sicaklik: int = 0
+    titresim: int = 0
+    ses_anomalisi: int = 0
+    yag_durumu: int = 0
+    
+    # CNC Özel
+    is_mili_ses_ve_titresim: int = 0
+    eksen_olcu_sapmasi: int = 0
+    takim_zorlanma_durumu: int = 0
+    islenen_yuzey_kalitesi: int = 0
+    is_mili_govde_sicakligi: int = 0
+    bor_yagi_ve_sogutma: int = 0
+    pnomatik_hava_basinci: int = 0
+    kizak_yag_seviyesi: int = 0
+    
+    # Pres Özel
+    hidrolik_basinc_seviyesi: int = 0
+    hidrolik_yag_sicakligi: int = 0
+    yag_kacak_durumu: int = 0
+    koc_vuruntu_sesi: int = 0
+    koc_kilavuz_boslugu: int = 0
+    kavrama_fren_hava_basinci: int = 0
+    tonaj_sapmasi: int = 0
+    basilan_parca_kalitesi: int = 0
+    
+    # Enjeksiyon Özel
+    kovan_rezistans_sicakligi: int = 0
+    eriyik_plastik_kokusu: int = 0
+    vida_donus_sesi: int = 0
+    enjeksiyon_baski_basinci: int = 0
+    mengene_kapanma_basinci: int = 0
+    kalip_sogutma_suyu_debisi: int = 0
+    sogutma_suyu_sicakligi: int = 0
+    eksik_baski_durumu: int = 0
+    capakli_baski_durumu: int = 0
+
+# ==========================================
+# 3. KURAL MOTORU (Uzman Sistem Çıktıları)
+# ==========================================
+KURAL_MOTORU = {
+    "YOK": {"maliyet_tl": 0, "durus_saat": 0, "ekip": "Gerek Yok", "parca": "Sorun Yok"},
+    # CNC
+    "SPINDLE_RULMAN_ARIZASI": {"maliyet_tl": 12500, "durus_saat": 12, "ekip": "Mekanik Bakım", "parca": "İş Mili Rulmanı"},
+    "EKSEN_MOTOR_ARIZASI": {"maliyet_tl": 25000, "durus_saat": 8, "ekip": "Elektrik/Otomasyon", "parca": "Eksen Sürücüsü"},
+    "PNOMATIK_VALF_ARIZASI": {"maliyet_tl": 3500, "durus_saat": 2, "ekip": "Mekanik Bakım", "parca": "Hava Valfi Grubu"},
+    "BOR_YAGI_POMPA_ARIZASI": {"maliyet_tl": 6000, "durus_saat": 4, "ekip": "Mekanik Bakım", "parca": "Soğutma Pompası"},
+    # PRES
+    "ANA_HIDROLIK_POMPA_ARIZASI": {"maliyet_tl": 45000, "durus_saat": 24, "ekip": "Hidrolik Ekibi", "parca": "Ana Pompa"},
+    "HIDROLIK_YON_VALFI_ARIZASI": {"maliyet_tl": 8000, "durus_saat": 4, "ekip": "Hidrolik Ekibi", "parca": "Yön Valfi"},
+    "MEKANIK_GOVDE_YORULMASI": {"maliyet_tl": 85000, "durus_saat": 48, "ekip": "Ağır Bakım Ekibi", "parca": "Gövde / Kılavuz"},
+    # ENJEKSİYON
+    "ISITICI_REZISTANS_ARIZASI": {"maliyet_tl": 5000, "durus_saat": 3, "ekip": "Elektrik Bakım", "parca": "Kovan Rezistansı"},
+    "VIDA_KOVAN_ASINMASI": {"maliyet_tl": 65000, "durus_saat": 36, "ekip": "Mekanik Bakım", "parca": "Enjeksiyon Vidası"},
+    "KALIP_SOGUTMA_VALFI_ARIZASI": {"maliyet_tl": 4500, "durus_saat": 2, "ekip": "Tesisat/Mekanik", "parca": "Soğutma Eşanjörü"}
 }
 
-OZEL_MAPPING_SOZLUKLERI = {
-    "Plastik ve Enjeksiyon": {"hidrolik_yag_durumu": {"Seviye İyi/Normal": 0, "Eksilme Var (Çizgide)": 1, "Köpüklü/Kirli": 2}, "rezistans_kokusu": {"Koku Yok": 0, "Hafif Plastik Kokusu": 1, "Ağır Yanık Kokusu Var": 2}},
-    "Talaşlı İmalat": {"bor_yag_rengi": {"Süt Beyazı/Normal": 0, "Koyu/Karamel Renk": 1, "Bakteri(Çürük) Kokusu Var": 2}, "spindle_titresim": {"Ses Normal": 0, "Hafif Titreşim Sesi": 1, "Vuruntu/Anormal Ses Var": 2}},
-    "Yardımcı Tesis": {"alt_su_tahliye": {"Düzenli Atıyor": 0, "Sürekli Hava Kaçırıyor": 1, "Hiç Su Atmadı": 2}},
-    "Kalite Kontrol": {"mercek_temizligi": {"Tozsuz/Temiz": 0, "Tozlanmış": 1, "Silinmesi Lazım": 2}},
-    "Otomasyon ve Robotik": {"kaynak_torcu": {"Temiz": 0, "Hafif Çapaklı": 1, "Çok Yoğun Çapak/Temizlik Şart": 2}, "kablo_sarmali": {"Hasarsız": 0, "Sürtünüyor": 1, "Aşınmış/Yırtık Var": 2}},
-    "Sac ve Şekillendirme": {"isik_bariyeri": {"Sorunsuz Kesti": 0, "Düzensiz Çalışıyor": 1, "Algılamıyor (Risk)": 2}, "sizma_kontrolu": {"Kuru": 0, "Hafif Terleme Var": 1, "Ayrık Yağ Sızıntısı Var": 2}},
-    "Döküm ve Isıl İşlem": {"termal_gozlem": {"Kızarma Yok (Normal)": 0, "Hafif Renk Değişimi": 1, "Aşırı Kızarıklık (Riskli)": 2}, "sogutma_suyu": {"Gürül Gürül Akıyor": 0, "Düşük Debili": 1, "Akış Yok (Kritik)": 2}},
-    "Paketleme ve Lojistik": {"teflon_kontrolu": {"Temiz/Kalıntısız": 0, "Yanık Plastik Yapışmış": 1, "Kesme Sorunu Yaratıyor": 2}, "fotosel_algilama": {"Temiz(Görüyor)": 0, "Tozlu (Silinmeli)": 1, "Kritik Tozlanma": 2}}
-}
-
-ARIZA_FATURA_SOZLUGU = {
-    "HDF": {"maliyet": 15000.0, "durus_saati": 4.5},  
-    "TWF": {"maliyet": 25000.0, "durus_saati": 8.0},  
-    "OSF": {"maliyet": 5000.0,  "durus_saati": 2.0},  
-    "PWF": {"maliyet": 35000.0, "durus_saati": 12.0}, 
-    "RNF": {"maliyet": 10000.0, "durus_saati": 3.0},  
-    "Yok": {"maliyet": 0.0,     "durus_saati": 0.0}   
-}
-
-# XGBoost'un beklediği o kusursuz 22 sütunluk sıra (Mock veri ile birebir aynı)
-SUTUN_SIRASI = [
-    "calisma_saati", "genel_bakim_periyodu_saat",
-    "sicaklik_durumu", "titresim_hissi", "yag_seviyesi", "genel_durum", "sizinti_durumu", "kablo_hasar_durumu",
-    "hidrolik_yag_durumu", "rezistans_kokusu", "bor_yag_rengi", "spindle_titresim",
-    "alt_su_tahliye", "mercek_temizligi", "kaynak_torcu", "kablo_sarmali",
-    "isik_bariyeri", "sizma_kontrolu", "termal_gozlem", "sogutma_suyu",
-    "teflon_kontrolu", "fotosel_algilama"
-]
-
 # ==========================================
-# 3. VERİ ÖN İŞLEME FONKSİYONU
+# 4. API ENDPOINT (Tahmin Merkezi)
 # ==========================================
-def verileri_modele_hazirla(istek: AnaOtonomBakimIstegi) -> pd.DataFrame:
-    islenmis_veri = {sutun: 0 for sutun in SUTUN_SIRASI} # Tüm matrisi 0 (Normal) ile doldur
+@app.post("/tahmin_et")
+async def tahmin_yap(istek: BakimIstegi):
+    makine = istek.makine_turu.upper()
     
-    islenmis_veri["calisma_saati"] = istek.calisma_saati
-    islenmis_veri["genel_bakim_periyodu_saat"] = istek.genel_bakim_periyodu_saat
+    if makine not in modeller:
+        raise HTTPException(status_code=400, detail="Geçersiz Makine Türü. Sadece CNC, PRES, ENJEKSIYON.")
+
+    # 1. 10 Saniye Kalkanı (Güvenilirlik Testi)
+    guvenilirlik = "YÜKSEK - Veri Güvenilir"
+    if istek.form_doldurma_suresi_sn < 10:
+        guvenilirlik = "DÜŞÜK - Veri Şüpheli (Çok Hızlı Dolduruldu)"
+
+    # 2. Makineye Özel Özellikleri Filtrele
+    istek_dict = istek.dict()
     
-    # Temel sensörleri eşleştir
-    temel_dict = istek.temel_veriler.model_dump()
-    for alan, deger in temel_dict.items():
-        islenmis_veri[alan] = MAPPING_SOZLUKLERI[alan].get(deger, 2)
-                
-    # Özel sensörleri eşleştir (Eğer makineye ait özel sensör geldiyse)
-    makine_turu = istek.makine_turu
-    if makine_turu in OZEL_MAPPING_SOZLUKLERI:
-        secili_sozluk = OZEL_MAPPING_SOZLUKLERI[makine_turu] 
-        for ozel_alan, ozel_deger in istek.ozel_veriler.items():
-            if isinstance(ozel_deger, str) and ozel_alan in secili_sozluk:
-                islenmis_veri[ozel_alan] = secili_sozluk[ozel_alan].get(ozel_deger, 2)
-            elif isinstance(ozel_deger, (int, float)):
-                islenmis_veri[ozel_alan] = ozel_deger
-                
-    # DataFrame'e çevir
-    return pd.DataFrame([islenmis_veri], columns=SUTUN_SIRASI)
+    if makine == "CNC":
+        ozellikler = ["sicaklik", "titresim", "ses_anomalisi", "yag_durumu", "is_mili_ses_ve_titresim", "eksen_olcu_sapmasi", "takim_zorlanma_durumu", "islenen_yuzey_kalitesi", "is_mili_govde_sicakligi", "bor_yagi_ve_sogutma", "pnomatik_hava_basinci", "kizak_yag_seviyesi"]
+    elif makine == "PRES":
+        ozellikler = ["sicaklik", "titresim", "ses_anomalisi", "yag_durumu", "hidrolik_basinc_seviyesi", "hidrolik_yag_sicakligi", "yag_kacak_durumu", "koc_vuruntu_sesi", "koc_kilavuz_boslugu", "kavrama_fren_hava_basinci", "tonaj_sapmasi", "basilan_parca_kalitesi"]
+    elif makine == "ENJEKSIYON":
+        ozellikler = ["sicaklik", "titresim", "ses_anomalisi", "yag_durumu", "kovan_rezistans_sicakligi", "eriyik_plastik_kokusu", "vida_donus_sesi", "enjeksiyon_baski_basinci", "mengene_kapanma_basinci", "kalip_sogutma_suyu_debisi", "sogutma_suyu_sicakligi", "eksik_baski_durumu", "capakli_baski_durumu"]
 
-# ==========================================
-# 4. ANA KARAR MOTORU (API ENDPOINT)
-# ==========================================
-@app.post("/predict", response_model=AIArizaTespitSonucu)
-def predict_ariza(istek: AnaOtonomBakimIstegi):
+    veri_df = pd.DataFrame([{k: istek_dict[k] for k in ozellikler}])
+
+ # 3. Yapay Zeka Tahmini ve Risk Skoru Hesaplama
+    model = modeller[makine]
+    encoder = encoderlar[makine]
     
-    # 1. Ön İşleme: JSON'u O Devasa 22 Sütunluk Matrise Çevir
-    df_model_girdisi = verileri_modele_hazirla(istek)
+    # Modelin tüm ihtimallerini (olasılıklarını) alıyoruz
+    olasiliklar = model.predict_proba(veri_df)[0]
+    tahmin_kodu = model.predict(veri_df)[0]
+    ariza_ad = encoder.inverse_transform([tahmin_kodu])[0]
 
-    # 2. BEYİN 1: Arıza Tipini Tahmin Et
-    sayisal_tahmin = beyin1_ariza.predict(df_model_girdisi)
-    gercek_ariza_tipi = ariza_cevirmen.inverse_transform(sayisal_tahmin)[0]
+    # En yüksek ihtimali 100 üzerinden bir skora çeviriyoruz
+    en_yuksek_olasilik = float(max(olasiliklar)) * 100
 
-    # GÜVENLİK AĞI: Sensörlerin hepsi "Normal" ise boşuna arıza verme
-    # İlk 2 sütun saat, sonrakiler sensör. Sensörlerin toplamı 0 ise sorun yoktur.
-    if df_model_girdisi.iloc[0, 2:].sum() == 0: 
-        gercek_ariza_tipi = "Yok"
+    if ariza_ad == "YOK":
+        # Arıza YOK kararı çıktıysa, risk skoru "YOK" olma ihtimalinin tersidir.
+        # Örn: Model %90 arıza YOK diyorsa, risk sadece %10'dur.
+        risk_skoru = round(100 - en_yuksek_olasilik)
+    else:
+        # Arıza VAR kararı çıktıysa, risk skoru doğrudan modelin o arızaya verdiği ihtimaldir.
+        # Örn: Model %85 Rulman Arızası diyorsa, risk skoru 85'tir (Kırmızı).
+        risk_skoru = round(en_yuksek_olasilik)
 
-    # 3. BEYİN 2: Gerçek Yıpranma Yüzdesini Tahmin Et! (İşte şov burada)
-    ai_tahmini_yuzde = float(beyin2_yuzde.predict(df_model_girdisi)[0])
-    
-    if ai_tahmini_yuzde > 100.0: ai_tahmini_yuzde = 100.0
-    if ai_tahmini_yuzde < 0.0: ai_tahmini_yuzde = 0.0
+    # Kıyamet Senaryosu ve 10 Saniye Kalkanı
+    if ariza_ad != "YOK" and istek.form_doldurma_suresi_sn < 10:
+         uyari_rengi = "KIRMIZI-ŞÜPHELİ (Operatör formata uymadı ama kritik arıza var!)"
+         risk_skoru = max(risk_skoru, 90) # Kesin acil müdahale
+    else:
+         uyari_rengi = "YEŞİL" if ariza_ad == "YOK" else "KIRMIZI"
+         
+    if ariza_ad == "YOK" and istek.form_doldurma_suresi_sn < 10:
+         uyari_rengi = "SARI (Form çok hızlı dolduruldu, gidip teyit ediniz)"
+         risk_skoru = max(risk_skoru, 50) # Arıza yok dese bile veri şüpheli olduğu için riski 50'ye çektik!
 
-    # 4. Meryem'in Klasik Kronometresi
-    teorik_yuzde = (istek.calisma_saati / istek.genel_bakim_periyodu_saat) * 100.0
-    if teorik_yuzde > 100.0: teorik_yuzde = 100.0
+    # 4. Kural Motoru Çıktısı Ekle
+    sonuc = KURAL_MOTORU.get(ariza_ad, KURAL_MOTORU["YOK"])
 
-    planli_bakim_gecikmesi = (istek.calisma_saati >= istek.genel_bakim_periyodu_saat)
-
-    # 5. Faturayı Kes
-    fatura_detayi = ARIZA_FATURA_SOZLUGU.get(gercek_ariza_tipi, ARIZA_FATURA_SOZLUGU["Yok"])
-    
-    return AIArizaTespitSonucu(
-        makine_turu=istek.makine_turu,
-        tahmin_edilen_ariza=gercek_ariza_tipi,
-        teorik_yipranma_yuzdesi=f"%{round(teorik_yuzde, 1)}",
-        ai_dinamik_yipranma_yuzdesi=f"%{round(ai_tahmini_yuzde, 1)}",
-        tahmini_durus_suresi=fatura_detayi["durus_saati"],
-        tahmini_maliyet=fatura_detayi["maliyet"],
-        planli_bakim_gecikmesi=planli_bakim_gecikmesi
-    )
+    return {
+        "sistem_mesaji": "Tahmin Başarılı",
+        "makine_turu": makine,
+        "guvenilirlik_notu": guvenilirlik,
+        "yapay_zeka_karari": ariza_ad,
+        "risk_skoru": risk_skoru,  # <--- İŞTE MERYEM'İN İSTEDİĞİ 0-100 DEĞERİ BURADA!
+        "uyari_durumu": uyari_rengi,
+        "detaylar": sonuc
+    }

@@ -1,0 +1,9 @@
+# Python Sistem Çöpleri
+__pycache__/
+venv/
+env/
+*.pyc
+.env
+
+# Devasa Eğitim Verileri
+data/
