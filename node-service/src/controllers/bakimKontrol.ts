@@ -65,11 +65,11 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
 
 export const makineBakimKayitlari = async (req: Request, res: Response) => {
     try {
-        const makineIdParam = req.query.makine_id as string;
+        const makineIdParam = req.params.makine_id;
         if (!makineIdParam || isNaN(Number(makineIdParam))) {
             return res.status(400).json({
                 success: false,
-                message: 'Geçerli bir makine_id query parametresi gereklidir. Örnek: /api/bakimlar?makine_id=1'
+                message: 'Geçerli bir makine_id parametresi gereklidir. Örnek: /api/bakimlar/1'
             });
 
         }

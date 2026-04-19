@@ -49,11 +49,21 @@ export default function KisiEkle() {
     }
 
     try {
-      // API'ye gönderilecek sayısal değerleri dönüştür
+      // rol_id (string sayısal değer örn "3") üzerinden rol stringini bul
+      const roleMap = {
+        "1": "OPERATOR",
+        "2": "TEKNISYEN",
+        "3": "YONETICI",
+        "4": "SERVIS"
+      };
+
+      const rolStr = roleMap[form.rol_id] || "";
+
+      // API'ye gönderilecek veriler (backend 'rol' stringi bekliyor)
       const payload = {
         ...form,
         firma_id: Number(form.firma_id),
-        rol_id: Number(form.rol_id)
+        rol: rolStr
       };
 
       const addedUser = await api.addUser(payload);
@@ -133,10 +143,10 @@ export default function KisiEkle() {
                 <input name="firma_id" placeholder="Firma ID" type="number" value={form.firma_id} onChange={handleChange} style={inputStyle} />
                 <select name="rol_id" value={form.rol_id} onChange={handleChange} style={inputStyle}>
                   <option value="" disabled>Rol seçin</option>
-                  <option value="1">Yönetici (1)</option>
-                  <option value="2">Teknisyen (2)</option>
-                  <option value="3">Operatör (3)</option>
-                  <option value="4">Dış Servis Sorumlusu (4)</option>
+                  <option value="1">Operatör</option>
+                  <option value="2">Teknisyen</option>
+                  <option value="3">Yönetici</option>
+                  <option value="4">Dış Servis Sorumlusu</option>
                 </select>
 
                 <button

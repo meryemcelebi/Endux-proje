@@ -101,9 +101,9 @@ export default function Makineler() {
 
       // UI listesini anlık olarak güncelle
       const machineForUI = {
-        ...addedMachine,
-        id: addedMachine.makine_id,
-        makineid: "MKN-" + addedMachine.makine_id,
+        ...addedMachine.makine, // Backend'den dönen makine nesnesini kullan
+        id: addedMachine.makine.makine_id,
+        makineid: "MKN-" + addedMachine.makine.makine_id,
         aktiflik_durumu: form.aktiflik_durumu
       };
 

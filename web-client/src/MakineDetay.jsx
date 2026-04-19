@@ -45,7 +45,7 @@ export default function MakineDetay() {
         return <div style={{ ...sayfaStil, padding: "100px 20px", color: "white", textAlign: "center" }}>Makine bulunamadı.</div>;
     }
 
-    const totalBakimMaliyet = history.reduce((sum, item) => sum + (item.bakim_maliyet?.[0] || 0), 0);
+    const totalBakimMaliyet = history.reduce((sum, item) => sum + (item.bakim_maliyet || 0), 0);
 
     // --- GARANTİ DURUMU HESAPLAMA MANTIĞI ---
     // Satın alma tarihi ve garanti süresine göre kalan günü ve kritik durumu belirler.
@@ -91,7 +91,7 @@ export default function MakineDetay() {
                                 </span>
                             </h2>
                             <div style={{ color: "#bdc3c7", fontSize: "14px", marginTop: "5px" }}>
-                                Seri No: {machine.seri_no?.join(", ")} | Kimlik: #{id}
+                                Seri No: {Array.isArray(machine.seri_no) ? machine.seri_no.join(", ") : machine.seri_no || "-"} | Kimlik: #{id}
                             </div>
                         </div>
                     </div>
@@ -138,7 +138,7 @@ export default function MakineDetay() {
                                 <div style={kartIkonStil}>⏱️</div>
                                 <div>
                                     <div style={kartBaslikStil}>Toplam Çalışma Süresi</div>
-                                    <div style={kartDegerStil}>{machine.top_cal_sma_saati?.[0]} Saat</div>
+                                    <div style={kartDegerStil}>{machine.top_calisma_saati || 0} Saat</div>
                                 </div>
                             </div>
                             <div style={bilgiKartStil}>
@@ -237,7 +237,7 @@ export default function MakineDetay() {
                         <div style={detayKartStil}>
                             <h3 style={bolumBaslikStil}>Makine Analiz Özeti</h3>
                             <p style={{ color: "#555", lineHeight: "1.6", margin: 0 }}>
-                                Bu makine en son satın alma tarihinden ({new Date(machine.satin_alma_tarihi).toLocaleDateString("tr-TR")}) bu yana toplam <strong>{machine.top_cal_sma_saati?.[0]} saat</strong> aktif hizmet vermiştir. Servis kayıtlarında toplam <strong>{history.length}</strong> adet bakım veya arıza kaydı gözükmektedir. Risk skoru algoritmik olarak <strong>{machine.mevcut_risk_skoru}</strong> hesaplanmış olup, sistemde <strong style={{ color: machine.aktiflik_durumu === "Aktif" ? "#2ecc71" : machine.aktiflik_durumu === "Bakımda" ? "#f39c12" : "#e74c3c" }}>{machine.aktiflik_durumu === "Aktif" ? "aktif çalışmaya uygundur." : machine.aktiflik_durumu === "Bakımda" ? "bakım sürecindedir." : "arızalı olarak etiketlenmiştir."}</strong>
+                                Bu makine en son satın alma tarihinden ({new Date(machine.satin_alma_tarihi).toLocaleDateString("tr-TR")}) bu yana toplam <strong>{machine.top_calisma_saati || 0} saat</strong> aktif hizmet vermiştir. Servis kayıtlarında toplam <strong>{history.length}</strong> adet bakım veya arıza kaydı gözükmektedir. Risk skoru algoritmik olarak <strong>{machine.mevcut_risk_skoru}</strong> hesaplanmış olup, sistemde <strong style={{ color: machine.aktiflik_durumu === "Aktif" ? "#2ecc71" : machine.aktiflik_durumu === "Bakımda" ? "#f39c12" : "#e74c3c" }}>{machine.aktiflik_durumu === "Aktif" ? "aktif çalışmaya uygundur." : machine.aktiflik_durumu === "Bakımda" ? "bakım sürecindedir." : "arızalı olarak etiketlenmiştir."}</strong>
 
                                 {/* Garanti Bilgisi Rozeti */}
                                 {warranty && (
@@ -304,16 +304,16 @@ export default function MakineDetay() {
                                     <div key={kayit.bakim_id} style={servisKartStil}>
                                         <div style={servisKartUstStil}>
                                             <span style={servisTarihStil}>
-                                                {new Date(kayit.bakim_tarihi[0]).toLocaleDateString("tr-TR")}
+                                                {new Date(kayit.bakim_tarihi).toLocaleDateString("tr-TR")}
                                             </span>
                                             <span style={servisMaliyetStil}>
-                                                Maliyet: {kayit.bakim_maliyet[0]?.toLocaleString()} ₺
+                                                Maliyet: {kayit.bakim_maliyet?.toLocaleString()} ₺
                                             </span>
                                         </div>
 
                                         <div style={{ display: "flex", gap: "20px", marginTop: "12px", fontSize: "14px" }}>
                                             <div>
-                                                <span style={griBaslik}>Bakım Türü:</span> <strong>{kayit.bakim_turu?.[0] || "-"}</strong>
+                                                <span style={griBaslik}>Bakım Türü:</span> <strong>{kayit.bakim_turu?.bakim_tur_adi || "-"}</strong>
                                             </div>
                                             <div>
                                                 <span style={griBaslik}>Servis Firması:</span> {kayit.servis_firmasi || `ID: ${kayit.servis_firma_id}`}

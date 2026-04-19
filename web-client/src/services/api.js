@@ -107,9 +107,9 @@ export const api = {
       const res = await fetch(`${API_BASE}/makineler/${makine_id}`, { headers: getHeaders() });
       const json = await handleResponse(res);
       const m = json.data || {};
-      
+
       if (!m.gunluk_kontrol_formu || !Array.isArray(m.gunluk_kontrol_formu)) return [];
-      
+
       return m.gunluk_kontrol_formu.map(form => ({
         tarih: form.kontrol_tarihi?.[0] || form.istek_tarihi_saati,
         tespit_eden: form.AI_on_risk_durumu?.includes("Yüksek") ? "AI" : "Operatör",
@@ -123,7 +123,7 @@ export const api = {
       return [];
     }
   },
-  
+
   // POST /api/checklist/form
   submitChecklist: async (formData) => {
     const res = await fetch(`${API_BASE}/checklist/form`, {
@@ -188,14 +188,12 @@ export const api = {
   },
 
   // ═══════════════ 10. PERSONEL EKLE ═══════════════
-  // POST /api/kullanicilar
   addUser: async (userData) => {
-    const rolIdToStr = { 1: "YONETICI", 2: "TEKNISYEN", 3: "OPERATOR", 4: "SERVIS" };
     const res = await fetch(`${API_BASE}/kullanicilar`, {
       method: "POST", headers: getHeaders(),
       body: JSON.stringify({
         ad: userData.ad, soyad: userData.soyad,
-        rol: rolIdToStr[userData.rol_id] || "OPERATOR",
+        rol: userData.rol, // Doğrudan string alınıyor (örn: "YONETICI")
         sifre: userData.sifre,
         telefon: userData.telefon,
         eposta: userData.eposta || null,

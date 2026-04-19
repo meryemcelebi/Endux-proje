@@ -146,7 +146,7 @@ async function main() {
 
     // 6. 100 Adet Makine ve Özellikleri
     console.log("Mevcut sahte test verileri temizleniyor...");
-    
+
     // Bağımlı tabloları temizle (Sıralama FK kısıtlamalarına göre)
     await prisma.parca_degisim.deleteMany({});
     await prisma.bakim_kaydi.deleteMany({});
