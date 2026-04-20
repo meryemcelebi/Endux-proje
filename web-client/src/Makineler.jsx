@@ -360,7 +360,13 @@ export default function Makineler() {
                               <div><strong>Garanti Tel:</strong> {m.tedarikci.telefon || "-"}</div>
                             </>
                           )}
-                          <div style={{ gridColumn: "span 2" }}><strong>Özellikler:</strong> {m.makine_ozellikleri?.teknik_ozellikler ? Object.entries(m.makine_ozellikleri.teknik_ozellikler).map(([k,v]) => `${k}: ${v}`).join(" | ") : "Belirtilmemiş"}</div>
+                          <div style={{ gridColumn: "span 2", lineHeight: "1.5" }}><strong>Özellikler Özeti:</strong> {
+                            m.makine_ozellikleri?.teknik_ozellikler?.teknikSpesifikasyonlar 
+                              ? `⚡ ${m.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.gucTuketimi_kW}kW | 📏 ${m.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.agirlik_kg}kg | 🏭 Model: ${m.makine_ozellikleri.teknik_ozellikler.kimlikBilgileri?.uretimYili}`
+                              : (m.makine_ozellikleri?.teknik_ozellikler 
+                                  ? Object.entries(m.makine_ozellikleri.teknik_ozellikler).map(([k,v]) => `${k}: ${typeof v === 'object' ? '...' : v}`).join(" | ") 
+                                  : "Belirtilmemiş")
+                          }</div>
                         </div>
                       </div>
                     )}

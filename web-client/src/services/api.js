@@ -46,6 +46,15 @@ export const api = {
       mevcut_risk_skoru: Number(m.mevcut_risk_skoru || 0),
       satin_alma_maliyeti: Number(m.satin_alma_maliyeti || 0),
       top_calisma_saati: Number(m.toplam_calisma_saati || 0),
+      lo_id: m.lokasyon?.[0]?.lokasyon_adi || "-",
+      m_tur_id: m.makine_turu?.makine_tur_adi || "-",
+      pin: m.servis_pin,
+      tedarikci: m.garanti_firma ? {
+        firma_adi: m.garanti_firma.firma_adi,
+        telefon: m.garanti_firma.iletisim?.telefon || "-",
+        email: m.garanti_firma.iletisim?.mail || "-",
+        adres: m.garanti_firma.iletisim?.acik_adres || "Adres bilgisi yok"
+      } : null,
     }));
   },
 
@@ -61,7 +70,15 @@ export const api = {
       mevcut_risk_skoru: Number(m.mevcut_risk_skoru || 0),
       satin_alma_maliyeti: Number(m.satin_alma_maliyeti || 0),
       top_calisma_saati: Number(m.toplam_calisma_saati || 0),
-      tedarikci: m.firma ? { firma_id: m.firma.firma_id, firma_adi: m.firma.firma_adi } : null,
+      lo_id: m.lokasyon?.[0]?.lokasyon_adi || "-",
+      m_tur_id: m.makine_turu?.makine_tur_adi || "-",
+      pin: m.servis_pin,
+      tedarikci: m.garanti_firma ? {
+        firma_adi: m.garanti_firma.firma_adi,
+        telefon: m.garanti_firma.iletisim?.telefon || "-",
+        email: m.garanti_firma.iletisim?.mail || "-",
+        adres: m.garanti_firma.iletisim?.acik_adres || "Adres bilgisi yok"
+      } : null,
     };
   },
 
@@ -107,9 +124,9 @@ export const api = {
       const res = await fetch(`${API_BASE}/makineler/${makine_id}`, { headers: getHeaders() });
       const json = await handleResponse(res);
       const m = json.data || {};
-
+      
       if (!m.gunluk_kontrol_formu || !Array.isArray(m.gunluk_kontrol_formu)) return [];
-
+      
       return m.gunluk_kontrol_formu.map(form => ({
         tarih: form.kontrol_tarihi?.[0] || form.istek_tarihi_saati,
         tespit_eden: form.AI_on_risk_durumu?.includes("Yüksek") ? "AI" : "Operatör",
@@ -123,7 +140,7 @@ export const api = {
       return [];
     }
   },
-
+  
   // POST /api/checklist/form
   submitChecklist: async (formData) => {
     const res = await fetch(`${API_BASE}/checklist/form`, {

@@ -210,24 +210,72 @@ export default function MakineDetay() {
                                     <h3 style={{ ...bolumBaslikStil, borderBottom: "none", marginBottom: 0, paddingBottom: 0 }}>Teknik Bilgiler</h3>
                                 </div>
 
-                                <div style={{ ...tedarikciListeStil, gap: "18px" }}>
-                                    <div style={{ ...tedarikciSatirStil, padding: "12px", borderRadius: "8px" }}>
-                                        <span style={tedarikciEtiketStil}>Sistem Lokasyon No:</span>
-                                        <strong style={{ color: "#e94560", fontSize: "17px" }}>{machine.lo_id || "Tanımlanmamış"}</strong>
-                                    </div>
-                                    <div style={{ ...tedarikciSatirStil, padding: "8px 12px" }}>
-                                        <span style={tedarikciEtiketStil}>Makine Kategori ID:</span>
-                                        <strong style={{ color: "#2c3e50" }}>{machine.m_tur_id || "N/A"}</strong>
-                                    </div>
-                                    <div style={{ ...tedarikciSatirStil, padding: "8px 12px", borderBottom: "none" }}>
-                                        <span style={tedarikciEtiketStil}>Kapasite & Donanım Özellikleri:</span>
-                                        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", justifyContent: "flex-end" }}>
-                                            {machine.makine_ozellikleri?.map((oz, i) => (
-                                                <span key={i} style={{ background: "#e1e5eb", padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: "600" }}>{oz}</span>
-                                            )) || "-"}
+                                {machine.makine_ozellikleri?.teknik_ozellikler && machine.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar ? (
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+                                        {/* Teknik Özellikler Sütunu */}
+                                        <div style={{ background: "#f8f9fa", padding: "15px", borderRadius: "8px" }}>
+                                            <h4 style={{ margin: "0 0 10px 0", color: "#2c3e50", fontSize: "14px", borderBottom: "1px solid #ddd", paddingBottom: "5px" }}>⚡ Performans Değerleri</h4>
+                                            <p style={{ margin: "5px 0", fontSize: "13px" }}><span style={{ color: "#7f8c8d" }}>Güç Tüketimi:</span> <strong style={{ color: "#2c3e50" }}>{machine.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.gucTuketimi_kW}</strong> <span style={{ color: "#aaa" }}>kW</span></p>
+                                            <p style={{ margin: "5px 0", fontSize: "13px" }}><span style={{ color: "#7f8c8d" }}>Gerilim:</span> <strong style={{ color: "#2c3e50" }}>{machine.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.calismaGerilimi_V}</strong> <span style={{ color: "#aaa" }}>V</span></p>
+                                            <p style={{ margin: "5px 0", fontSize: "13px" }}><span style={{ color: "#7f8c8d" }}>Kapasite:</span> <strong style={{ color: "#2c3e50" }}>{machine.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.kapasite_BirimSaat}</strong> <span style={{ color: "#aaa" }}>br/saat</span></p>
+                                        </div>
+
+                                        {/* Fiziksel Özellikler Sütunu */}
+                                        <div style={{ background: "#f8f9fa", padding: "15px", borderRadius: "8px" }}>
+                                            <h4 style={{ margin: "0 0 10px 0", color: "#2c3e50", fontSize: "14px", borderBottom: "1px solid #ddd", paddingBottom: "5px" }}>📏 Fiziksel Ölçüler</h4>
+                                            <p style={{ margin: "5px 0", fontSize: "13px" }}><span style={{ color: "#7f8c8d" }}>Ağırlık:</span> <strong style={{ color: "#2c3e50" }}>{machine.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.agirlik_kg}</strong> <span style={{ color: "#aaa" }}>kg</span></p>
+                                            <p style={{ margin: "5px 0", fontSize: "13px" }}><span style={{ color: "#7f8c8d" }}>Boyutlar (E-B-Y):</span> <strong style={{ color: "#2c3e50" }}>{machine.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.boyutlar_mm?.en}x{machine.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.boyutlar_mm?.boy}x{machine.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.boyutlar_mm?.yukseklik}</strong> <span style={{ color: "#aaa" }}>mm</span></p>
+                                            <p style={{ margin: "5px 0", fontSize: "13px" }}><span style={{ color: "#7f8c8d" }}>Üretim Yılı:</span> <strong style={{ color: "#2c3e50" }}>{machine.makine_ozellikleri.teknik_ozellikler.kimlikBilgileri?.uretimYili || "-"}</strong></p>
+                                        </div>
+
+                                        {/* Operasyonel ve Dokümantasyon Sütunu */}
+                                        <div style={{ gridColumn: "span 2", background: "#f8f9fa", padding: "15px", borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                            <div>
+                                                <h4 style={{ margin: "0 0 5px 0", color: "#2c3e50", fontSize: "14px" }}>🏭 Operasyon Departmanı</h4>
+                                                <span style={{ fontSize: "13px", color: "#555", fontWeight: "600" }}>{machine.makine_ozellikleri.teknik_ozellikler.operasyonelDurum?.departmanHatti || "Bilinmiyor"}</span>
+                                            </div>
+                                            <div>
+                                                <h4 style={{ margin: "0 0 5px 0", color: "#2c3e50", fontSize: "14px" }}>📄 Belgeler</h4>
+                                                <div style={{ display: "flex", gap: "10px" }}>
+                                                    {machine.makine_ozellikleri.teknik_ozellikler.dokumantasyon?.kilavuzLinkleri?.map((link, idx) => (
+                                                        <a 
+                                                            key={idx} 
+                                                            href="#" 
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                alert(`Lokal Geliştirme Ortamı:\n"${link.baslik}" belgesi indiriliyor simülasyonu...\n(Gerçek sistemde ${link.url} adresine yönlendirilecektir.)`);
+                                                            }} 
+                                                            style={{ background: "#e94560", color: "white", padding: "4px 12px", borderRadius: "20px", textDecoration: "none", fontSize: "11px", fontWeight: "bold", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                                                        >
+                                                            <span>📄</span> {link.baslik}
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div style={{ textAlign: "right" }}>
+                                                <h4 style={{ margin: "0 0 5px 0", color: "#2c3e50", fontSize: "14px" }}>Kritiklik</h4>
+                                                <span style={{
+                                                    background: machine.makine_ozellikleri.teknik_ozellikler.operasyonelDurum?.kritiklikSeviyesi === "A" ? "#ffebee" : machine.makine_ozellikleri.teknik_ozellikler.operasyonelDurum?.kritiklikSeviyesi === "B" ? "#fff3cd" : "#e8f5e9",
+                                                    color: machine.makine_ozellikleri.teknik_ozellikler.operasyonelDurum?.kritiklikSeviyesi === "A" ? "#c0392b" : machine.makine_ozellikleri.teknik_ozellikler.operasyonelDurum?.kritiklikSeviyesi === "B" ? "#d35400" : "#27ae60",
+                                                    padding: "4px 12px", borderRadius: "6px", fontSize: "16px", fontWeight: "900"
+                                                }}>
+                                                    SINIF {machine.makine_ozellikleri.teknik_ozellikler.operasyonelDurum?.kritiklikSeviyesi || "B"}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
+                                ) : (
+                                    <div style={{ ...tedarikciListeStil, gap: "18px" }}>
+                                        <div style={{ ...tedarikciSatirStil, padding: "8px 12px", borderBottom: "none" }}>
+                                            <span style={tedarikciEtiketStil}>Eski Tip Özellik Kayıtları:</span>
+                                            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", justifyContent: "flex-end" }}>
+                                                {machine.makine_ozellikleri?.teknik_ozellikler ? Object.entries(machine.makine_ozellikleri.teknik_ozellikler).map(([key, val], i) => (
+                                                    <span key={i} style={{ background: "#e1e5eb", padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: "600" }}>{key}: {String(val)}</span>
+                                                )) : "-"}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

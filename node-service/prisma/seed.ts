@@ -16,6 +16,36 @@ async function main() {
         });
     }
 
+    // 1.5 Rol ve Yönetici (Admin) Kullanıcısı
+    const roller = ["YONETICI", "TEKNISYEN", "OPERATOR"];
+    for (let i = 0; i < roller.length; i++) {
+        let rol = await prisma.rol.findFirst({ where: { rol_id: i + 1 } });
+        if (!rol) {
+            await prisma.rol.create({ data: { rol_id: i + 1, rol_adi: roller[i] } });
+        }
+    }
+
+    let admin = await prisma.kullanici.findFirst({ where: { kullanici_adi: "YON_admin" } });
+    if (!admin) {
+        // "admin" şifresinin bcrypt hash'i
+        const hashedSifre = "$2b$10$cC4GHQEzL0f7CQvnBqmVY.dVP5rIRZCo6QEocGfSW9fo4Tb6nEKzi";
+        await prisma.kullanici.create({
+            data: {
+                firma_id: firma.firma_id,
+                rol_id: 1, // YONETICI
+                ad: "Sistem",
+                soyad: "Yöneticisi",
+                telefon: "5550000000",
+                eposta: "admin@endux.com",
+                kullanici_adi: "YON_admin",
+                sifre: hashedSifre,
+                aktiflik: true,
+                baslama_tarihi: new Date()
+            }
+        });
+        console.log("YON_admin kullanıcısı başarıyla eklendi.");
+    }
+
     // 2. Tedarikçi
     let tedarikci = await prisma.tedarikci.findFirst();
     if (!tedarikci) {
@@ -144,10 +174,45 @@ async function main() {
         }
     }
 
-    // 6. 100 Adet Makine ve Özellikleri
-    console.log("Mevcut sahte test verileri temizleniyor...");
+    // 6. Garanti Firması ve Servis Firması Tanımlama
+    let iletisim = await prisma.iletisim.findFirst({ where: { mail: "destek@genelyedekparca.com" } });
+    if (!iletisim) {
+        iletisim = await prisma.iletisim.create({
+            data: {
+                telefon: "+90 555 123 4567",
+                mail: "destek@genelyedekparca.com",
+                acik_adres: "Endüstri Sanayi Sitesi, 1. Blok No:4, İstanbul"
+            }
+        });
+    }
 
-    // Bağımlı tabloları temizle (Sıralama FK kısıtlamalarına göre)
+    let garantiFirma = await prisma.garanti_firma.findFirst();
+    if (!garantiFirma) {
+        garantiFirma = await prisma.garanti_firma.create({
+            data: {
+                firma_adi: "Genel Makine İthalat İhracat A.Ş.",
+                iletisim_id: iletisim.iletisim_id
+            }
+        });
+    }
+
+    let servisFirma = await prisma.servis_firma.findFirst();
+    if (!servisFirma) {
+        servisFirma = await prisma.servis_firma.create({
+            data: { firma_adi: "Güvenilir Servis A.Ş.", aktiflik: true, iletisim_id: iletisim.iletisim_id }
+        });
+    }
+
+    let bakimTuru = await prisma.bakim_turu.findFirst();
+    if (!bakimTuru) {
+        bakimTuru = await prisma.bakim_turu.create({ data: { bakim_tur_adi: "Ağır Bakım" } });
+    }
+
+    let operator = await prisma.kullanici.findFirst({ where: { rol_id: 3 } });
+    if (!operator) operator = await prisma.kullanici.findFirst();
+
+    // 7. 100 Adet Makine ve Özellikleri
+    console.log("Mevcut sahte test verileri temizleniyor...");
     await prisma.parca_degisim.deleteMany({});
     await prisma.bakim_kaydi.deleteMany({});
     await prisma.arizayi_tetikleyen_form.deleteMany({});
@@ -162,16 +227,15 @@ async function main() {
     await prisma.makine_ozellikleri.deleteMany({});
     await prisma.makine.deleteMany({});
 
-    console.log("100 Adet YENİ kurallara (Sıfır/2.El, Arızalı/Aktif, 4 Haneli PIN) uygun makine üretiliyor...");
+    console.log("100 Adet YENİ kurallara uygun makine (Geçmiş servis/kontrol kayıtlarıyla) üretiliyor...");
     for (let i = 1; i <= 100; i++) {
         const rndIndex = Math.floor(Math.random() * makineTurleri.length);
         const secilenTur = makineTurleri[rndIndex];
         const seri = `SNO-${uuidv4().substring(0, 8).toUpperCase()}`;
 
-        // Yeni Kurallar Belirleniyor:
-        const isSifir = Math.random() > 0.5; // %50 ihtimalle sıfır makine
-        const isArizali = Math.random() < 0.2; // %20 ihtimalle cihaz arızalı (aktiflik_durumu: false)
-        const satinAlmaGecmisTarih = new Date(Date.now() - Math.floor(Math.random() * 200000000000)); // Eskiyse geçmis tarih
+        const isSifir = Math.random() > 0.6; // %40 ihtimalle ikinci el
+        const isArizali = Math.random() < 0.2; // %20 ihtimalle cihaz arızalı
+        const satinAlmaGecmisTarih = new Date(Date.now() - Math.floor(Math.random() * 200000000000));
 
         const m = await prisma.makine.create({
             data: {
@@ -182,23 +246,106 @@ async function main() {
                 satin_alma_maliyeti: Math.floor(Math.random() * 500000) + 100000,
                 aktiflik_durumu: isArizali ? false : true,
                 seri_no: seri,
-                garanti_suresi: isSifir ? 24 : 0, // Sıfırsa 2 yıl, 2. Else yok
-                servis_pin: Math.floor(1000 + Math.random() * 9000), // Kesinlikle 4 Haneli PIN (Örn: 4215)
-                toplam_calisma_saati: isSifir ? 0 : Math.floor(Math.random() * 15000) // Sıfırsa 0 saat
+                garanti_suresi: isSifir ? 24 : 0, 
+                garanti_firma_id: garantiFirma.garanti_firma_id,
+                servis_pin: Math.floor(1000 + Math.random() * 9000), 
+                toplam_calisma_saati: isSifir ? 0 : Math.floor(Math.random() * 15000) 
             }
         });
 
-        // Makine özellikleri JSON
-        let teknikSpecs = { araba_kodu: seri.toLowerCase(), montaj_yili: isSifir ? 2024 : 2020 + (i % 5), periyodik_bakim_zorunlu_mu: true, statu: isArizali ? 'ARIZALI/PASİF' : 'AKTİF/ÇALIŞIYOR' };
-        await prisma.makine_ozellikleri.create({
+        // Risk skoru
+        await prisma.risk_skoru.create({
             data: {
                 makine_id: m.makine_id,
-                teknik_ozellikler: teknikSpecs
+                risk_skoru: isArizali ? 0.9 : Math.random() * 0.4,
+                risk_seviyesi: isArizali ? 'YUKSEK' : 'DUSUK',
+                hesaplama_tarihi: new Date()
             }
         });
+
+        let teknikSpecs = {
+            kimlikBilgileri: {
+                makineModel: `${secilenTur.makine_tur_adi} - ${seri.substring(4, 7)} Serisi`,
+                uretici: "Endux Endüstriyel Makine Sistemleri A.Ş.",
+                uretimYili: isSifir ? 2024 : 2018 + (i % 6)
+            },
+            teknikSpesifikasyonlar: {
+                gucTuketimi_kW: parseFloat((Math.random() * (100 - 15) + 15).toFixed(1)),
+                calismaGerilimi_V: Math.random() > 0.5 ? 380 : 220,
+                kapasite_BirimSaat: Math.floor(Math.random() * 500) + 50,
+                agirlik_kg: Math.floor(Math.random() * 10000) + 500,
+                boyutlar_mm: {
+                    en: Math.floor(Math.random() * 3000) + 1000,
+                    boy: Math.floor(Math.random() * 5000) + 1500,
+                    yukseklik: Math.floor(Math.random() * 2500) + 1200
+                }
+            },
+            operasyonelDurum: {
+                kritiklikSeviyesi: isArizali ? "A" : (Math.random() > 0.5 ? "B" : "C"),
+                departmanHatti: `Üretim Hattı - ${Math.floor(Math.random() * 5) + 1}`
+            },
+            dokumantasyon: {
+                kilavuzLinkleri: [
+                    { baslik: "Kullanım Kılavuzu", url: `https://endux.com/docs/${seri}-kullanim.pdf` },
+                    { baslik: "Periyodik Bakım Prosedürü", url: `https://endux.com/docs/${seri}-bakim.pdf` }
+                ],
+                isoStandartlari: ["ISO 9001", "ISO 45001"]
+            }
+        };
+        await prisma.makine_ozellikleri.create({
+            data: { makine_id: m.makine_id, teknik_ozellikler: teknikSpecs }
+        });
+
+        // ARIZALI ise veya eski makine ise Bakım Kayıtları Oluştur
+        if (isArizali || (!isSifir && Math.random() > 0.5)) {
+            const bakimSayisi = isArizali ? 3 : 1;
+            for (let k = 0; k < bakimSayisi; k++) {
+                await prisma.bakim_kaydi.create({
+                    data: {
+                        makine_id: m.makine_id,
+                        servis_firma_id: servisFirma.servis_firma_id,
+                        bakim_tur_id: bakimTuru.bakim_tur_id,
+                        bakim_maliyet: Math.floor(Math.random() * 15000) + 1500,
+                        aciklama: (isArizali && k === 0) ? "Makine arızaya geçti, motor sürücüleri yandı." : "Periyodik genel bakım tamamlandı.",
+                        bakim_tarihi: new Date(Date.now() - Math.floor(Math.random() * 10000000000)),
+                    }
+                });
+            }
+        }
+
+        // Günlük Kontrol Formu
+        if (!isSifir && operator) {
+            const sablon = await prisma.kontrol_sablonu.findFirst({ where: { makine_tur_id: secilenTur.makine_tur_id } });
+            if (sablon) {
+                const formSayisi = 3;
+                const maddeler = await prisma.kontrol_maddesi.findMany({ where: { sablon_id: sablon.sablon_id } });
+                for (let c = 0; c < formSayisi; c++) {
+                    const form = await prisma.gunluk_kontrol_formu.create({
+                        data: {
+                            makine_id: m.makine_id,
+                            kullanici_id: operator.kullanici_id,
+                            sablon_id: sablon.sablon_id,
+                            kontrol_tarihi: new Date(Date.now() - (c * 86400000)),
+                            genel_not: (isArizali && c === 0) ? "Ciddi titreşim ve ses var, makineyi kapattım!" : "Her şey normal.",
+                            ai_on_risk_durumu: (isArizali && c === 0) ? 0.95 : Math.random() * 0.2,
+                        }
+                    });
+                    
+                    if (maddeler.length > 0) {
+                        await prisma.form_madde_cevap.createMany({
+                            data: maddeler.map(madde => ({
+                                form_id: form.form_id,
+                                soru_referans_id: madde.madde_id,
+                                girilen_deger: (isArizali && c === 0 && (madde.madde_adi?.includes("Anomalisi") || madde.madde_adi?.includes("Ses"))) ? "EVET" : "HAYIR"
+                            }))
+                        });
+                    }
+                }
+            }
+        }
     }
 
-    console.log("✅ Seed işlemi %100 tamamlandı! 100 sahte makine, parçalar ve kontrol şablonları eklendi.");
+    console.log("✅ Seed işlemi %100 tamamlandı! 100 sahte makine, geçmiş veriler, parçalar ve şablonlar eklendi.");
 }
 
 main()

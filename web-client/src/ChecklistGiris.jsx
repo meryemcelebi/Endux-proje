@@ -51,25 +51,25 @@ export default function ChecklistGiris() {
       const result = await api.login({ kullanici_adi: username, sifre: password });
       if (result.success) {
         saveLogin(result);
-        
-        if (id) {
-             try {
-                 // QR Merkezi üzerinden (qrileMakineGetir) AUDIT loglarını yazdır ve gerçek veriyi getir
-                 const qrResult = await api.getMachineByQR(id);
-                 const roleStr = qrResult.rol;
-                 const makineId = qrResult.makine.makine_id;
 
-                 // Dinamik olarak merkezin belirlediği role göre form/panellere yönlendir
-                 if (roleStr === "YONETICI") navigate(`/makine/${makineId}`);
-                 else if (roleStr === "OPERATOR") navigate(`/checklist/${makineId}`);
-                 else if (roleStr === "TEKNISYEN") navigate(`/servis/${makineId}`);
-                 else navigate(`/dashboard`);
-             } catch (err) {
-                 alert("QR kod doğrulanamadı veya bu makineye erişiminiz kısıtlı.");
-             }
+        if (id) {
+          try {
+            // QR Merkezi üzerinden (qrileMakineGetir) AUDIT loglarını yazdır ve gerçek veriyi getir
+            const qrResult = await api.getMachineByQR(id);
+            const roleStr = qrResult.rol;
+            const makineId = qrResult.makine.makine_id;
+
+            // Dinamik olarak merkezin belirlediği role göre form/panellere yönlendir
+            if (roleStr === "YONETICI") navigate(`/makine/${makineId}`);
+            else if (roleStr === "OPERATOR") navigate(`/checklist/${makineId}`);
+            else if (roleStr === "TEKNISYEN") navigate(`/servis/${makineId}`);
+            else navigate(`/dashboard`);
+          } catch (err) {
+            alert("QR kod doğrulanamadı veya bu makineye erişiminiz kısıtlı.");
+          }
         } else {
-             // Eğer direkt URL'den /checklist-giris yazıp girdiyse (makine yoksa) panele at
-             navigate("/dashboard");
+          // Eğer direkt URL'den /checklist-giris yazıp girdiyse (makine yoksa) panele at
+          navigate("/dashboard");
         }
       }
     } catch (err) {
@@ -97,10 +97,10 @@ export default function ChecklistGiris() {
           : `Tekrar hoş geldin, ${result.user.ad}!`);
 
         saveLogin(result);
-        
+
         // API'den gelen makine_id'yi (integer) kullan (UUID yerine)
         const finalId = result.data?.makine?.makine_id || result.makine_id;
-        
+
         setTimeout(() => {
           if (finalId) navigate(`/servis/${finalId}`);
           else navigate("/dashboard");
