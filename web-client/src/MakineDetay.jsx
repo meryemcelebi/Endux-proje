@@ -17,6 +17,14 @@ export default function MakineDetay() {
     const [isFocusView, setIsFocusView] = useState(false); // Detaylı "Teknik & Tedarikçi" görünüm modu anahtarı
     const [loading, setLoading] = useState(true); // Sayfa yükleniyor durum kontrolü
 
+    // Güvenli render için yardımcı fonksiyon
+    const safeVal = (v) => {
+        if (v === null || v === undefined) return "-";
+        if (Array.isArray(v)) return v.map(item => safeVal(item)).join(", ");
+        if (typeof v === 'object') return v.ad || v.val || v.text || v.value || JSON.stringify(v);
+        return String(v);
+    };
+
     useEffect(() => {
         const loadData = async () => {
             try {
@@ -45,7 +53,7 @@ export default function MakineDetay() {
         return <div style={{ ...sayfaStil, padding: "100px 20px", color: "white", textAlign: "center" }}>Makine bulunamadı.</div>;
     }
 
-    const totalBakimMaliyet = history.reduce((sum, item) => sum + (item.bakim_maliyet || 0), 0);
+    const totalBakimMaliyet = Array.isArray(history) ? history.reduce((sum, item) => sum + (Number(item.bakim_maliyet) || 0), 0) : 0;
 
     // --- GARANTİ DURUMU HESAPLAMA MANTIĞI ---
     // Satın alma tarihi ve garanti süresine göre kalan günü ve kritik durumu belirler.
@@ -77,7 +85,7 @@ export default function MakineDetay() {
                     <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
                         <div>
                             <h2 style={{ margin: 0, color: "white", fontSize: "24px", display: "flex", alignItems: "center", gap: "10px" }}>
-                                {machine.makine_ad}
+                                {safeVal(machine.makine_adi || machine.makine_ad)}
                                 <span style={{
                                     padding: "4px 10px",
                                     borderRadius: "12px",
@@ -91,7 +99,7 @@ export default function MakineDetay() {
                                 </span>
                             </h2>
                             <div style={{ color: "#bdc3c7", fontSize: "14px", marginTop: "5px" }}>
-                                Seri No: {Array.isArray(machine.seri_no) ? machine.seri_no.join(", ") : machine.seri_no || "-"} | Kimlik: #{id}
+                                Seri No: {Array.isArray(machine.seri_no) ? machine.seri_no.join(", ") : (machine.seri_no || "-")} | Kimlik: #{id}
                             </div>
                         </div>
                     </div>
@@ -138,7 +146,7 @@ export default function MakineDetay() {
                                 <div style={kartIkonStil}>⏱️</div>
                                 <div>
                                     <div style={kartBaslikStil}>Toplam Çalışma Süresi</div>
-                                    <div style={kartDegerStil}>{machine.top_calisma_saati || 0} Saat</div>
+                                    <div style={kartDegerStil}>{safeVal(machine.top_calisma_saati)} Saat</div>
                                 </div>
                             </div>
                             <div style={bilgiKartStil}>
@@ -159,7 +167,7 @@ export default function MakineDetay() {
                                 <div style={kartIkonStil}>⚠️</div>
                                 <div>
                                     <div style={kartBaslikStil}>Anlık Risk Skoru</div>
-                                    <div style={kartDegerStil}>{machine.mevcut_risk_skoru} / 1.0</div>
+                                    <div style={kartDegerStil}>{safeVal(machine.mevcut_risk_skoru)} / 1.0</div>
                                 </div>
                             </div>
                         </div>
@@ -184,19 +192,19 @@ export default function MakineDetay() {
                                     <div style={{ ...tedarikciListeStil, gap: "18px" }}>
                                         <div style={{ ...tedarikciSatirStil, padding: "12px", borderRadius: "8px" }}>
                                             <span style={tedarikciEtiketStil}>Firma Adı:</span>
-                                            <strong style={{ color: "#0f3460", fontSize: "17px" }}>{machine.tedarikci.firma_adi}</strong>
+                                            <strong style={{ color: "#0f3460", fontSize: "17px" }}>{machine.tedarikci?.firma_adi || "-"}</strong>
                                         </div>
                                         <div style={{ ...tedarikciSatirStil, padding: "8px 12px" }}>
                                             <span style={tedarikciEtiketStil}>İletişim Hattı:</span>
-                                            <strong style={{ color: "#2c3e50" }}>{machine.tedarikci.telefon}</strong>
+                                            <strong style={{ color: "#2c3e50" }}>{machine.tedarikci?.telefon || "-"}</strong>
                                         </div>
                                         <div style={{ ...tedarikciSatirStil, padding: "8px 12px" }}>
                                             <span style={tedarikciEtiketStil}>E-Posta Adresi:</span>
-                                            <u style={{ color: "#3498db" }}>{machine.tedarikci.email}</u>
+                                            <u style={{ color: "#3498db" }}>{machine.tedarikci?.email || "-"}</u>
                                         </div>
                                         <div style={{ ...tedarikciSatirStil, padding: "8px 12px", borderBottom: "none" }}>
                                             <span style={tedarikciEtiketStil}>Genel Merkez / Adres:</span>
-                                            <span style={{ textAlign: "right", maxWidth: "250px", fontWeight: "500" }}>{machine.tedarikci.adres}</span>
+                                            <span style={{ textAlign: "right", maxWidth: "250px", fontWeight: "500" }}>{machine.tedarikci?.adres || "-"}</span>
                                         </div>
                                     </div>
                                 ) : (
@@ -210,72 +218,24 @@ export default function MakineDetay() {
                                     <h3 style={{ ...bolumBaslikStil, borderBottom: "none", marginBottom: 0, paddingBottom: 0 }}>Teknik Bilgiler</h3>
                                 </div>
 
-                                {machine.makine_ozellikleri?.teknik_ozellikler && machine.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar ? (
-                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-                                        {/* Teknik Özellikler Sütunu */}
-                                        <div style={{ background: "#f8f9fa", padding: "15px", borderRadius: "8px" }}>
-                                            <h4 style={{ margin: "0 0 10px 0", color: "#2c3e50", fontSize: "14px", borderBottom: "1px solid #ddd", paddingBottom: "5px" }}>⚡ Performans Değerleri</h4>
-                                            <p style={{ margin: "5px 0", fontSize: "13px" }}><span style={{ color: "#7f8c8d" }}>Güç Tüketimi:</span> <strong style={{ color: "#2c3e50" }}>{machine.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.gucTuketimi_kW}</strong> <span style={{ color: "#aaa" }}>kW</span></p>
-                                            <p style={{ margin: "5px 0", fontSize: "13px" }}><span style={{ color: "#7f8c8d" }}>Gerilim:</span> <strong style={{ color: "#2c3e50" }}>{machine.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.calismaGerilimi_V}</strong> <span style={{ color: "#aaa" }}>V</span></p>
-                                            <p style={{ margin: "5px 0", fontSize: "13px" }}><span style={{ color: "#7f8c8d" }}>Kapasite:</span> <strong style={{ color: "#2c3e50" }}>{machine.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.kapasite_BirimSaat}</strong> <span style={{ color: "#aaa" }}>br/saat</span></p>
-                                        </div>
-
-                                        {/* Fiziksel Özellikler Sütunu */}
-                                        <div style={{ background: "#f8f9fa", padding: "15px", borderRadius: "8px" }}>
-                                            <h4 style={{ margin: "0 0 10px 0", color: "#2c3e50", fontSize: "14px", borderBottom: "1px solid #ddd", paddingBottom: "5px" }}>📏 Fiziksel Ölçüler</h4>
-                                            <p style={{ margin: "5px 0", fontSize: "13px" }}><span style={{ color: "#7f8c8d" }}>Ağırlık:</span> <strong style={{ color: "#2c3e50" }}>{machine.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.agirlik_kg}</strong> <span style={{ color: "#aaa" }}>kg</span></p>
-                                            <p style={{ margin: "5px 0", fontSize: "13px" }}><span style={{ color: "#7f8c8d" }}>Boyutlar (E-B-Y):</span> <strong style={{ color: "#2c3e50" }}>{machine.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.boyutlar_mm?.en}x{machine.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.boyutlar_mm?.boy}x{machine.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.boyutlar_mm?.yukseklik}</strong> <span style={{ color: "#aaa" }}>mm</span></p>
-                                            <p style={{ margin: "5px 0", fontSize: "13px" }}><span style={{ color: "#7f8c8d" }}>Üretim Yılı:</span> <strong style={{ color: "#2c3e50" }}>{machine.makine_ozellikleri.teknik_ozellikler.kimlikBilgileri?.uretimYili || "-"}</strong></p>
-                                        </div>
-
-                                        {/* Operasyonel ve Dokümantasyon Sütunu */}
-                                        <div style={{ gridColumn: "span 2", background: "#f8f9fa", padding: "15px", borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                            <div>
-                                                <h4 style={{ margin: "0 0 5px 0", color: "#2c3e50", fontSize: "14px" }}>🏭 Operasyon Departmanı</h4>
-                                                <span style={{ fontSize: "13px", color: "#555", fontWeight: "600" }}>{machine.makine_ozellikleri.teknik_ozellikler.operasyonelDurum?.departmanHatti || "Bilinmiyor"}</span>
-                                            </div>
-                                            <div>
-                                                <h4 style={{ margin: "0 0 5px 0", color: "#2c3e50", fontSize: "14px" }}>📄 Belgeler</h4>
-                                                <div style={{ display: "flex", gap: "10px" }}>
-                                                    {machine.makine_ozellikleri.teknik_ozellikler.dokumantasyon?.kilavuzLinkleri?.map((link, idx) => (
-                                                        <a 
-                                                            key={idx} 
-                                                            href="#" 
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                alert(`Lokal Geliştirme Ortamı:\n"${link.baslik}" belgesi indiriliyor simülasyonu...\n(Gerçek sistemde ${link.url} adresine yönlendirilecektir.)`);
-                                                            }} 
-                                                            style={{ background: "#e94560", color: "white", padding: "4px 12px", borderRadius: "20px", textDecoration: "none", fontSize: "11px", fontWeight: "bold", display: "inline-flex", alignItems: "center", gap: "4px" }}
-                                                        >
-                                                            <span>📄</span> {link.baslik}
-                                                        </a>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                            <div style={{ textAlign: "right" }}>
-                                                <h4 style={{ margin: "0 0 5px 0", color: "#2c3e50", fontSize: "14px" }}>Kritiklik</h4>
-                                                <span style={{
-                                                    background: machine.makine_ozellikleri.teknik_ozellikler.operasyonelDurum?.kritiklikSeviyesi === "A" ? "#ffebee" : machine.makine_ozellikleri.teknik_ozellikler.operasyonelDurum?.kritiklikSeviyesi === "B" ? "#fff3cd" : "#e8f5e9",
-                                                    color: machine.makine_ozellikleri.teknik_ozellikler.operasyonelDurum?.kritiklikSeviyesi === "A" ? "#c0392b" : machine.makine_ozellikleri.teknik_ozellikler.operasyonelDurum?.kritiklikSeviyesi === "B" ? "#d35400" : "#27ae60",
-                                                    padding: "4px 12px", borderRadius: "6px", fontSize: "16px", fontWeight: "900"
-                                                }}>
-                                                    SINIF {machine.makine_ozellikleri.teknik_ozellikler.operasyonelDurum?.kritiklikSeviyesi || "B"}
-                                                </span>
-                                            </div>
+                                <div style={{ ...tedarikciListeStil, gap: "18px" }}>
+                                    <div style={{ ...tedarikciSatirStil, padding: "12px", borderRadius: "8px" }}>
+                                        <span style={tedarikciEtiketStil}>Sistem Lokasyon No:</span>
+                                        <strong style={{ color: "#e94560", fontSize: "17px" }}>{machine.lo_id || "Tanımlanmamış"}</strong>
+                                    </div>
+                                    <div style={{ ...tedarikciSatirStil, padding: "8px 12px" }}>
+                                        <span style={tedarikciEtiketStil}>Makine Kategori ID:</span>
+                                        <strong style={{ color: "#2c3e50" }}>{machine.m_tur_id || "N/A"}</strong>
+                                    </div>
+                                    <div style={{ ...tedarikciSatirStil, padding: "8px 12px", borderBottom: "none" }}>
+                                        <span style={tedarikciEtiketStil}>Kapasite & Donanım Özellikleri:</span>
+                                        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", justifyContent: "flex-end" }}>
+                                            {Array.isArray(machine.makine_ozellikleri) ? machine.makine_ozellikleri.map((oz, i) => (
+                                                <span key={i} style={{ background: "#e1e5eb", padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: "600" }}>{oz}</span>
+                                            )) : (machine.makine_ozellikleri || "-")}
                                         </div>
                                     </div>
-                                ) : (
-                                    <div style={{ ...tedarikciListeStil, gap: "18px" }}>
-                                        <div style={{ ...tedarikciSatirStil, padding: "8px 12px", borderBottom: "none" }}>
-                                            <span style={tedarikciEtiketStil}>Eski Tip Özellik Kayıtları:</span>
-                                            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", justifyContent: "flex-end" }}>
-                                                {machine.makine_ozellikleri?.teknik_ozellikler ? Object.entries(machine.makine_ozellikleri.teknik_ozellikler).map(([key, val], i) => (
-                                                    <span key={i} style={{ background: "#e1e5eb", padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: "600" }}>{key}: {String(val)}</span>
-                                                )) : "-"}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -285,7 +245,7 @@ export default function MakineDetay() {
                         <div style={detayKartStil}>
                             <h3 style={bolumBaslikStil}>Makine Analiz Özeti</h3>
                             <p style={{ color: "#555", lineHeight: "1.6", margin: 0 }}>
-                                Bu makine en son satın alma tarihinden ({new Date(machine.satin_alma_tarihi).toLocaleDateString("tr-TR")}) bu yana toplam <strong>{machine.top_calisma_saati || 0} saat</strong> aktif hizmet vermiştir. Servis kayıtlarında toplam <strong>{history.length}</strong> adet bakım veya arıza kaydı gözükmektedir. Risk skoru algoritmik olarak <strong>{machine.mevcut_risk_skoru}</strong> hesaplanmış olup, sistemde <strong style={{ color: machine.aktiflik_durumu === "Aktif" ? "#2ecc71" : machine.aktiflik_durumu === "Bakımda" ? "#f39c12" : "#e74c3c" }}>{machine.aktiflik_durumu === "Aktif" ? "aktif çalışmaya uygundur." : machine.aktiflik_durumu === "Bakımda" ? "bakım sürecindedir." : "arızalı olarak etiketlenmiştir."}</strong>
+                                Bu makine en son satın alma tarihinden ({machine.satin_alma_tarihi ? safeVal(new Date(machine.satin_alma_tarihi).toLocaleDateString("tr-TR")) : "-"}) bu yana toplam <strong>{safeVal(machine.top_calisma_saati)} saat</strong> aktif hizmet vermiştir. Servis kayıtlarında toplam <strong>{safeVal(history?.length)}</strong> adet bakım veya arıza kaydı gözükmektedir. Risk skoru algoritmik olarak <strong>{safeVal(machine.mevcut_risk_skoru)}</strong> hesaplanmış olup, sistemde <strong style={{ color: machine.aktiflik_durumu === "Aktif" ? "#2ecc71" : machine.aktiflik_durumu === "Bakımda" ? "#f39c12" : "#e74c3c" }}>{safeVal(machine.aktiflik_durumu === "Aktif" ? "aktif çalışmaya uygundur." : machine.aktiflik_durumu === "Bakımda" ? "bakım sürecindedir." : "arızalı olarak etiketlenmiştir.")}</strong>
 
                                 {/* Garanti Bilgisi Rozeti */}
                                 {warranty && (
@@ -326,12 +286,12 @@ export default function MakineDetay() {
 
                                     <div style={{ marginTop: "15px" }}>
                                         <div style={{ fontSize: "13px", fontWeight: "bold", color: "#636e72", marginBottom: "8px" }}>Soru & Cevaplar</div>
-                                        {item.cevaplar.map((c, i) => (
+                                        {Array.isArray(item.cevaplar) ? item.cevaplar.map((c, i) => (
                                             <div key={i} style={cevapSatirStil}>
                                                 <span style={{ flex: 1 }}>{c.soru}</span>
-                                                <strong style={{ color: c.cevap === "HAYIR" ? "#d63031" : "#00b894" }}>{c.cevap}</strong>
+                                                <strong style={{ color: c.cevap === "HAYIR" ? "#d63031" : "#00b894" }}>{safeVal(c.cevap)}</strong>
                                             </div>
-                                        ))}
+                                        )) : null}
                                     </div>
                                 </div>
                             ))}
@@ -344,24 +304,24 @@ export default function MakineDetay() {
                     <div style={{ ...detayKartStil, flex: 2, minWidth: "400px", marginTop: "20px" }}>
                         <h3 style={bolumBaslikStil}>Servis Geçmişi ve Değişen Parçalar</h3>
 
-                        {history.length === 0 ? (
+                        {Array.isArray(history) && history.length === 0 ? (
                             <p style={{ color: "#777" }}>Henüz bir servis kaydı sisteme yansımamış.</p>
                         ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                                {history.map((kayit) => (
+                                {Array.isArray(history) && history.map((kayit) => (
                                     <div key={kayit.bakim_id} style={servisKartStil}>
                                         <div style={servisKartUstStil}>
                                             <span style={servisTarihStil}>
-                                                {new Date(kayit.bakim_tarihi).toLocaleDateString("tr-TR")}
+                                                {kayit.bakim_tarihi ? new Date(kayit.bakim_tarihi).toLocaleDateString("tr-TR") : "-"}
                                             </span>
                                             <span style={servisMaliyetStil}>
-                                                Maliyet: {kayit.bakim_maliyet?.toLocaleString()} ₺
+                                                Maliyet: {Number(kayit.bakim_maliyet || 0).toLocaleString()} ₺
                                             </span>
                                         </div>
 
                                         <div style={{ display: "flex", gap: "20px", marginTop: "12px", fontSize: "14px" }}>
                                             <div>
-                                                <span style={griBaslik}>Bakım Türü:</span> <strong>{kayit.bakim_turu?.bakim_tur_adi || "-"}</strong>
+                                                <span style={griBaslik}>Bakım Türü:</span> <strong>{safeVal(kayit.bakim_turu)}</strong>
                                             </div>
                                             <div>
                                                 <span style={griBaslik}>Servis Firması:</span> {kayit.servis_firmasi || `ID: ${kayit.servis_firma_id}`}
@@ -375,7 +335,7 @@ export default function MakineDetay() {
                                             "{kayit.aciklama}"
                                         </p>
 
-                                        {kayit.degisen_parcalar && kayit.degisen_parcalar.length > 0 && (
+                                        {Array.isArray(kayit.degisen_parcalar) && kayit.degisen_parcalar.length > 0 && (
                                             <div style={parcaKonteynerStil}>
                                                 <span style={{ fontSize: "13px", fontWeight: "bold", color: "#e67e22", display: "flex", alignItems: "center", gap: "6px" }}>
                                                     ⚙️ Değiştirilen veya Temin Edilen Yedek Parçalar

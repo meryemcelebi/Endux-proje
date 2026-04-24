@@ -124,23 +124,32 @@ export const api = {
       const res = await fetch(`${API_BASE}/makineler/${makine_id}`, { headers: getHeaders() });
       const json = await handleResponse(res);
       const m = json.data || {};
-      
+
       if (!m.gunluk_kontrol_formu || !Array.isArray(m.gunluk_kontrol_formu)) return [];
-      
-      return m.gunluk_kontrol_formu.map(form => ({
-        tarih: form.kontrol_tarihi?.[0] || form.istek_tarihi_saati,
-        tespit_eden: form.AI_on_risk_durumu?.includes("Yüksek") ? "AI" : "Operatör",
-        risk_sebebi: form.genel_not?.[0] || "Risk Yok",
-        cevaplar: form.form_madde_cevap?.map(c => ({
-          soru: c.kontrol_maddesi?.madde_adi?.[0] || "Bilinmeyen Soru",
-          cevap: c.girilen_deger?.[0] || "-"
-        })) || []
-      }));
+
+      return m.gunluk_kontrol_formu.map(form => {
+        // Tarih, Not ve Soru/Cevap verileri dizide veya nesne içinde sarmalanmış olabilir.
+        const extractVal = (v) => {
+          if (Array.isArray(v)) v = v[0];
+          if (typeof v === 'object' && v !== null) return v.val || v.text || v.value || JSON.stringify(v);
+          return v;
+        };
+
+        return {
+          tarih: extractVal(form.kontrol_tarihi) || form.istek_tarihi_saati,
+          tespit_eden: String(extractVal(form.AI_on_risk_durumu) || "").includes("Yüksek") ? "AI" : "Operatör",
+          risk_sebebi: extractVal(form.genel_not) || "Risk Yok",
+          cevaplar: (form.form_madde_cevap || []).map(c => ({
+            soru: extractVal(c.kontrol_maddesi?.madde_adi) || "Bilinmeyen Soru",
+            cevap: extractVal(c.girilen_deger) || "-"
+          }))
+        };
+      });
     } catch {
       return [];
     }
   },
-  
+
   // POST /api/checklist/form
   submitChecklist: async (formData) => {
     const res = await fetch(`${API_BASE}/checklist/form`, {
@@ -180,11 +189,22 @@ export const api = {
   getServiceHistory: async (makine_id) => {
     const res = await fetch(`${API_BASE}/bakimlar/${makine_id}`, { headers: getHeaders() });
     const json = await handleResponse(res);
-    return (json.data || []).map((b) => ({
-      ...b,
-      bakim_maliyet: Number(b.bakim_maliyet || 0),
-      servis_firmasi: b.servis_firma?.firma_adi || `Firma #${b.servis_firma_id}`,
-    }));
+
+    const extractVal = (v) => {
+      if (Array.isArray(v)) v = v[0];
+      if (typeof v === 'object' && v !== null) return v.val || v.text || v.value || v.ad || v.bakim_tur_adi || JSON.stringify(v);
+      return v;
+    };
+
+    return (json.data || []).map((b) => {
+      return {
+        ...b,
+        bakim_maliyet: Number(extractVal(b.bakim_maliyet) || 0),
+        bakim_tarihi: extractVal(b.bakim_tarihi),
+        bakim_turu: extractVal(b.bakim_turu),
+        servis_firmasi: b.servis_firma?.firma_adi || `Firma #${b.servis_firma_id}`,
+      };
+    });
   },
 
   // ═══════════════ 9. TÜM BAKIM GEÇMİŞİ (DASHBOARD) ═══════════════
@@ -226,6 +246,14 @@ export const api = {
     const res = await fetch(`${API_BASE}/kullanicilar`, { headers: getHeaders() });
     const json = await handleResponse(res);
     return json.kullanicilar || [];
+  },
+
+  deleteUser: async (kullanici_id) => {
+    const res = await fetch(`${API_BASE}/kullanicilar/${kullanici_id}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    return handleResponse(res);
   },
 
   // ═══════════════ 12. SİSTEM DROPDOWN VERİLERİ ═══════════════
@@ -322,6 +350,8 @@ export const api = {
           guvenilirlik_skoru: t.guvenilirlik_skoru ? Number(t.guvenilirlik_skoru) : null,
           vergi_no: t.vergi_no || null,
           yetkili_kisi: t.yetkili_kisi || null,
+          ortalama_puan: t.ortalama_puan,
+          yorum: t.yorum
         });
       }
       return mapped;
@@ -437,6 +467,104 @@ export const api = {
     const res = await fetch(`${API_BASE}/makineler/${makine_id}/maliyet-analizi`, { headers: getHeaders() });
     const json = await handleResponse(res);
     return json.data;
+  },
+
+  // ═══════════════ 24. DİNAMİK CHECKLIST (Makine ID ile) ═══════════════
+  // Makine bilgisini ve o türe ait şablon sorularını birlikte getirir
+  getChecklistByMachine: async (makine_id) => {
+    // 1. Makine bilgisini al (tür bilgisi dahil)
+    const makineRes = await fetch(`${API_BASE}/makineler/${makine_id}`, { headers: getHeaders() });
+    const makineJson = await handleResponse(makineRes);
+    const makine = makineJson.data;
+
+    if (!makine) throw new Error("Makine bulunamadı.");
+
+    // 2. Makine türü bilgisi
+    const makineTuru = makine.makine_turu?.makine_tur_adi || "Bilinmiyor";
+    const makineTurId = makine.makine_tur_id;
+
+    // 3. Makine türüne bağlı şablon sorularını getir - tüm şablonları deneyerek doğru olanı bul
+    let sorular = [];
+    let sablonId = null;
+    let sablonAdi = null;
+
+    // Şablonları sırayla dene (1, 2, 3...)
+    for (let tryId = 1; tryId <= 10; tryId++) {
+      try {
+        const sablonRes = await fetch(`${API_BASE}/checklist/sablon/${tryId}`, { headers: getHeaders() });
+        const sablonJson = await handleResponse(sablonRes);
+        const sablon = sablonJson.data;
+
+        if (sablon && sablon.makine_tur_id === makineTurId) {
+          sablonId = sablon.sablon_id;
+          sablonAdi = sablon.sablon_adi;
+          sorular = sablon.kontrol_maddesi || [];
+          break;
+        }
+      } catch {
+        // Bu şablon yok, devam et
+      }
+    }
+
+    return {
+      makine_id: makine.makine_id,
+      makine_adi: makine.makine_adi,
+      makine_turu: makineTuru,
+      makine_tur_id: makineTurId,
+      sablon_id: sablonId,
+      sablon_adi: sablonAdi,
+      sorular: sorular
+    };
+  },
+
+  // ═══════════════ 25. SATIN ALMA ═══════════════
+  // POST /api/satin-alma
+  addPurchase: async (purchaseData) => {
+    const res = await fetch(`${API_BASE}/satin-alma`, {
+      method: "POST", headers: getHeaders(),
+      body: JSON.stringify({
+        tedarikci_id: Number(purchaseData.tedarikci_id),
+        parca_adi: purchaseData.parca_adi,
+        adet: Number(purchaseData.adet),
+        birim_fiyat: Number(purchaseData.birim_fiyat),
+        tedarik_suresi: purchaseData.tedarik_suresi ? Number(purchaseData.tedarik_suresi) : null,
+        tarih: purchaseData.tarih || new Date().toISOString(),
+        puan: Number(purchaseData.puan),
+      }),
+    });
+    return handleResponse(res);
+  },
+
+  // GET /api/satin-alma
+  getPurchases: async () => {
+    const res = await fetch(`${API_BASE}/satin-alma`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json.data || [];
+  },
+
+  // ═══════════════ 26. STOK ═══════════════
+  // GET /api/satin-alma/stok
+  getInventory: async () => {
+    const res = await fetch(`${API_BASE}/satin-alma/stok`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json.data || [];
+  },
+
+  // ═══════════════ 27. TEDARİKÇİ SATIN ALMA PUAN ORTALAMASI ═══════════════
+  // GET /api/satin-alma/:id/ortalama-puan
+  getSupplierAvgScore: async (tedarikciId) => {
+    const res = await fetch(`${API_BASE}/satin-alma/${tedarikciId}/ortalama-puan`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json.data;
+  },
+
+  // PATCH /api/satin-alma/:id/puan
+  ratePurchase: async (satinAlmaId, puan) => {
+    const res = await fetch(`${API_BASE}/satin-alma/${satinAlmaId}/puan`, {
+      method: "PATCH", headers: getHeaders(),
+      body: JSON.stringify({ puan: Number(puan) }),
+    });
+    return handleResponse(res);
   },
 };
 

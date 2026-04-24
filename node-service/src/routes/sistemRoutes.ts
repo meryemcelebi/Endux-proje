@@ -1,9 +1,11 @@
 import Router from 'express';
-import {siralaFirmalar,
-     siralaRoller, 
-     siralaMakineTurleri} from '../controllers/sistemKontrol'; ;
+import {
+     siralaFirmalar,
+     siralaRoller,
+     siralaMakineTurleri
+} from '../controllers/sistemKontrol';;
 
-const router=Router();
+const router = Router();
 
 router.get('/firmalar', siralaFirmalar);
 router.get('/roller', siralaRoller);

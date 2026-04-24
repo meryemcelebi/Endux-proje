@@ -2,24 +2,18 @@ import React, { useState, useEffect } from "react";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import { api } from "./services/api";
-import FirmModal from "./components/FirmModal";
 
-export default function TedarikciListesi() {
-  // --- STATE TANIMLAMALARI ---
-  const [activeTab, setActiveTab] = useState("tedarikciler");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [purchaseRatingId, setPurchaseRatingId] = useState(null); // Sonradan alım puanlama için
+export default function SatinAlma() {
+  // ── TAB STATE ──
+  const [activeTab, setActiveTab] = useState("form");
 
+  // ── FORM STATE ──
   const [tedarikciler, setTedarikciler] = useState([]);
-
-  // --- SATIN ALMA FORMU STATE ---
   const [formData, setFormData] = useState({
     tedarikci_id: "",
     parca_adi: "",
     adet: "",
     birim_fiyat: "",
-    tedarik_suresi: "",
     tarih: new Date().toISOString().split("T")[0],
     puan: 0,
   });
@@ -27,30 +21,28 @@ export default function TedarikciListesi() {
   const [formLoading, setFormLoading] = useState(false);
   const [formSuccess, setFormSuccess] = useState("");
 
-  // --- STOK STATE ---
+  // ── STOK STATE ──
   const [stoklar, setStoklar] = useState([]);
   const [stokLoading, setStokLoading] = useState(true);
 
-  // --- GEÇMİŞ ALIMLAR STATE ---
+  // ── GEÇMİŞ ALIMLAR STATE ──
   const [satinAlmalar, setSatinAlmalar] = useState([]);
   const [satinAlmaLoading, setSatinAlmaLoading] = useState(true);
 
-  // --- VERİ ÇEKME (Tedarikçiler) ---
+  // ── VERİ ÇEKME ──
   useEffect(() => {
-    const fetchSuppliers = async () => {
+    const fetchData = async () => {
       try {
         const allFirms = await api.getFirms();
         const suppliersOnly = allFirms.filter(f => f.tip === "Tedarikçi");
         setTedarikciler(suppliersOnly);
       } catch (error) {
         console.error("Tedarikçi verileri çekilirken hata:", error);
-      } finally {
       }
     };
-    fetchSuppliers();
+    fetchData();
   }, []);
 
-  // --- SEKME DEĞİŞTİĞİNDE VERİ ÇEKME ---
   useEffect(() => {
     if (activeTab === "stok") {
       setStokLoading(true);
@@ -68,40 +60,21 @@ export default function TedarikciListesi() {
     }
   }, [activeTab]);
 
-  // --- TEDARİKÇİ EKLEME ---
-  const handleSaveFirm = async (firmData) => {
-    try {
-      const newFirm = await api.addFirm(firmData);
-      const newSupplier = {
-        tedarikci_id: newFirm.id,
-        firma_adi: newFirm.ad,
-        telefon: newFirm.telefon,
-        email: newFirm.email,
-        adres: newFirm.adres,
-        aktiflik: true
-      };
-      setTedarikciler([...tedarikciler, newSupplier]);
-      setIsModalOpen(false);
-      alert("Tedarikçi başarıyla eklendi!");
-    } catch (error) {
-      alert("Tedarikçi eklenirken hata oluştu!");
-    }
-  };
-
-  // --- SATIN ALMA FORMU SUBMIT ---
-  const handlePurchaseSubmit = async (e) => {
+  // ── FORM SUBMIT ──
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.tedarikci_id || !formData.parca_adi || !formData.adet || !formData.birim_fiyat) {
-      alert("Lütfen zorunlu alanları doldurunuz.");
+    if (!formData.tedarikci_id || !formData.parca_adi || !formData.adet || !formData.birim_fiyat || !formData.puan) {
+      alert("Lütfen tüm zorunlu alanları doldurunuz.");
       return;
     }
     setFormLoading(true);
     setFormSuccess("");
     try {
       await api.addPurchase(formData);
-      setFormSuccess("✅ Satın alma kaydı başarıyla oluşturuldu ve stok güncellendi!");
-      setFormData({ tedarikci_id: "", parca_adi: "", adet: "", birim_fiyat: "", tedarik_suresi: "", tarih: new Date().toISOString().split("T")[0], puan: 0 });
+      setFormSuccess("Satın alma kaydı başarıyla oluşturuldu ve stok güncellendi!");
+      setFormData({ tedarikci_id: "", parca_adi: "", adet: "", birim_fiyat: "", tarih: new Date().toISOString().split("T")[0], puan: 0 });
       setHoverPuan(0);
+      // 3 saniye sonra başarı mesajını kaldır
       setTimeout(() => setFormSuccess(""), 4000);
     } catch (error) {
       alert("Hata: " + (error.message || "Satın alma kaydı eklenemedi."));
@@ -114,88 +87,37 @@ export default function TedarikciListesi() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  // --- SONRADAN SATIN ALMA PUANLAMA ---
-  const handlePurchaseRate = async (id, val) => {
-    try {
-      await api.ratePurchase(id, val);
-      // Yerel state'i güncelle
-      setSatinAlmalar(satinAlmalar.map(sa => sa.satin_alma_id === id ? { ...sa, puan: val } : sa));
-      setFormSuccess("⭐ Puan kaydedildi!");
-      setTimeout(() => setFormSuccess(""), 3000);
-    } catch (error) {
-      alert("Puan kaydedilemedi: " + error.message);
-    }
-  };
-
-  // --- FİLTRELEME ve HESAPLAMALAR ---
-  const filteredTedarikciler = tedarikciler.filter(
-    (t) => (t.firma_adi || t.ad || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (t.email || "").toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
+  // ── TOPLAM TUTAR ──
   const toplamTutar = (Number(formData.adet) || 0) * (Number(formData.birim_fiyat) || 0);
 
+  // Stok seviyesi bar rengi
   const getStokRenk = (miktar) => {
     if (miktar > 50) return "linear-gradient(90deg, #27ae60, #2ecc71)";
     if (miktar > 15) return "linear-gradient(90deg, #f39c12, #f1c40f)";
     return "linear-gradient(90deg, #c0392b, #e74c3c)";
   };
 
-  // ═══════════════════════════════════════
-  // RENDER
-  // ═══════════════════════════════════════
-
   return (
     <div style={{ display: "flex", background: "#f5f6fa", minHeight: "100vh" }}>
       <Sidebar />
-
       <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
         <Navbar />
-
         <div style={{ padding: "30px", flex: 1, overflowY: "auto" }}>
 
           {/* BAŞLIK */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "25px" }}>
-            <div>
-              <h2 style={{ margin: 0, color: "#0f3460", fontSize: "28px", letterSpacing: "1px" }}>Tedarikçi & Stok Yönetimi</h2>
-              <p style={{ margin: "5px 0 0 0", color: "#7f8c8d", fontSize: "14px" }}>
-                Tedarikçileri yönetin, satın alma kaydı oluşturun ve stok durumunu takip edin.
-              </p>
-            </div>
-
-            <div style={{ display: "flex", gap: "15px", alignItems: "center" }}>
-              <button
-                onClick={() => setIsModalOpen(true)}
-                style={{
-                  padding: "12px 25px",
-                  background: "#27ae60",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "10px",
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                  boxShadow: "0 4px 15px rgba(39, 174, 96, 0.3)"
-                }}
-              >
-                + Tedarikçi Ekle
-              </button>
-              {activeTab === "tedarikciler" && (
-                <input
-                  type="text"
-                  placeholder="🔍 Firma adı veya e-posta ara..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  style={searchInputStyle}
-                />
-              )}
-            </div>
+          <div style={{ marginBottom: "25px" }}>
+            <h2 style={{ margin: 0, color: "#0f3460", fontSize: "28px", letterSpacing: "1px" }}>
+              Satın Alma & Stok Yönetimi
+            </h2>
+            <p style={{ margin: "5px 0 0 0", color: "#7f8c8d", fontSize: "14px" }}>
+              Tedarikçilerden yapılan alımları kaydedin, puanlayın ve stok durumunu takip edin.
+            </p>
           </div>
 
           {/* TABS */}
           <div style={tabContainerStyle}>
             {[
-              { key: "tedarikciler", label: "Tedarikçi Listesi" },
-              { key: "form", label: "Satın Alma" },
+              { key: "form", label: "Satın Alma Formu" },
               { key: "stok", label: "Stok Durumu" },
               { key: "gecmis", label: "Alım Geçmişi" },
             ].map(tab => (
@@ -209,86 +131,15 @@ export default function TedarikciListesi() {
             ))}
           </div>
 
-          {/* ═══════ TEDARİKÇİ LİSTESİ TAB ═══════ */}
-          {activeTab === "tedarikciler" && (
-            <div style={contentCardStyle} className="glass-card-animation">
-              <table style={tableStyle}>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>Firma Adı</th>
-                    <th style={thStyle}>Yetkili Kişi</th>
-                    <th style={thStyle}>İletişim Bilgileri</th>
-                    <th style={thStyle}>Veri / Vergi No</th>
-                    <th style={thStyle}>Güvenilirlik</th>
-                    <th style={thStyle}>Değerlendirme</th>
-                    <th style={thStyle}>Durum</th>
-                  </tr>
-                </thead>
-                <tbody>
-                    {filteredTedarikciler.length > 0 ? (
-                      filteredTedarikciler.map((t) => (
-                        <tr key={t.tedarikci_id || t.id} style={trStyle}>
-                          <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>
-                            {t.firma_adi || t.ad}
-                            <div style={{ fontSize: "11px", color: "#95a5a6", fontWeight: "normal" }}>Kayıt: {t.kayit_tarihi ? new Date(t.kayit_tarihi).toLocaleDateString("tr-TR") : "-"}</div>
-                          </td>
-                          <td style={tdStyle}>{t.yetkili_kisi || "-"}</td>
-                          <td style={tdStyle}>
-                            <div style={{ fontSize: "13px" }}>📞 {t.telefon}</div>
-                            <div style={{ fontSize: "12px", color: "#7f8c8d" }}>✉️ {t.email}</div>
-                          </td>
-                          <td style={tdStyle}>
-                            <code style={{ background: "#f8f9fa", padding: "2px 6px", borderRadius: "4px", fontSize: "12px" }}>{t.veri_no || "BELİRTİLMEMİŞ"}</code>
-                          </td>
-                          <td style={tdStyle}>
-                            <div style={{
-                              display: "inline-block",
-                              padding: "4px 10px",
-                              borderRadius: "20px",
-                              fontSize: "12px",
-                              fontWeight: "bold",
-                              background: t.guvenilirlik_skoru >= 90 ? "rgba(46, 204, 113, 0.15)" : t.guvenilirlik_skoru >= 70 ? "rgba(241, 196, 15, 0.15)" : "rgba(231, 76, 60, 0.15)",
-                              color: t.guvenilirlik_skoru >= 90 ? "#27ae60" : t.guvenilirlik_skoru >= 70 ? "#f39c12" : "#e74c3c"
-                            }}>
-                              %{t.guvenilirlik_skoru || 0} Güven
-                            </div>
-                          </td>
-                          <td style={tdStyle}>
-                            <div style={{ display: "flex", gap: "2px", alignItems: "center" }}>
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <span key={star} style={{ fontSize: "18px", color: star <= Math.round((t.ortalama_puan || 0) / 2) ? "#f39c12" : "#dfe6e9" }}>
-                                  ★
-                                </span>
-                              ))}
-                              {t.ortalama_puan > 0 && <strong style={{ marginLeft: "6px", color: "#0f3460", fontSize: "13px" }}>{t.ortalama_puan}/10</strong>}
-                            </div>
-                            {t.yorum && <div style={{ fontSize: "12px", color: "#7f8c8d", marginTop: "4px", fontStyle: "italic" }}>💬 {t.yorum}</div>}
-                          </td>
-                          <td style={tdStyle}>
-                            <span style={t.aktiflik !== false ? badgeActive : badgeInactive}>
-                              {t.aktiflik !== false ? "Aktif" : "Pasif"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
-                  ) : (
-                    <tr>
-                      <td colSpan="7" style={{ padding: "40px", textAlign: "center", color: "#95a5a6" }}>
-                        Arama kriterlerine uygun tedarikçi bulunamadı.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* ═══════ SATIN ALMA FORMU TAB ═══════ */}
+          {/* ═══════ FORM TAB ═══════ */}
           {activeTab === "form" && (
-            <div style={contentCardStyle} className="glass-card-animation">
+            <div style={contentCardStyle}>
               <div style={{ maxWidth: "720px", margin: "0 auto" }}>
+                {/* Başarı mesajı */}
                 {formSuccess && (
-                  <div style={successBannerStyle}>{formSuccess}</div>
+                  <div style={successBannerStyle}>
+                    {formSuccess}
+                  </div>
                 )}
 
                 <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "30px", paddingBottom: "20px", borderBottom: "2px solid #f1f2f6" }}>
@@ -299,7 +150,7 @@ export default function TedarikciListesi() {
                   </div>
                 </div>
 
-                <form onSubmit={handlePurchaseSubmit}>
+                <form onSubmit={handleSubmit}>
                   {/* TEDARİKÇİ SEÇİMİ */}
                   <div style={formGroupStyle}>
                     <label style={labelStyle}>Tedarikçi Seçimi <span style={{ color: "#e74c3c" }}>*</span></label>
@@ -329,8 +180,8 @@ export default function TedarikciListesi() {
                     />
                   </div>
 
-                  {/* ADET, BİRİM FİYAT ve TEDARİK SÜRESİ yan yana */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px" }}>
+                  {/* ADET ve BİRİM FİYAT yan yana */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
                     <div style={formGroupStyle}>
                       <label style={labelStyle}>Adet <span style={{ color: "#e74c3c" }}>*</span></label>
                       <input
@@ -353,18 +204,6 @@ export default function TedarikciListesi() {
                         placeholder="0.00"
                         value={formData.birim_fiyat}
                         onChange={(e) => handleInputChange("birim_fiyat", e.target.value)}
-                        style={inputStyle}
-                      />
-                    </div>
-                    <div style={formGroupStyle}>
-                      <label style={labelStyle}>Tedarik Süresi (Gün)</label>
-                      <input
-                        id="tedarik-suresi-input"
-                        type="number"
-                        min="0"
-                        placeholder="0"
-                        value={formData.tedarik_suresi}
-                        onChange={(e) => handleInputChange("tedarik_suresi", e.target.value)}
                         style={inputStyle}
                       />
                     </div>
@@ -455,9 +294,9 @@ export default function TedarikciListesi() {
             </div>
           )}
 
-          {/* ═══════ STOK DURUMU TAB ═══════ */}
+          {/* ═══════ STOK TAB ═══════ */}
           {activeTab === "stok" && (
-            <div style={contentCardStyle} className="glass-card-animation">
+            <div style={contentCardStyle}>
               <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "25px" }}>
 
                 <div>
@@ -545,11 +384,13 @@ export default function TedarikciListesi() {
             </div>
           )}
 
-          {/* ═══════ ALIM GEÇMİŞİ TAB ═══════ */}
+          {/* ═══════ GEÇMİŞ TAB ═══════ */}
           {activeTab === "gecmis" && (
-            <div style={contentCardStyle} className="glass-card-animation">
+            <div style={contentCardStyle}>
               <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "25px" }}>
-
+                <div style={{ width: "44px", height: "44px", borderRadius: "12px", background: "linear-gradient(135deg, #8e44ad, #9b59b6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px", color: "white", boxShadow: "0 4px 15px rgba(142,68,173,0.3)" }}>
+                  📋
+                </div>
                 <div>
                   <h3 style={{ margin: 0, color: "#0f3460", fontSize: "18px" }}>Satın Alma Geçmişi</h3>
                   <p style={{ margin: "2px 0 0 0", color: "#95a5a6", fontSize: "13px" }}>Tüm satın alma kayıtları ve tedarikçi puanlamaları</p>
@@ -558,11 +399,11 @@ export default function TedarikciListesi() {
 
               {satinAlmaLoading ? (
                 <div style={{ textAlign: "center", padding: "60px 0", color: "#95a5a6", fontSize: "16px" }}>
-                  Veriler yükleniyor...
+                  ⏳ Veriler yükleniyor...
                 </div>
               ) : satinAlmalar.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "60px 0" }}>
-
+                  <div style={{ fontSize: "48px", marginBottom: "15px" }}>📭</div>
                   <div style={{ color: "#95a5a6", fontSize: "16px" }}>Henüz satın alma kaydı bulunmamaktadır.</div>
                 </div>
               ) : (
@@ -574,7 +415,6 @@ export default function TedarikciListesi() {
                       <th style={thStyle}>Parça</th>
                       <th style={thStyle}>Adet</th>
                       <th style={thStyle}>Birim Fiyat</th>
-                      <th style={thStyle}>Süre</th>
                       <th style={thStyle}>Toplam</th>
                       <th style={thStyle}>Puan</th>
                     </tr>
@@ -591,38 +431,21 @@ export default function TedarikciListesi() {
                         <td style={tdStyle}>{sa.parca_adi}</td>
                         <td style={{ ...tdStyle, fontWeight: "bold" }}>{sa.adet}</td>
                         <td style={tdStyle}>{Number(sa.birim_fiyat).toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ₺</td>
-                        <td style={tdStyle}>{(sa.tedarik_suresi !== null && sa.tedarik_suresi !== undefined) ? `${sa.tedarik_suresi} Gün` : "-"}</td>
                         <td style={{ ...tdStyle, fontWeight: "bold", color: "#27ae60" }}>
                           {(sa.adet * Number(sa.birim_fiyat)).toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ₺
                         </td>
                         <td style={tdStyle}>
                           <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                             {[...Array(10)].map((_, idx) => (
-                              <span
-                                key={idx}
-                                onClick={() => handlePurchaseRate(sa.satin_alma_id, idx + 1)}
-                                onMouseEnter={() => setPurchaseRatingId(`${sa.satin_alma_id}-${idx + 1}`)}
-                                onMouseLeave={() => setPurchaseRatingId(null)}
-                                style={{
-                                  fontSize: "16px",
-                                  cursor: "pointer",
-                                  color: (purchaseRatingId?.startsWith(`${sa.satin_alma_id}-`) && idx < parseInt(purchaseRatingId.split("-")[1])) || (idx < (sa.puan || 0))
-                                    ? "#f39c12"
-                                    : "#ecf0f1",
-                                  transition: "transform 0.1s"
-                                }}
-                              >
-                                ★
-                              </span>
+                              <span key={idx} style={{ fontSize: "14px", color: idx < sa.puan ? "#f39c12" : "#ecf0f1" }}>★</span>
                             ))}
                             <span style={{
                               marginLeft: "8px",
                               fontWeight: "bold",
                               fontSize: "13px",
-                              width: "40px",
-                              color: !sa.puan ? "#95a5a6" : (sa.puan >= 8 ? "#27ae60" : sa.puan >= 5 ? "#f39c12" : "#e74c3c")
+                              color: sa.puan >= 8 ? "#27ae60" : sa.puan >= 5 ? "#f39c12" : "#e74c3c"
                             }}>
-                              {sa.puan ? `${sa.puan}/10` : "Puanla"}
+                              {sa.puan}/10
                             </span>
                           </div>
                         </td>
@@ -633,13 +456,6 @@ export default function TedarikciListesi() {
               )}
             </div>
           )}
-
-          <FirmModal
-            isOpen={isModalOpen}
-            onClose={() => setIsModalOpen(false)}
-            onSave={handleSaveFirm}
-            initialType="Tedarikçi"
-          />
 
         </div>
       </div>
@@ -683,75 +499,14 @@ const inactiveTabStyle = {
   transition: "all 0.3s ease",
 };
 
-const searchInputStyle = {
-  padding: "14px 20px",
-  border: "1px solid #ddd",
-  borderRadius: "30px",
-  fontSize: "14px",
-  outline: "none",
-  width: "320px",
-  background: "white",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-  color: "#333",
-  transition: "all 0.3s ease"
-};
-
 const contentCardStyle = {
   background: "white",
-  padding: "30px",
+  padding: "35px",
   borderRadius: "20px",
   boxShadow: "0 10px 40px 0 rgba(0, 0, 0, 0.05)",
   border: "1px solid #eee",
+  animation: "fadeIn 0.4s ease-out",
   overflowX: "auto"
-};
-
-const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: "900px" };
-
-const thStyle = {
-  textAlign: "left",
-  padding: "16px",
-  background: "#f8f9fa",
-  color: "#34495e",
-  fontWeight: "bold",
-  fontSize: "13px",
-  textTransform: "uppercase",
-  letterSpacing: "1px",
-  borderBottom: "2px solid #e1e5eb",
-  borderTopLeftRadius: "8px",
-  borderTopRightRadius: "8px"
-};
-
-const tdStyle = {
-  padding: "18px 16px",
-  fontSize: "14px",
-  color: "#555",
-  borderBottom: "1px solid #f1f2f6",
-  verticalAlign: "middle"
-};
-
-const trStyle = {
-  transition: "background 0.2s ease"
-};
-
-const badgeActive = {
-  padding: "6px 14px",
-  borderRadius: "20px",
-  fontSize: "12px",
-  fontWeight: "bold",
-  background: "rgba(46, 204, 113, 0.15)",
-  color: "#2ecc71",
-  boxShadow: "0 0 10px rgba(46, 204, 113, 0.2)",
-  border: "1px solid rgba(46, 204, 113, 0.3)"
-};
-
-const badgeInactive = {
-  padding: "6px 14px",
-  borderRadius: "20px",
-  fontSize: "12px",
-  fontWeight: "bold",
-  background: "rgba(231, 76, 60, 0.15)",
-  color: "#e74c3c",
-  border: "1px solid rgba(231, 76, 60, 0.3)"
 };
 
 const formGroupStyle = {
@@ -828,6 +583,32 @@ const successBannerStyle = {
   animation: "fadeIn 0.3s ease-out"
 };
 
+const tableStyle = { width: "100%", borderCollapse: "collapse", minWidth: "800px" };
+
+const thStyle = {
+  textAlign: "left",
+  padding: "16px",
+  background: "#f8f9fa",
+  color: "#34495e",
+  fontWeight: "bold",
+  fontSize: "13px",
+  textTransform: "uppercase",
+  letterSpacing: "1px",
+  borderBottom: "2px solid #e1e5eb",
+};
+
+const tdStyle = {
+  padding: "18px 16px",
+  fontSize: "14px",
+  color: "#555",
+  borderBottom: "1px solid #f1f2f6",
+  verticalAlign: "middle"
+};
+
+const trStyle = {
+  transition: "background 0.2s ease"
+};
+
 const stokKapsayiciStyle = {
   height: "8px",
   width: "120px",
@@ -837,22 +618,16 @@ const stokKapsayiciStyle = {
   boxShadow: "inset 0 1px 3px rgba(0,0,0,0.1)"
 };
 
-// Keyframes
+// Animasyonlar
 if (typeof document !== "undefined") {
-  const existingStyle = document.getElementById("tedarikci-styles");
+  const existingStyle = document.getElementById("satin-alma-styles");
   if (!existingStyle) {
     const style = document.createElement("style");
-    style.id = "tedarikci-styles";
+    style.id = "satin-alma-styles";
     style.innerHTML = `
       @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
-      }
-      .glass-card-animation {
-        animation: fadeIn 0.4s ease-out;
-      }
-      tr:hover {
-        background: rgba(0, 0, 0, 0.02) !important;
       }
     `;
     document.head.appendChild(style);

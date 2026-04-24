@@ -18,7 +18,7 @@ export default function ServisMerkezi() {
   const [disRatingId, setDisRatingId] = useState(null); // Puanlanan dış servis ID'si
   const [disRatingValue, setDisRatingValue] = useState(0); // Verilen yıldız puanı
   const [disRatingComment, setDisRatingComment] = useState(""); // Servis hakkında yorum
-  
+
   // Statik dış servis listesi (Simüle edilmiş veriler)
   const [disServisler, setDisServisler] = useState([
     { id: 1, firma: "Alfa Teknik Servis", uzmanlik: "Genel Mekanik", telefon: "0216 111 2233", email: "info@alfateknik.com", sorumlu_ad: "Hasan", sorumlu_soyad: "Demir", sorumlu_tel: "0532 111 2233", islem: 15, puan: 4.8, yorum: "" },

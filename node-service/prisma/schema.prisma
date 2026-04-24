@@ -341,6 +341,7 @@ model tedarikci {
   iletisim           iletisim?         @relation(fields: [iletisim_id], references: [iletisim_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_iletisim")
   tedarikci_parca    tedarikci_parca[]
   tedarikci_puan     tedarikci_puan[]
+  satin_alma         satin_alma[]
 }
 
 model ariza_turu {
@@ -463,6 +464,28 @@ model tedarikci_puan {
   tedarikci              tedarikci @relation(fields: [tedarikci_id], references: [tedarikci_id], onDelete: NoAction, onUpdate: NoAction, map: "tk_tedarikci")
 
   @@index([tedarikci_id], map: "idx_tpuan_tedarikci")
+}
+
+model satin_alma {
+  satin_alma_id  Int       @id @default(autoincrement())
+  tedarikci_id   Int
+  parca_adi      String    @db.VarChar(150)
+  adet           Int
+  birim_fiyat    Decimal   @db.Decimal(12, 2)
+  tedarik_suresi Int?
+  tarih          DateTime  @default(now()) @db.Timestamptz(6)
+  puan           Int?
+  tedarikci      tedarikci @relation(fields: [tedarikci_id], references: [tedarikci_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_satin_alma_tedarikci")
+
+  @@index([tedarikci_id], map: "idx_satin_alma_tedarikci")
+  @@index([parca_adi], map: "idx_satin_alma_parca")
+}
+
+model stok {
+  stok_id         Int      @id @default(autoincrement())
+  parca_adi       String   @unique @db.VarChar(150)
+  miktar          Int      @default(0)
+  son_guncelleme  DateTime @default(now()) @db.Timestamptz(6)
 }
 
 enum du_ort_yuk {

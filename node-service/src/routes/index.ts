@@ -8,6 +8,7 @@ import bakimRoutes from "./bakimRoutes";
 import { TedarikciRouter, ServisFirmasiRouter } from "./firmaRoutes";
 import gorevRoutes from "./gorevRoutes";
 import { ServisPuanRouter, TedarikciPuanRouter } from "./puanRoute";
+import satinAlmaRoutes from "./satinAlmaRoutes";
 
 
 
@@ -39,5 +40,6 @@ router.use("/servis-puan", ServisPuanRouter);
 
 router.use("/tedarikci-puan", TedarikciPuanRouter);
 
+router.use("/satin-alma", satinAlmaRoutes); // /api/satin-alma/*
 
 export default router;

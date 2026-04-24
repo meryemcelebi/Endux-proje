@@ -36,10 +36,10 @@ router.get('/:id/maliyet-analizi',
 
 
 router.get('/:id',
-   oturumKontrol,
-   rolKontrol("YONETICI", "TEKNISYEN"),
-   makineDetayGetir
-    );
+    oturumKontrol,
+    rolKontrol("YONETICI", "TEKNISYEN", "OPERATOR"),
+    makineDetayGetir
+);
 
 
 export default router;

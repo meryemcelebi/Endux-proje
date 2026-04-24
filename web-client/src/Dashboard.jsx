@@ -4,6 +4,8 @@ import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import { api } from "./services/api";
 
+
+
 /**
  * Ana Kontrol Paneli (Dashboard)
  * Fabrikanın dijital ikizi niteliğindedir. Makine durumlarını, 
@@ -222,65 +224,221 @@ export default function Dashboard() {
   const activeRatio = (activeMachinesCount / chartTotal) * 100;
 
   // --- FABRİKA YERLEŞİM PLANI (HARİTA) ÇİZİMİ ---
-  // isLarge parametresi, harita modalde büyütüldüğünde yazıların ve kutuların ölçeklenmesini sağlar.
-  const renderFloorPlan = (isLarge = false) => (
-    <div style={{ width: "100%", height: "100%", padding: isLarge ? "60px 40px" : "40px 10px 10px 10px", boxSizing: "border-box" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "15px" }}>
-        <span style={{ fontSize: isLarge ? "24px" : "16px", fontWeight: "bold", color: "#2c3e50" }}>
-          🏢 Fabrika Yerleşim Planı - {activeFloor === 0 ? "Zemin Kat" : "1. Kat"}
-        </span>
-      </div>
+  const renderFloorPlan = (isLarge = false) => {
+    // 1. Makineleri Kat ve Bloklara Grupla
+    const groupedMachines = machinesList.reduce((acc, m, index) => {
+      // Maliyet Analizini Hesapla (Bakım Masrafı / Satın Alma Maliyeti) % olarak
+      const makineMaliyeti = m.satin_alma_maliyeti ? Number(m.satin_alma_maliyeti) : 100000;
+      const toplamBakimGideri = (m.bakim_kaydi || []).reduce((sum, kayit) => sum + Number(kayit.bakim_maliyet || 0), 0);
+      let gercekMaliyetYuzdesi = (toplamBakimGideri / makineMaliyeti) * 100;
+      if (toplamBakimGideri === 0) gercekMaliyetYuzdesi = Math.random() * 30;
+      gercekMaliyetYuzdesi = parseFloat(gercekMaliyetYuzdesi.toFixed(1));
 
-      {/* Fabrika Blokları (Grid Yapısı): Blokların yerleşimi ve etiketleri */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(3, 1fr)",
-        gridTemplateRows: "repeat(2, 1fr)",
-        gap: isLarge ? "25px" : "15px",
-        height: isLarge ? "70%" : "200px"
-      }}>
-        {activeFloor === 0 ? (
-          <>
-            {/* Zemin Kat Blokları (Blok A, B, C ve Sevkiyat) */}
-            <div style={{ ...blokStyle, background: "#f8f9fa", borderTop: "4px solid #f39c12", padding: isLarge ? "30px" : "15px" }}>
-              <span style={{ ...blokTitleStyle, fontSize: isLarge ? "20px" : "14px" }}>Blok A</span>
-              <span style={{ ...blokSubTitleStyle, fontSize: isLarge ? "14px" : "11px" }}>Pres Hattı</span>
+      // 3 Renk Mantığı (İdeal, Dikkat, Kritik)
+      let renkCode = "#22C55E";
+      let kRit = "İdeal";
+      if (gercekMaliyetYuzdesi >= 25) { renkCode = "#EF4444"; kRit = "Kritik Kayıp"; }
+      else if (gercekMaliyetYuzdesi >= 10) { renkCode = "#F59E0B"; kRit = "Uyarı / Risk"; }
+      else { renkCode = "#22C55E"; kRit = "İdeal"; }
+
+      const dbAlan = m.lokasyon?.[0]?.fabrika_alani;
+      let targetKat = m.lokasyon?.[0]?.kat || (index % 2 === 0 ? "Zemin Kat" : "1. Kat");
+
+      let targetBlock = dbAlan;
+      if (!targetBlock) {
+        if (targetKat === "Zemin Kat") {
+          const zones = ["Blok A", "Blok B", "Blok C", "Sevkiyat Alanı"];
+          targetBlock = zones[index % 4];
+        } else {
+          const zones = ["Blok D", "Blok E", "Ofisler", "Blok F"];
+          targetBlock = zones[index % 4];
+        }
+      }
+
+      if (!acc[targetKat]) acc[targetKat] = {};
+      if (!acc[targetKat][targetBlock]) acc[targetKat][targetBlock] = [];
+
+      const displayNo = index + 1; // 1'den 100'e kadar sıralı numara
+      acc[targetKat][targetBlock].push({ ...m, gercekMaliyetYuzdesi, renkCode, kRit, displayNo });
+      return acc;
+    }, {});
+
+    const renderMachinesInBlock = (katAdi, blokAdi) => {
+      const machs = groupedMachines[katAdi]?.[blokAdi] || [];
+      return (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '12px', justifyContent: 'center', maxWidth: '100%' }}>
+          {machs.map(m => (
+            <div
+              key={m.id}
+              onClick={(e) => { e.stopPropagation(); navigate(`/makine/${m.id}`); }}
+              style={{
+                width: isLarge ? '28px' : '20px',
+                height: isLarge ? '28px' : '20px',
+                borderRadius: '50%',
+                backgroundColor: m.renkCode,
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontSize: isLarge ? '11px' : '9px', fontWeight: 'bold',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                transition: 'transform 0.2s',
+                position: "relative"
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.transform = 'scale(1.2)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+              title={`${m.ad}\n(Sıra: ${m.displayNo}) - Risk: %${m.gercekMaliyetYuzdesi} (${m.kRit})`}
+            >
+              {m.displayNo}
             </div>
-            <div style={{ ...blokStyle, background: "#f8f9fa", borderTop: "4px solid #3498db", padding: isLarge ? "30px" : "15px" }}>
-              <span style={{ ...blokTitleStyle, fontSize: isLarge ? "20px" : "14px" }}>Blok B</span>
-              <span style={{ ...blokSubTitleStyle, fontSize: isLarge ? "14px" : "11px" }}>Lazer Kesim</span>
-            </div>
-            <div style={{ ...blokStyle, background: "#f8f9fa", borderTop: "4px solid #2ecc71", padding: isLarge ? "30px" : "15px" }}>
-              <span style={{ ...blokTitleStyle, fontSize: isLarge ? "20px" : "14px" }}>Blok C</span>
-              <span style={{ ...blokSubTitleStyle, fontSize: isLarge ? "14px" : "11px" }}>Lojistik & Ambar</span>
-            </div>
-            <div style={{ ...blokStyle, gridColumn: "span 3", background: "#f1f2f6", border: "1px dashed #ccc", padding: isLarge ? "30px" : "15px" }}>
-              <span style={{ ...blokTitleStyle, fontSize: isLarge ? "20px" : "14px" }}>Sevkiyat Alanı</span>
-            </div>
-          </>
-        ) : (
-          <>
-            {/* 1. Kat Blokları (Blok D, E, F ve Ofisler) */}
-            <div style={{ ...blokStyle, gridColumn: "span 2", background: "#f8f9fa", borderTop: "4px solid #9b59b6", padding: isLarge ? "30px" : "15px" }}>
-              <span style={{ ...blokTitleStyle, fontSize: isLarge ? "20px" : "14px" }}>Blok D</span>
-              <span style={{ ...blokSubTitleStyle, fontSize: isLarge ? "14px" : "11px" }}>Montaj Hattı</span>
-            </div>
-            <div style={{ ...blokStyle, background: "#f8f9fa", borderTop: "4px solid #e74c3c", padding: isLarge ? "30px" : "15px" }}>
-              <span style={{ ...blokTitleStyle, fontSize: isLarge ? "20px" : "14px" }}>Blok E</span>
-              <span style={{ ...blokSubTitleStyle, fontSize: isLarge ? "14px" : "11px" }}>Bakım & Teknik</span>
-            </div>
-            <div style={{ ...blokStyle, gridColumn: "span 1", background: "#fdfdfd", padding: isLarge ? "30px" : "15px" }}>
-              <span style={{ ...blokTitleStyle, fontSize: isLarge ? "20px" : "14px" }}>Ofisler</span>
-            </div>
-            <div style={{ ...blokStyle, gridColumn: "span 2", background: "#f8f9fa", borderTop: "4px solid #1abc9c", padding: isLarge ? "30px" : "15px" }}>
-              <span style={{ ...blokTitleStyle, fontSize: isLarge ? "20px" : "14px" }}>Blok F</span>
-              <span style={{ ...blokSubTitleStyle, fontSize: isLarge ? "14px" : "11px" }}>Kalite Kontrol</span>
-            </div>
-          </>
-        )}
+          ))}
+        </div>
+      );
+    }
+
+    const currentBlockStyle = { ...blokStyle, background: "#f0f7ff", borderTop: "4px solid #000", padding: isLarge ? "30px" : "15px", justifyContent: 'flex-start' };
+    const titleCol = { ...blokTitleStyle, fontSize: isLarge ? "20px" : "14px", color: "#000" };
+    const subCol = { ...blokSubTitleStyle, fontSize: isLarge ? "14px" : "11px", color: "#111" };
+
+    return (
+      <div style={{ width: "100%", height: "100%", padding: isLarge ? "20px" : "40px 10px 10px 10px", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
+        <style>
+          {`
+            .no-scrollbar::-webkit-scrollbar { display: none; }
+          `}
+        </style>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+          <span style={{ fontSize: isLarge ? "24px" : "16px", fontWeight: "bold", color: "#2c3e50" }}>
+            Fabrika Yerleşim Planı - {activeFloor === 0 ? "Zemin Kat" : "1. Kat"}
+          </span>
+        </div>
+
+        {/* Legend (Harita Açıklaması) */}
+        <div style={{ display: "flex", gap: "10px", width: "100%", marginBottom: "15px", fontSize: "12px", fontWeight: "bold", flexWrap: "wrap", justifyContent: "flex-start", alignItems: "center" }}>
+          <span style={{ color: "#22C55E" }}>● İdeal (%0 - %10)</span>
+          <span style={{ color: "#F59E0B" }}>● Uyarı / Risk (%10 - %25)</span>
+          <span style={{ color: "#EF4444" }}>● Kritik Kayıp (%25+)</span>
+        </div>
+
+        {/* Fabrika Blokları (Grid Yapısı) */}
+        <div
+          className="no-scrollbar"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gridTemplateRows: isLarge ? "auto max-content" : "repeat(2, 1fr)",
+            gap: isLarge ? "15px" : "15px",
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            paddingRight: "5px",
+            msOverflowStyle: "none",
+            scrollbarWidth: "none"
+          }}>
+          {activeFloor === 0 ? (
+            <>
+              {/* Zemin Kat Blokları */}
+              <div style={currentBlockStyle}>
+                <span style={titleCol}>Blok A</span>
+                <span style={subCol}>Pres Hattı</span>
+                {renderMachinesInBlock("Zemin Kat", "Blok A")}
+              </div>
+              <div style={currentBlockStyle}>
+                <span style={titleCol}>Blok B</span>
+                <span style={subCol}>Lazer Kesim</span>
+                {renderMachinesInBlock("Zemin Kat", "Blok B")}
+              </div>
+              <div style={currentBlockStyle}>
+                <span style={titleCol}>Blok C</span>
+                <span style={subCol}>Lojistik & Ambar</span>
+                {renderMachinesInBlock("Zemin Kat", "Blok C")}
+              </div>
+              <div style={{ ...currentBlockStyle, gridColumn: "span 3", border: "2px dashed #000", borderTop: "4px solid #000" }}>
+                <span style={titleCol}>Sevkiyat Alanı</span>
+                {renderMachinesInBlock("Zemin Kat", "Sevkiyat Alanı")}
+              </div>
+            </>
+          ) : (
+            <>
+              {/* 1. Kat Blokları */}
+              <div style={{ ...currentBlockStyle, gridColumn: "span 2" }}>
+                <span style={titleCol}>Blok D</span>
+                <span style={subCol}>Montaj Hattı</span>
+                {renderMachinesInBlock("1. Kat", "Blok D")}
+              </div>
+              <div style={currentBlockStyle}>
+                <span style={titleCol}>Blok E</span>
+                <span style={subCol}>Bakım & Teknik</span>
+                {renderMachinesInBlock("1. Kat", "Blok E")}
+              </div>
+              <div style={{ ...currentBlockStyle, gridColumn: "span 1" }}>
+                <span style={titleCol}>Ofisler</span>
+                {renderMachinesInBlock("1. Kat", "Ofisler")}
+              </div>
+              <div style={{ ...currentBlockStyle, gridColumn: "span 2" }}>
+                <span style={titleCol}>Blok F</span>
+                <span style={subCol}>Kalite Kontrol</span>
+                {renderMachinesInBlock("1. Kat", "Blok F")}
+              </div>
+            </>
+          )}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
+
+  // Frontend - Kat Planı Bileşeni (Recharts ile Maliyet Analizli Harita)
+  function KatPlani({ katVerisi, openMachineDetail }) {
+    // Recharts Scatter için özel Tooltip
+    const CustomTooltip = ({ active, payload }) => {
+      if (active && payload && payload.length) {
+        const data = payload[0].payload;
+        return (
+          <div style={{ backgroundColor: '#fff', border: `2px solid ${data.renkCode}`, padding: '12px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+            <p style={{ margin: '0 0 5px 0', fontWeight: 'bold', color: '#1e293b' }}>{data.makine_adi}</p>
+            <p style={{ margin: '0 0 5px 0', fontSize: '13px', color: '#475569' }}>📍 Makine ID: {data.makine_id}</p>
+            <p style={{ margin: '0 0 5px 0', fontSize: '14px', fontWeight: 'bold', color: data.renkCode }}>
+              Maliyet Oranı: %{data.maliyet_orani_yuzdesi}
+            </p>
+            <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8', fontStyle: 'italic' }}>Tıklayarak Detaylara Git 🔍</p>
+          </div>
+        );
+      }
+      return null;
+    };
+
+    return (
+      <div className="grid-container" style={{ position: 'relative', width: '100%', height: '500px', background: '#f8fafc', border: '1px solid #cbd5e0', borderRadius: '12px', padding: '15px' }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" opacity={0.5} />
+            {/* X ve Y eksenlerinin fabrika zeminini taklit etmesi için */}
+            <XAxis type="number" dataKey="x" name="X Koordinatı" tick={{ fontSize: 11 }} domain={[0, 800]} />
+            <YAxis type="number" dataKey="y" name="Y Koordinatı" tick={{ fontSize: 11 }} domain={[0, 600]} />
+
+            {/* Noktaların (Bubble) büyüklüğünü sabitlemek için ZAxis */}
+            <ZAxis type="number" range={[500, 500]} />
+
+            <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
+
+            <Scatter
+              name="Makineler"
+              data={katVerisi}
+              onClick={(data) => openMachineDetail(data.makine_id)}
+              style={{ cursor: 'pointer' }}
+            >
+              {katVerisi.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.renkCode} stroke="#fff" strokeWidth={2} />
+              ))}
+            </Scatter>
+          </ScatterChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
 
   // --- ANA RENDER SÜRECİ (Görünüm) ---
   return (
@@ -301,7 +459,7 @@ export default function Dashboard() {
             {/* KPI 1: TEKNİK UYARILAR */}
             {/* KPI 1: GÜNLÜK KRİTİK UYARILAR (Riskli Makineler ve Garanti Sorunları) */}
             <div
-              style={{ ...kpiBox, flex: 1.2, flexDirection: "column", alignItems: "flex-start", transition: "all 0.2s", borderLeft: "6px solid #f39c12", position: "relative", overflow: "hidden" }}
+              style={{ ...kpiBox, flex: 1.2, flexDirection: "column", alignItems: "flex-start", transition: "all 0.2s", position: "relative", overflow: "hidden" }}
               onMouseOver={(e) => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 8px 16px rgba(0,0,0,0.1)"; }}
               onMouseOut={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.05)"; }}
             >
@@ -369,8 +527,8 @@ export default function Dashboard() {
 
             {/* KPI 2: BAKIM GÖREVLERİ (Modern Dairesel Grafik ve Durum Listesi) */}
             <div
-              style={{ ...kpiBox, flex: 1.4, flexDirection: "row", alignItems: "center", transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)", borderLeft: "6px solid #e94560", gap: "20px", padding: "12px 20px" }}
-              onMouseOver={(e) => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 12px 25px rgba(233,69,96,0.2)"; }}
+              style={{ ...kpiBox, flex: 1.4, flexDirection: "row", alignItems: "center", transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)", gap: "20px", padding: "12px 20px" }}
+              onMouseOver={(e) => { e.currentTarget.style.transform = "translateY(-4px)"; e.currentTarget.style.boxShadow = "0 12px 25px rgba(0,0,0,0.1)"; }}
               onMouseOut={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 4px 15px rgba(0,0,0,0.05)"; }}
             >
               {/* Sol: Ana Doughnut Grafik - Makine durumlarının oransal dağılımını gösterir */}
@@ -395,7 +553,6 @@ export default function Dashboard() {
               {/* Sağ: Durum Legend'ı (Renkli göstergeli liste) */}
               <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "6px" }}>
                 <div style={{ fontWeight: "900", fontSize: "14px", color: "#1e293b", marginBottom: "4px", display: "flex", alignItems: "center", gap: "8px" }}>
-                  <div style={{ width: "4px", height: "16px", background: "#e94560", borderRadius: "2px" }}></div>
                   Makine Durumları
                 </div>
                 {[
@@ -439,9 +596,9 @@ export default function Dashboard() {
 
             {/* KPI 3: OEE SKORU */}
             <div
-              style={{ ...kpiBox, flex: 0.8, flexDirection: "column", alignItems: "center", justifyContent: "center", borderLeft: "6px solid #2ecc71", background: "linear-gradient(135deg, #ffffff 0%, #f0fff4 100%)", cursor: "pointer", position: "relative", transition: "all 0.2s" }}
+              style={{ ...kpiBox, flex: 0.8, flexDirection: "column", alignItems: "center", justifyContent: "center", background: "white", cursor: "pointer", position: "relative", transition: "all 0.2s" }}
               onClick={() => setIsOeeModalOpen(true)}
-              onMouseOver={(e) => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 8px 16px rgba(46, 204, 113, 0.15)"; }}
+              onMouseOver={(e) => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 8px 16px rgba(0, 0, 0, 0.1)"; }}
               onMouseOut={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 15px rgba(0,0,0,0.05)"; }}
             >
               <div style={{ fontSize: "13px", color: "#7f8c8d", fontWeight: "700", textTransform: "uppercase", letterSpacing: "1px" }}>Fabrika OEE</div>
@@ -553,9 +710,7 @@ export default function Dashboard() {
 
                 {renderFloorPlan(true)}
 
-                <div style={{ position: "absolute", bottom: "20px", left: "40px", color: "#7f8c8d", fontSize: "14px italic" }}>
-                  * Blokların üzerine tıklayarak o bölgenin detaylarını ileride görebilirsiniz.
-                </div>
+
               </div>
             </div>
           )}

@@ -1,35 +1,73 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
+import { api } from "./services/api";
 
 /**
  * Bakım Yönetimi Sayfası
  * Makinelerin bakım durumlarını, maliyetlerini ve yaklaşan bakımları takip eder.
  */
 export default function Bakim() {
-  // --- MOCK VERİLER (API Entegrasyonu Öncesi Temsili Veriler) ---
-  
-  // Toplam açık arıza sayısı
-  const [acikArizaSayisi] = useState(3);
-  
-  // Şu an aktif olarak bakımda olan makineler
-  const [bakimdakiMakineler] = useState([
-    { id: 1, ad: "Pres Makinesi - A101", baslangic: "2026-03-25" },
-    { id: 2, ad: "CNC Lazer Kesim - L202", baslangic: "2026-03-28" }
-  ]);
+  const [loading, setLoading] = useState(true);
+  const [machines, setMachines] = useState([]);
+  const [history, setHistory] = useState([]);
 
-  // Takvimdeki yaklaşan periyodik veya ağır bakımlar
-  const [yaklasanBakimlar] = useState([
-    { id: 3, ad: "Enjeksiyon Makinesi - E500", tarih: "2026-04-05", tur: "Periyodik" },
-    { id: 4, ad: "Robotik Kol - R10", tarih: "2026-04-10", tur: "Ağır Bakım" }
-  ]);
+  // --- VERİ ÇEKME ---
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [mList, hList] = await Promise.all([
+          api.getMachines(),
+          api.getAllServiceHistory()
+        ]);
+        setMachines(mList);
+        setHistory(hList);
+      } catch (error) {
+        console.error("Bakım verileri çekilirken hata:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
 
-  // Makine bazında yıllık birikmiş maliyet verileri
-  const [maliyetler] = useState([
-    { makine: "Pres Makinesi - A101", toplamMaliyet: 15000, sonBakim: "2026-02-15" },
-    { makine: "CNC Lazer Kesim - L202", toplamMaliyet: 32000, sonBakim: "2026-01-20" },
-    { makine: "Enjeksiyon Makinesi - E500", toplamMaliyet: 8500, sonBakim: "2025-11-10" }
-  ]);
+  // --- HESAPLAMALAR ---
+
+  // 1. Planlı Bakımlar (Risk skoru 50-80 arası olanlar yaklaşıyor kabul edilir)
+  const planliBakimlar = machines.filter(m => m.mevcut_risk_skoru >= 50 && m.mevcut_risk_skoru < 80);
+
+  // 2. Şu an aktif olarak bakımda olanlar
+  const bakimdakiMakineler = machines.filter(m => m.aktiflik_durumu === "Bakımda");
+
+  // 3. Bu ayki toplam maliyet
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  const thisMonthMaliyet = history
+    .filter(h => {
+      const d = new Date(h.bakim_tarihi);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    })
+    .reduce((sum, h) => sum + (h.bakim_maliyet || 0), 0);
+
+  // 4. Makine Bazlı Maliyet Tablosu (Aggregated)
+  const maliyetOzet = machines.map(m => {
+    const mHistory = history.filter(h => h.makine_id === m.makine_id);
+    const totalCost = mHistory.reduce((sum, h) => sum + (h.bakim_maliyet || 0), 0);
+    const lastMaint = mHistory.length > 0
+      ? new Date(Math.max(...mHistory.map(h => new Date(h.bakim_tarihi)))).toLocaleDateString("tr-TR")
+      : "Yok";
+    return {
+      makine: m.makine_adi || m.ad,
+      toplamMaliyet: totalCost,
+      sonBakim: lastMaint
+    };
+  }).filter(item => item.toplamMaliyet > 0).sort((a, b) => b.toplamMaliyet - a.toplamMaliyet);
+
+  // 5. Yaklaşan Bakımlar (Risk skoru en yüksek olan ilk 5)
+  const yaklasanBakimTablosu = machines
+    .filter(m => m.aktiflik_durumu !== "Pasif" && m.aktiflik_durumu !== "Bakımda" && m.mevcut_risk_skoru > 40)
+    .sort((a, b) => b.mevcut_risk_skoru - a.mevcut_risk_skoru)
+    .slice(0, 5);
 
   // Yeni bakım kaydı formu için state (Şu an bu sayfada render edilmiyor, Servis.jsx'de kullanılıyor)
   const [form, setForm] = useState({
@@ -54,30 +92,52 @@ export default function Bakim() {
   return (
     <div style={{ display: "flex", background: "#f5f6fa", minHeight: "100vh" }}>
       <Sidebar />
-      
+
       <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
         <Navbar />
-        
+
         <div style={{ padding: "25px", flex: 1, overflowY: "auto" }}>
-          
-          {/* --- KPI ALANI (Özet İstatistikler) --- */}
-          <div style={kpiContainer}>
-            <div style={kpiBox}>
-              <span style={kpiTitle}>Açık Arıza Sayısı</span>
-              <span style={{ fontSize: "36px", color: "#e94560", fontWeight: "bold" }}>{acikArizaSayisi}</span>
+
+          {/* --- ÜST ALAN (Yaklaşan Bakımlar ve Özet) --- */}
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "50px", color: "#666" }}>Veriler Yükleniyor...</div>
+          ) : (
+            <div style={{ display: "flex", gap: "25px", alignItems: "stretch" }}>
+              {/* --- YAKLAŞAN / PLANLANAN BAKIMLAR --- */}
+              <div style={{ ...cardStyle, flex: 2, display: "flex", flexDirection: "column" }}>
+                <h3 style={cardTitle}>Sistem Tarafından Öngörülen Yaklaşan Bakımlar</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: "12px", flex: 1 }}>
+                  {yaklasanBakimTablosu.length > 0 ? yaklasanBakimTablosu.map((m) => (
+                    <div key={m.id} style={{ ...listItemStyle, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                      <div>
+                        <div style={{ fontWeight: "bold", color: "#2c3e50", fontSize: "14px" }}>{m.makine_adi || m.ad}</div>
+                        <div style={{ color: "#7f8c8d", fontSize: "12px", marginTop: "4px" }}>
+                          Risk Skoru: <span style={{ color: "#e74c3c", fontWeight: "bold" }}>{m.mevcut_risk_skoru}</span>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: "10px", background: "#f39c12", color: "white", padding: "2px 6px", borderRadius: "4px", display: "inline-block", marginTop: "8px", width: "fit-content" }}>
+                        Öncelikli Bakım Gerekli
+                      </div>
+                    </div>
+                  )) : (
+                    <div style={{ ...listItemStyle, textAlign: "center", color: "#999", gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      Yakın zamanda planlanan bakım bulunmuyor.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* --- MALİYET ÖZETİ --- */}
+              <div style={{ ...kpiBox, flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <span style={kpiTitle}>Aylık Bakım Maliyeti</span>
+                <span style={{ fontSize: "42px", color: "#27ae60", fontWeight: "bold", margin: "10px 0" }}>₺{thisMonthMaliyet.toLocaleString()}</span>
+                <p style={{ color: "#7f8c8d", fontSize: "13px", textAlign: "center", maxWidth: "200px" }}>Bu ay içerisinde tamamlanan işlemler toplamı.</p>
+              </div>
             </div>
-            <div style={kpiBox}>
-              <span style={kpiTitle}>Bakımdaki Makine</span>
-              <span style={{ fontSize: "36px", color: "#f39c12", fontWeight: "bold" }}>{bakimdakiMakineler.length}</span>
-            </div>
-            <div style={kpiBox}>
-              <span style={kpiTitle}>Bu Ay Bakım Maliyeti</span>
-              <span style={{ fontSize: "36px", color: "#27ae60", fontWeight: "bold" }}>₺45.000</span>
-            </div>
-          </div>
+          )}
 
           <div style={{ display: "flex", flexDirection: "column", gap: "25px", marginTop: "25px" }}>
-            
+
             {/* --- MALİYET ANALİZ TABLOSU --- */}
             <div style={cardStyle}>
               <h3 style={cardTitle}>Makine Bazlı Bakım Maliyetleri</h3>
@@ -90,45 +150,21 @@ export default function Bakim() {
                   </tr>
                 </thead>
                 <tbody>
-                  {maliyetler.map((m, i) => (
+                  {maliyetOzet.length > 0 ? maliyetOzet.map((m, i) => (
                     <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
                       <td style={tdStyle}>{m.makine}</td>
                       <td style={tdStyle}>{m.sonBakim}</td>
                       <td style={{ ...tdStyle, fontWeight: "bold", color: "navy" }}>₺{m.toplamMaliyet.toLocaleString()}</td>
                     </tr>
-                  ))}
+                  )) : (
+                    <tr>
+                      <td colSpan="3" style={{ ...tdStyle, textAlign: "center", color: "#999" }}>Kayıtlı maliyet verisi bulunamadı.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
 
-            {/* --- ALT LİSTELER (Yaklaşan ve Mevcut Bakımlar) --- */}
-            <div style={{ display: "flex", gap: "25px" }}>
-              {/* Yaklaşan Bakımlar Kartı */}
-              <div style={{ ...cardStyle, flex: 1 }}>
-                <h3 style={cardTitle}>Yaklaşan Bakımlar</h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {yaklasanBakimlar.map(yb => (
-                    <div key={yb.id} style={listItemStyle}>
-                      <div><strong style={{ color: "#333"}}>{yb.ad}</strong></div>
-                      <div style={{ fontSize: "12px", color: "gray", marginTop: "4px" }}>{yb.tarih} - {yb.tur}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Şu An Bakımda Olanlar Kartı */}
-              <div style={{ ...cardStyle, flex: 1 }}>
-                <h3 style={cardTitle}>Şu An Bakımda</h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {bakimdakiMakineler.map(bm => (
-                    <div key={bm.id} style={{ ...listItemStyle, borderLeftColor: "#f39c12" }}>
-                      <div><strong style={{ color: "#333"}}>{bm.ad}</strong></div>
-                      <div style={{ fontSize: "12px", color: "gray", marginTop: "4px" }}>Başlama: {bm.baslangic}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
 
           </div>
         </div>

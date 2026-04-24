@@ -5,25 +5,63 @@ export async function tumTedarikcileriGetir(req: Request, res: Response) {
     try {
         const tedarikciler = await prisma.tedarikci.findMany({
             include: {
-                iletisim: true
+                iletisim: true,
+                satin_alma: {
+                    select: {
+                        puan: true
+                    }
+                },
+                tedarikci_puan: {
+                    select: {
+                        puan: true,
+                        yorum: true,
+                        tarih: true
+                    },
+                    orderBy: {
+                        tarih: "desc"
+                    }
+                }
             },
             orderBy: {
                 tedarikci_id: "asc"
             }
         });
+
+        const dataWithAvg = tedarikciler.map(t => {
+            const satinAlmaPuanlari = t.satin_alma
+                .filter(sa => sa.puan !== null && sa.puan !== undefined)
+                .map(sa => Number(sa.puan));
+
+            const genelPuanlar = t.tedarikci_puan
+                .filter(tp => tp.puan !== null && tp.puan !== undefined)
+                .map(tp => Number(tp.puan) * 2); // 1-5'i 1-10'a normalize et
+
+            const tumPuanlar = [...satinAlmaPuanlari, ...genelPuanlar];
+
+            const ortalama = tumPuanlar.length > 0
+                ? Number((tumPuanlar.reduce((a, b) => a + b, 0) / tumPuanlar.length).toFixed(1))
+                : 0;
+
+            return {
+                ...t,
+                ortalama_puan: ortalama,
+                yorum: t.tedarikci_puan?.[0]?.yorum || null,
+                satin_alma: undefined,
+                tedarikci_puan: undefined
+            };
+        });
+
         res.status(200).json({
             success: true,
             message: `${tedarikciler.length} adet tedarikçi getirildi.`,
-            data: tedarikciler
+            data: dataWithAvg
         });
     } catch (error) {
         console.error("Tedarikçileri getirme hatası:", error);
         res.status(500).json({
-
             success: false,
             message: 'Tedarikçiler getirilirken bir hata oluştu.'
         });
-
     }
 };
 

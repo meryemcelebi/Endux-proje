@@ -101,9 +101,9 @@ export default function Makineler() {
 
       // UI listesini anlık olarak güncelle
       const machineForUI = {
-        ...addedMachine.makine, // Backend'den dönen makine nesnesini kullan
-        id: addedMachine.makine.makine_id,
-        makineid: "MKN-" + addedMachine.makine.makine_id,
+        ...addedMachine,
+        id: addedMachine.makine_id,
+        makineid: "MKN-" + addedMachine.makine_id,
         aktiflik_durumu: form.aktiflik_durumu
       };
 
@@ -175,7 +175,7 @@ export default function Makineler() {
               >
                 <option value="">Kat</option>
                 <option value="0">Z.Kat</option>
-                
+
               </select>
 
               {/* Lokasyon Filtresi */}
@@ -276,7 +276,7 @@ export default function Makineler() {
                 // Arama filtresi
                 if (searchTerm) {
                   const searchLower = searchTerm.toLowerCase();
-                  const matches = 
+                  const matches =
                     (m.makine_ad?.toLowerCase().includes(searchLower)) ||
                     (m.makineid?.toLowerCase().includes(searchLower)) ||
                     (m.m_tur_id?.toString().includes(searchLower));
@@ -360,13 +360,7 @@ export default function Makineler() {
                               <div><strong>Garanti Tel:</strong> {m.tedarikci.telefon || "-"}</div>
                             </>
                           )}
-                          <div style={{ gridColumn: "span 2", lineHeight: "1.5" }}><strong>Özellikler Özeti:</strong> {
-                            m.makine_ozellikleri?.teknik_ozellikler?.teknikSpesifikasyonlar 
-                              ? `⚡ ${m.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.gucTuketimi_kW}kW | 📏 ${m.makine_ozellikleri.teknik_ozellikler.teknikSpesifikasyonlar.agirlik_kg}kg | 🏭 Model: ${m.makine_ozellikleri.teknik_ozellikler.kimlikBilgileri?.uretimYili}`
-                              : (m.makine_ozellikleri?.teknik_ozellikler 
-                                  ? Object.entries(m.makine_ozellikleri.teknik_ozellikler).map(([k,v]) => `${k}: ${typeof v === 'object' ? '...' : v}`).join(" | ") 
-                                  : "Belirtilmemiş")
-                          }</div>
+                          <div style={{ gridColumn: "span 2" }}><strong>Özellikler:</strong> {m.makine_ozellikleri?.teknik_ozellikler ? Object.entries(m.makine_ozellikleri.teknik_ozellikler).map(([k, v]) => `${k}: ${v}`).join(" | ") : "Belirtilmemiş"}</div>
                         </div>
                       </div>
                     )}
@@ -376,7 +370,7 @@ export default function Makineler() {
                       <div className={`qr-container-${m.id}`}>
                         <QRCodeCanvas value={`${window.location.origin}/checklist-giris/${m.makine_qr}`} size={100} />
                       </div>
-                      
+
                       {/* QR Çıktı Al: QR kodu yeni pencerede yazdırılabilir formatta açar */}
                       <button
                         onClick={(e) => {

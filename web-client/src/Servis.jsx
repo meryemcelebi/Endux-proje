@@ -42,7 +42,7 @@ export default function Servis() {
     }
   };
 
-  const sortedHistory = [...history].sort((a,b) => (b.puan || 0) - (a.puan || 0));
+  const sortedHistory = [...history].sort((a, b) => (b.puan || 0) - (a.puan || 0));
 
   const [form, setForm] = useState({
     ariza_sebebi: "",
@@ -68,7 +68,7 @@ export default function Servis() {
       makine_id: Number(id),
       kullanici_id: Number(currentUser.kullanici_id || 0),
       servis_firma_id: Number(currentUser.firma_id || 1),
-      ariza_id: 1, 
+      ariza_id: 1,
       ariza_sebebi: form.ariza_sebebi,
       bakim_maliyet: [parseFloat(form.bakim_maliyet)],
       durus_suresi: Number(form.durus_suresi), // Makinenin ne kadar süre devre dışı kaldığı
@@ -123,7 +123,7 @@ export default function Servis() {
                 const isTarihArray = Array.isArray(item.bakim_tarihi) && item.bakim_tarihi.length > 0;
                 const tarihDate = isTarihArray ? item.bakim_tarihi[0] : item.bakim_tarihi;
                 const formatTarih = tarihDate ? new Date(tarihDate).toLocaleDateString("tr-TR") : "Belirtilmemiş";
-                
+
                 const formatMaliyet = Array.isArray(item.bakim_maliyet) ? item.bakim_maliyet[0] : item.bakim_maliyet;
 
                 return (
@@ -135,7 +135,7 @@ export default function Servis() {
                           İşlem: {item.bakim_turu?.[0] || "Bakım"}
                         </div>
                         <div style={{ color: "#34495e", fontSize: "14px", marginTop: "4px" }}>
-                          Duruş Süresi: <span style={{color: "#e74c3c", fontWeight: "bold"}}>{item.durus_suresi || 0} Saat</span> | Maliyet: {formatMaliyet} ₺
+                          Duruş Süresi: <span style={{ color: "#e74c3c", fontWeight: "bold" }}>{item.durus_suresi || 0} Saat</span> | Maliyet: {formatMaliyet} ₺
                         </div>
                         <p style={{ margin: 0, color: "#555", fontSize: "14px", marginTop: "8px", fontStyle: "italic" }}>"{item.aciklama}"</p>
                       </div>
@@ -143,18 +143,18 @@ export default function Servis() {
                         <div style={{ fontSize: "12px", color: "#7f8c8d", marginBottom: "4px", fontWeight: "bold" }}>İşlem Puanı</div>
                         <div style={{ display: "flex", gap: "2px" }}>
                           {[1, 2, 3, 4, 5].map(star => (
-                            <span key={star} 
-                                  onClick={() => handleRecordPuanla(item.bakim_id, star)}
-                                  style={{ 
-                                    cursor: "pointer", 
-                                    fontSize: "20px", 
-                                    color: (item.puan || 0) >= star ? "#f39c12" : "#dfe6e9",
-                                    transition: "transform 0.1s"
-                                  }}
-                                  onMouseOver={(e) => e.target.style.transform = "scale(1.2)"}
-                                  onMouseOut={(e) => e.target.style.transform = "scale(1)"}
+                            <span key={star}
+                              onClick={() => handleRecordPuanla(item.bakim_id, star)}
+                              style={{
+                                cursor: "pointer",
+                                fontSize: "20px",
+                                color: (item.puan || 0) >= star ? "#f39c12" : "#dfe6e9",
+                                transition: "transform 0.1s"
+                              }}
+                              onMouseOver={(e) => e.target.style.transform = "scale(1.2)"}
+                              onMouseOut={(e) => e.target.style.transform = "scale(1)"}
                             >
-                               ★
+                              ★
                             </span>
                           ))}
                         </div>
@@ -201,7 +201,7 @@ export default function Servis() {
                 style={inputStil}
               />
             </div>
-            
+
             {/* Bakım Türü (bakim_turu) */}
             <div style={{ marginBottom: "15px" }}>
               <label style={labelStil}>Bakım Türü</label>
@@ -258,10 +258,10 @@ export default function Servis() {
         </div>
       </div>
 
-      <FirmModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        onSave={handleSaveFirm} 
+      <FirmModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveFirm}
         initialType={modalType}
       />
     </div>

@@ -28,16 +28,16 @@ export default function FirmModal({ isOpen, onClose, onSave, initialType = "Serv
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.ad) return alert("Firma adı zorunludur!");
-    
-    const payload = { 
-      ...form, 
-      aktiflik: true, 
+
+    const payload = {
+      ...form,
+      aktiflik: true,
       kayit_tarihi: new Date().toISOString(),
       ortalama_puan: 0 // Yeni firmalar 0 puanla başlar
     };
     onSave(payload); // Veriyi üst bileşene gönder
-    
-    setForm({ 
+
+    setForm({
       ad: "", tip: initialType, telefon: "", email: "", adres: "",
       uzmanlik_alani: "", sorumlu_ad: "", sorumlu_soyad: "", sorumlu_telefon: "",
       yetkili_kisi: "", veri_no: "", guvenilirlik_skoru: ""
@@ -55,7 +55,7 @@ export default function FirmModal({ isOpen, onClose, onSave, initialType = "Serv
 
         {/* Ekleme Formu */}
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-          
+
           <div style={formRowStil}>
             <div style={{ flex: 1 }}>
               <label style={labelStil}>Firma/Servis Adı *</label>
@@ -77,11 +77,11 @@ export default function FirmModal({ isOpen, onClose, onSave, initialType = "Serv
               <input type="email" name="email" value={form.email} onChange={handleChange} style={inputStil} placeholder="Örn: info@firma.com" />
             </div>
           </div>
-          
+
           {form.tip === "Servis" && (
             <div style={{ background: "#f8f9fa", padding: "15px", borderRadius: "8px", border: "1px solid #e1e5eb" }}>
               <h4 style={{ margin: "0 0 10px 0", color: "#34495e", fontSize: "14px" }}>Servis & Teknisyen Detayları</h4>
-              
+
               <div style={{ marginBottom: "12px" }}>
                 <label style={labelStil}>Uzmanlık Alanı</label>
                 <input type="text" name="uzmanlik_alani" value={form.uzmanlik_alani} onChange={handleChange} style={inputStil} placeholder="Örn: CNC Mekaniği, Motor Revizyon" />
@@ -97,7 +97,7 @@ export default function FirmModal({ isOpen, onClose, onSave, initialType = "Serv
                   <input type="text" name="sorumlu_soyad" value={form.sorumlu_soyad} onChange={handleChange} style={inputStil} placeholder="Örn: Yılmaz" />
                 </div>
               </div>
-              
+
               <div style={{ marginTop: "12px" }}>
                 <label style={labelStil}>Teknisyen Cep Telefonu</label>
                 <input type="text" name="sorumlu_telefon" value={form.sorumlu_telefon} onChange={handleChange} style={inputStil} placeholder="Örn: 05XX..." />
@@ -108,7 +108,7 @@ export default function FirmModal({ isOpen, onClose, onSave, initialType = "Serv
           {form.tip === "Tedarikçi" && (
             <div style={{ background: "#f0f7ff", padding: "15px", borderRadius: "8px", border: "1px solid #cce3ff" }}>
               <h4 style={{ margin: "0 0 10px 0", color: "#0056b3", fontSize: "14px" }}>Tedarikçi Ek Bilgileri</h4>
-              
+
               <div style={{ marginBottom: "12px" }}>
                 <label style={labelStil}>Yetkili Kişi</label>
                 <input type="text" name="yetkili_kisi" value={form.yetkili_kisi} onChange={handleChange} style={inputStil} placeholder="Örn: Mehmet Özsoy" />
