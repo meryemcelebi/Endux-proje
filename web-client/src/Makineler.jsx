@@ -28,12 +28,17 @@ export default function Makineler() {
       try {
         const data = await api.getMachines();
         // API'den gelen veriyi yerel state'e uygun hale getir (ID ve durum eşleştirmesi)
-        const formattedData = data.map(m => ({
-          ...m,
-          id: m.makine_id,
-          makineid: "MKN-" + m.makine_id,
-          aktiflik_durumu: typeof m.aktiflik_durumu === "string" ? m.aktiflik_durumu : (m.aktiflik_durumu ? "Aktif" : "Pasif")
-        }));
+        const formattedData = data.map((m) => ({
+  ...m,
+  id: m.makine_id,
+  makineid: "MKN-" + m.makine_id,
+  makine_ad: m.makine_adi || m.makine_ad,
+  aktiflik_durumu:
+    typeof m.aktiflik_durumu === "string"
+      ? m.aktiflik_durumu
+      : (m.aktiflik_durumu ? "Aktif" : "Pasif")
+}));
+
         setMachines(formattedData);
       } catch (err) {
         console.error("Makineler yüklenirken hata oluştu", err);
@@ -373,32 +378,58 @@ export default function Makineler() {
 
                       {/* QR Çıktı Al: QR kodu yeni pencerede yazdırılabilir formatta açar */}
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const container = document.querySelector(`.qr-container-${m.id}`);
-                          const canvas = container?.querySelector('canvas');
-                          if (!canvas) return;
-                          const imgData = canvas.toDataURL('image/png');
-                          const printWindow = window.open('', '_blank');
-                          printWindow.document.write(`
-                            <html>
-                              <head><title>QR Kod Çıktısı - ${m.makine_ad}</title></head>
-                              <body style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; margin:0; font-family: sans-serif;">
-                                <h2>${m.makine_ad}</h2>
-                                <img src="${imgData}" style="width:200px; height:200px;" />
-                                <p style="font-size:14px; color:gray; margin-top:15px;">Makine ID: ${m.makineid}</p>
-                              </body>
-                            </html>
-                          `);
-                          printWindow.document.close();
-                          printWindow.focus();
-                          printWindow.print();
-                          printWindow.close();
-                        }}
-                        style={printBtnStyle}
-                      >
-                        QR Çıktı Al
-                      </button>
+                         onClick={(e) => {
+                         e.stopPropagation();
+
+                       const container = document.querySelector(`.qr-container-${m.id}`);
+                       const canvas = container?.querySelector("canvas");
+                       if (!canvas) {
+                      alert("QR alanı bulunamadı.");
+                      return;
+     }
+
+                   const imgData = canvas.toDataURL("image/png");
+                  const printWindow = window.open("", "_blank", "width=700,height=700");
+
+              if (!printWindow) {
+      alert("Tarayıcı açılır pencereyi engelledi. Lütfen popup izni ver.");
+      return;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>QR Kod Çıktısı - ${m.makine_adi || m.makine_ad || "Makine"}</title>
+        </head>
+        <body style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; margin:0; font-family:sans-serif;">
+          <h2>${m.makine_adi || m.makine_ad || "Makine"}</h2>
+          <img id="qrImage" src="${imgData}" style="width:220px; height:220px;" />
+          <p style="font-size:14px; color:gray; margin-top:15px;">Makine ID: ${m.makineid}</p>
+
+          <script>
+            const img = document.getElementById("qrImage");
+            function doPrint() {
+              window.print();
+              window.onafterprint = () => window.close();
+            }
+
+            if (img.complete) {
+              doPrint();
+            } else {
+              img.onload = doPrint;
+            }
+          <\/script>
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
+  }}
+  style={printBtnStyle}
+>
+  QR Çıktı Al
+</button>
 
                       {/* Detay Sayfasına Git Butonu */}
                       <button

@@ -1,9 +1,9 @@
-import Router from 'express';
+import { Router } from 'express';
 import {
      siralaFirmalar,
      siralaRoller,
      siralaMakineTurleri
-} from '../controllers/sistemKontrol';;
+} from '../controllers/sistemKontrol';
 
 const router = Router();
 

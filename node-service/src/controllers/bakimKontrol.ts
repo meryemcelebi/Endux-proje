@@ -24,32 +24,66 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
 
 
         const sonuc = await prisma.$transaction(async (tx) => {
-            const bakimKaydi = await tx.bakim_kaydi.create({
-                data: {
-                    makine_id: Number(makine_id),
-                    sorumlu_id: Number(sorumlu_id),
-                    servis_firma_id: Number(servis_firma_id),
-                    ariza_id: ariza_id ? Number(ariza_id) : undefined,
-                    // bakim_turu string değil — bakim_tur_id FK olarak integer
-                    bakim_tur_id: bakim_tur_id ? Number(bakim_tur_id) : undefined,
-                    bakim_maliyet: Number(bakim_maliyet),
-                    durus_suresi: durus_suresi ? Decimal(durus_suresi) : null,
-                    aciklama: aciklama || null,
-                    bakim_tarihi: new Date(),
-                },
+           const bakimKaydi = await tx.bakim_kaydi.create({
+            data: {
+            makine_id: Number(makine_id),
+            sorumlu_id: Number(sorumlu_id),
+            servis_firma_id: Number(servis_firma_id),
+            ariza_id: ariza_id ? Number(ariza_id) : null,
+            bakim_tur_id: bakim_tur_id ? Number(bakim_tur_id) : null,
+            bakim_maliyet: Number(bakim_maliyet),
+            durus_suresi: durus_suresi ? new Decimal(durus_suresi) : null,
+            aciklama: aciklama || null,
+            bakim_tarihi: new Date(),
+        },
+    });
+
+    // 🔧 Parça değişimleri + stok düşme
+    if (Array.isArray(degisen_Parcalar) && degisen_Parcalar.length > 0) {
+        for (const parca of degisen_Parcalar) {
+            const parcaId = Number(parca.parca_id);
+            const adet = Number(parca.adet) || 1;
+
+            if (!parcaId) continue;
+
+            // Parçayı bul
+            const mevcutParca = await tx.parca.findUnique({
+                where: { parca_id: parcaId }
             });
-            // degisen parçaların kaydedilmesi
-            // parca_degisim tablosu sadece 3 kolon içerir: parca_degisim_id, bakim_id, parca_id
-            if (degisen_Parcalar && Array.isArray(degisen_Parcalar) && degisen_Parcalar.length > 0) {
-                await tx.parca_degisim.createMany({
-                    data: degisen_Parcalar.map((parca: any) => ({
-                        bakim_id: bakimKaydi.bakim_id,
-                        parca_id: parca.parca_id ? Number(parca.parca_id) : null,
-                    })),
-                });
+
+            if (!mevcutParca) {
+                throw new Error(`parca_id ${parcaId} bulunamadı.`);
             }
-            return bakimKaydi;
-        });
+
+            if (mevcutParca.stok_miktari < adet) {
+                throw new Error(
+                    `"${mevcutParca.parca_adi}" için yeterli stok yok. ` +
+                    `Mevcut: ${mevcutParca.stok_miktari}, İstenen: ${adet}`
+                );
+            }
+
+            // Parça değişim kaydı
+            await tx.parca_degisim.create({
+                data: {
+                    bakim_id: bakimKaydi.bakim_id,
+                    parca_id: parcaId,
+                    adet: adet
+                }
+            });
+
+            // Stok düş
+            await tx.parca.update({
+                where: { parca_id: parcaId },
+                data: {
+                    stok_miktari: { decrement: adet }
+                }
+            });
+        }
+    }
+
+    return bakimKaydi;
+});
+        
         res.status(201).json({
             success: true,
             message: 'Bakım kaydı başarıyla oluşturuldu.',
@@ -161,3 +195,35 @@ export const makineBakimKayitlari = async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Bakım kayıtları getirilirken bir hata oluştu.' });
     }
 };
+
+  export async function dusukStokUyarisi(req: Request, res: Response) : Promise<void> {
+    try {
+      const dusukStokParcalar = await prisma.parca.findMany({
+        where: {
+          stok_miktari: {
+            lte: prisma.parca.fields.min_stok_seviyesi
+            //alternatif 5 gibi sabit bir sayı da olabilir: lte: 5
+          }
+        },
+        select: {
+            parca_id: true,
+            parca_adi: true,
+            stok_miktari: true,
+            min_stok_seviyesi: true,
+            tedarik_gun_suresi: true,
+            parca_maliyeti: true,
+        },
+        orderBy: {
+            stok_miktari: 'asc'
+        }
+      });
+      res.status(200).json({
+        success: true,
+        message: `${dusukStokParcalar.length} adet parça düşük stok seviyesinde.`,
+        data: dusukStokParcalar
+      });
+    } catch (error) {
+      console.error('stok uyarısı hatası:', error);
+      res.status(500).json({ error: 'Düşük stok uyarısı getirilirken bir hata oluştu.' });
+    }
+}

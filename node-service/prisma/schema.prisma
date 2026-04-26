@@ -282,6 +282,8 @@ model parca {
   tedarik_gun_suresi Int
   kategori_id        Int?
   tedarikci_id       Int
+  stok_miktari       Int              @default(0)     
+  min_stok_seviyesi  Int               @default(5)      
   parca_kategori     parca_kategori?   @relation(fields: [kategori_id], references: [kategori_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_kategori")
   tedarikci          tedarikci         @relation(fields: [tedarikci_id], references: [tedarikci_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_tedarikci")
   parca_degisim      parca_degisim[]
@@ -292,6 +294,7 @@ model parca_degisim {
   parca_degisim_id Int         @id @default(autoincrement())
   bakim_id         Int
   parca_id         Int?
+  adet             Int?
   bakim_kaydi      bakim_kaydi @relation(fields: [bakim_id], references: [bakim_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_bakim")
   parca            parca?      @relation(fields: [parca_id], references: [parca_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_parca")
 
@@ -449,6 +452,8 @@ model tedarikci_parca {
   tedarik_id         Int
   parca_id           Int
   tedarik_maliyeti   Decimal   @db.Decimal(15, 3)
+  stok_miktari       Int               @default(0)     
+  min_stok_seviyesi  Int               @default(5)      
   parca              parca     @relation(fields: [parca_id], references: [parca_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_parca")
   tedarikci          tedarikci @relation(fields: [tedarik_id], references: [tedarikci_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_tedarikci")
 }

@@ -566,5 +566,15 @@ export const api = {
     });
     return handleResponse(res);
   },
+
+  // ═══════════════ 28. QR KOD YAZDIR ═══════════════
+  // GET /api/makineler/:id/qr-yazdir
+  getMachineQrPrintData: async (makine_id) => {
+    const res = await fetch(`${API_BASE}/makineler/${makine_id}/qr-yazdir`, {
+      headers: getHeaders()
+    });
+    const json = await handleResponse(res);
+    return json.data;
+  },
 };
 

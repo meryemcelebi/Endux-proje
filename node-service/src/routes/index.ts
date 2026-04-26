@@ -8,7 +8,8 @@ import bakimRoutes from "./bakimRoutes";
 import { TedarikciRouter, ServisFirmasiRouter } from "./firmaRoutes";
 import gorevRoutes from "./gorevRoutes";
 import { ServisPuanRouter, TedarikciPuanRouter } from "./puanRoute";
-import satinAlmaRoutes from "./satinAlmaRoutes";
+import aiRoutes from "./aiRoutes";
+
 
 
 
@@ -34,12 +35,13 @@ router.use("/tedarikciler", TedarikciRouter); // /api/tedarikciler/*
 
 router.use("/servis-firmalari", ServisFirmasiRouter); // /api/servis-firmalari/*
 
-router.use("/gorevler", gorevRoutes);  
+router.use("/gorevler", gorevRoutes);
 
 router.use("/servis-puan", ServisPuanRouter);
 
 router.use("/tedarikci-puan", TedarikciPuanRouter);
 
-router.use("/satin-alma", satinAlmaRoutes); // /api/satin-alma/*
+router.use("/ai", aiRoutes); // /api/ai/*
+
 
 export default router;

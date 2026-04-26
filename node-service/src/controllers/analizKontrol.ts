@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import { Decimal } from "@prisma/client/runtime/client";
+import { parse } from "path";
 
 
 export async function maliyetAnalizi(req: Request, res: Response) {
@@ -83,5 +84,160 @@ export async function maliyetAnalizi(req: Request, res: Response) {
     }
 
 };
+
+
+/***
+ * Maliyet Renk Kuralı
+ * >%10 ise kırmızı
+ * >%5 ise sarı
+ * 2% -5% Turuncu
+ * %2 ise yeşil
+ */
+
+export async function lokasyonHaritasi(req: Request , res: Response): Promise<void> {
+    try{
+        const katFilter = req.query.kat as string | undefined ;
+        const firmaFilter= req.query.firma_id ? Number(req.query.firma_id) : undefined ;
+
+        const makineler= await prisma.makine.findMany({
+            where :{
+                ...(firmaFilter ? {firma_id: firmaFilter}: {}),
+                aktiflik_durumu:true,
+            },
+            select: {
+                makine_id: true,
+                makine_adi: true,
+                seri_no: true,
+                satin_alma_maliyeti: true,
+                aktiflik_durumu: true,
+                makine_turu: {
+                    select: {
+                        makine_tur_adi: true,
+                    
+                    }
+                },
+
+                lokasyon: {
+                    select:{
+                        lokasyon_id: true,
+                        fabrika_alani: true,
+                        x_koor: true,
+                        y_koor: true,
+                        kat: true,
+
+                    }
+                },
+                bakim_kaydi: {
+                    select: {
+                        bakim_maliyet: true,
+                        parca_degisim: {
+                            select: {
+                                parca: {
+                                    select: {
+                                        parca_maliyeti: true
+                                    }
+                                }
+                            }
+                        }
+                        
+
+                    }
+                },
+                risk_skoru: {
+                    orderBy: {hesaplama_tarihi: 'desc'},
+                    take: 1,
+                    select: {
+                        risk_skoru: true,
+                        risk_seviyesi: true,
+                    
+                    }
+                }
+                
+
+            }
+
+        });
+        // harita verileri
+
+        const haritaVerisi = makineler
+        .filter((m) => {
+            if (katFilter) return m.lokasyon.some((l) => l.kat === katFilter );
+            return true;
+        })
+        .map((m) => {
+            const satinAlma= Number(m.satin_alma_maliyeti || 0);
+            let toplamBakimMAliyeti = 0;
+            let toplamParcaMaliyeti = 0;
+
+            for (const bakim of m.bakim_kaydi){
+                toplamBakimMAliyeti += Number(bakim.bakim_maliyet || 0);
+                for (const degisim of bakim.parca_degisim){
+                    toplamParcaMaliyeti += Number(bakim.parca_degisim ?? 0);
+
+                }
+            }
+            const toplamOnarim = toplamBakimMAliyeti + toplamParcaMaliyeti;
+            const maliyetOrani = satinAlma > 0 ? (toplamOnarim / satinAlma) * 100 : 0;
+
+
+            //renk belirleme 
+            let renk: string ;
+            if (maliyetOrani > 10) renk = 'KIRMIZI';
+            else if (maliyetOrani > 5) renk = 'SARI';
+            else if (maliyetOrani >= 2) renk = 'Turuncu' ;
+            else renk = 'YESIL'
+
+            const lokasyon = m.lokasyon[0] || null;
+            const sonRisk = m.risk_skoru[0] || null ;
+
+            return {
+                makine_id: m.makine_id,
+                makine_adi: m.makine_adi,
+                seri_no: m.seri_no,
+                makine_turu: m.makine_turu.makine_tur_adi,
+                kat: lokasyon?.kat || null,
+                fabrika_alani: lokasyon?.fabrika_alani || null,
+                x: lokasyon ? Number(lokasyon.x_koor) : null,
+                y: lokasyon ? Number(lokasyon.y_koor) : null,
+                satin_alma_maaliyeti: parseFloat(satinAlma.toFixed(2)),
+                toplam_onarim_maliyeti: parseFloat(toplamOnarim.toFixed(2)),
+                maliyet_orani_yuzdesi: parseFloat(maliyetOrani.toFixed(2)),
+                renk: renk,
+                risk_skoru: sonRisk?.risk_skoru ? Number(sonRisk.risk_skoru) : null ,
+                risk_seviyesi: sonRisk?.risk_seviyesi ? Number(sonRisk.risk_seviyesi) : null,
+            };
+
+
+        });
+        //katlara göre gruplama
+        const katMap : Record<string, typeof haritaVerisi> = {} ;
+        for (const item of haritaVerisi){
+            const kat = item.kat || 'TANIMSIZ';
+            if (!katMap[kat]) katMap[kat] = [] ;
+            katMap[kat].push(item);
+            
+        }
+        res.status(200).json({
+            success: true,
+            message: `${haritaVerisi.length} makine için lokasyon haritası oluşturuldu.`,
+            data: {
+                toplam_makine: haritaVerisi.length,
+                katlar: katMap,
+                tum_makineler: haritaVerisi,
+            }
+        });
+    } catch (error) {
+        console.error("Lokasyon haritası oluşturma hatası:", error);
+        res.status(500).json({
+            success: false,
+            message: "Lokasyon haritası oluşturulurken bir hata oluştu."
+        });
+    }
+}
+
+        
+
+    
+    
 
 

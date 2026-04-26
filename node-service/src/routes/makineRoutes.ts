@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { makineEkle, qrileMakineGetir, tumMakineBilgileriGetir, makineDetayGetir } from "../controllers/makineKontrol";
-import { maliyetAnalizi } from "../controllers/analizKontrol";
+import { makineEkle, qrileMakineGetir, tumMakineBilgileriGetir, makineDetayGetir, QRKodYazdir } from "../controllers/makineKontrol";
+import { maliyetAnalizi,lokasyonHaritasi} from "../controllers/analizKontrol";
 import { oturumKontrol, rolKontrol } from "../middlewares/yetki";
 
 const router = Router();
@@ -28,11 +28,26 @@ router.get("/qr/:qr_uuid",
 
 );
 
+router.get("/lokasyon-haritasi",
+    oturumKontrol,
+    rolKontrol("YONETICI"),
+    lokasyonHaritasi
+);
+router.get("/:id/qr-yazdir",
+    oturumKontrol,
+    rolKontrol("YONETICI", "TEKNISYEN"),
+    QRKodYazdir
+);
+
+
 
 router.get('/:id/maliyet-analizi',
     oturumKontrol,
+    rolKontrol("YONETICI", "TEKNISYEN"),
     maliyetAnalizi
 );
+
+
 
 
 router.get('/:id',

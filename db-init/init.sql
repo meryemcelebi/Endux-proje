@@ -78,13 +78,28 @@ $$;
 CREATE FUNCTION public.func_form_sonrasi_tetikle() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
-begin
-call pr_makine_operator(NEW.kullanim_id, NEW.makine_id);--prosedür cağırdık
-update makine  
-set mevcut_risk_skoru=NEW.ai_on_risk_durumu
-where makine_id=NEW.makine_id;--operatörün girdiği risk degeri ile tabloyu güncelledik
-return NEW;
-end;
+BEGIN
+    CALL public.pr_makine_operator(NEW.kullanici_id, NEW.makine_id);
+
+    INSERT INTO public.risk_skoru (
+        makine_id,
+        risk_skoru,
+        risk_seviyesi,
+        hesaplama_tarihi
+    )
+    VALUES (
+        NEW.makine_id,
+        NEW.ai_on_risk_durumu,
+        CASE
+            WHEN COALESCE(NEW.ai_on_risk_durumu, 0) >= 75 THEN 'YUKSEK'::public.du_ort_yuk
+            WHEN COALESCE(NEW.ai_on_risk_durumu, 0) >= 50 THEN 'ORTA'::public.du_ort_yuk
+            ELSE 'DUSUK'::public.du_ort_yuk
+        END,
+        CURRENT_TIMESTAMP
+    );
+
+    RETURN NEW;
+END;
 $$;
 
 
@@ -93,7 +108,7 @@ $$;
 -- Name: get_sorular(integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.get_sorular(makine_qr integer) RETURNS TABLE(soru_tipi text, id integer, madde_adi text, teknik_parametre text, kritiklik_durumu boolean)
+CREATE FUNCTION public.get_sorular(p_makine_id integer) RETURNS TABLE(soru_tipi text, id integer, madde_adi text, teknik_parametre text, kritiklik_durumu boolean)
     LANGUAGE sql
     AS $$
 
@@ -118,10 +133,10 @@ CREATE FUNCTION public.get_sorular(makine_qr integer) RETURNS TABLE(soru_tipi te
         km.kritiklik_durumu
     FROM public.makine m
     JOIN public.kontrol_sablonu ks 
-        ON m.m_tur_id = ks.makine_tur_id
+        ON m.makine_tur_id = ks.makine_tur_id
     JOIN public.kontrol_maddesi km 
         ON ks.sablon_id = km.sablon_id
-    WHERE m.makine_id = makine_qr::INT
+    WHERE m.makine_id = p_makine_id
       AND ks.aktiflik = true;
 
 $$;
@@ -206,12 +221,11 @@ BEGIN
 
     -- 2. JSON'ı satırlara parçala ve tek tek tabloya bas
     FOR v_cevap IN SELECT * FROM jsonb_to_recordset(p_cevaplar) 
-        AS x(res_id INT, s_tipi TEXT, s_durum VARCHAR, s_deger NUMERIC, s_not TEXT)
+        AS x(res_id INT, s_tipi TEXT, s_durum VARCHAR, s_deger TEXT, s_not TEXT)
     LOOP
         INSERT INTO public.form_madde_cevap (
             form_id, 
             soru_referans_id, 
-            soru_tipi, 
             durum, 
             aciklama, 
             girilen_deger
@@ -219,7 +233,6 @@ BEGIN
         VALUES (
             v_form_id, 
             v_cevap.res_id, 
-            v_cevap.s_tipi, 
             v_cevap.s_durum, 
             v_cevap.s_not, 
             v_cevap.s_deger
@@ -234,16 +247,26 @@ $$;
 -- Name: pr_makine_operator(); Type: PROCEDURE; Schema: public; Owner: -
 --
 
-CREATE PROCEDURE public.pr_makine_operator()
-    LANGUAGE sql
-    AS $_$--prosedür parametreleri oluşturduk
-create or replace procedure pr_makine_kullanim(p_operator_id INT,p_makine_id INT)
-as $$
-update makine_kullanim set bitis_zamani=CURRENT_TIMESTAMP --operatörün kapanmamış önceki oturumlarını kapattık
-where kullanici_id=p_operator_id and bitis_zamani not null;
-insert into makine_kullanim(kullanici_id, makine_id, baslangic_zamani)
-values(p_operator_id, p_makine_id, CURRENT_TIMESTAMP); $$--yeni oturum için kayıt açtık
-$_$;
+CREATE PROCEDURE public.pr_makine_operator(IN p_operator_id integer, IN p_makine_id integer)
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    INSERT INTO public.makine_kullanim (
+        kullanici_id,
+        makine_id,
+        baslangic_zamani,
+        bitis_zamani,
+        gunluk_top_calisma_saati
+    )
+    VALUES (
+        p_operator_id,
+        p_makine_id,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP,
+        0
+    );
+END;
+$$;
 
 
 --
@@ -267,6 +290,7 @@ DECLARE
 
     -- ID TUTUCULAR
     v_makine_id integer;
+    v_kullanici_id integer;
     v_sorumlu_id integer;       
     v_servis_firma_id integer;  
     v_ariza_id integer;         
@@ -288,15 +312,17 @@ BEGIN
 
     -- ==========================================
     -- 2. BAKIM YAPAN KİŞİ (OPERATÖR / SERVİS) KONTROLÜ
-   SELECT kullanici_id INTO v_sorumlu_id FROM public.kullanici WHERE UPPER(TRIM(kullanici_adi)) = v_clean_bakim_yapan;
+   SELECT kullanici_id INTO v_kullanici_id FROM public.kullanici WHERE UPPER(TRIM(kullanici_adi)) = v_clean_bakim_yapan;
 
     -- Eğer kullanıcı tablosunda yoksa, servis sorumlusu tablosuna bakıyoruz
-    IF v_sorumlu_id IS NULL THEN
+    IF v_kullanici_id IS NULL THEN
         SELECT sorumlu_id INTO v_sorumlu_id FROM public.servis_sorumlusu WHERE UPPER(TRIM(sorumlu_adi)) = v_clean_bakim_yapan;
         
         IF v_sorumlu_id IS NULL THEN
             RAISE EXCEPTION 'İşlem durduruldu! "%" isimli personel ne kullanıcı ne de servis sorumlusu listesinde bulunamadı.', v_clean_bakim_yapan;
         END IF;
+    ELSE
+        v_sorumlu_id := NULL;
     END IF;
         
     -- ==========================================
@@ -364,7 +390,8 @@ BEGIN
         aciklama, 
         ariza_id,       
         bakim_tur_id,   
-        durus_suresi
+        durus_suresi,
+        kullanici_id
     ) VALUES (
         v_makine_id, 
         v_sorumlu_id,    
@@ -374,7 +401,8 @@ BEGIN
         p_aciklama, 
         v_ariza_id,       
         v_bakim_tur_id,   
-        p_durus_suresi
+        p_durus_suresi,
+        v_kullanici_id
     ) RETURNING bakim_id INTO v_yeni_bakim_id;
 
     -- ==========================================
@@ -422,22 +450,22 @@ DECLARE
 BEGIN
     -- 1. İLETİŞİM BİLGİSİ KONTROLÜ VE EKLENMESİ
     SELECT iletisim_id INTO v_iletisim_id 
-    FROM iletisim 
-    WHERE telefon = p_telefon AND email = p_email; 
+    FROM public.iletisim 
+    WHERE telefon = p_telefon AND COALESCE(mail, ''::character varying) = COALESCE(p_email, ''::character varying); 
 
     IF v_iletisim_id IS NULL THEN
-        INSERT INTO iletisim (telefon, email, il, ilce, acik_adres) 
+        INSERT INTO public.iletisim (telefon, mail, il, ilce, acik_adres) 
         VALUES (p_telefon, p_email, p_il, p_ilce, p_acik_adres) 
         RETURNING iletisim_id INTO v_iletisim_id;
     END IF;
 
     -- 2. GARANTİ FİRMASI KONTROLÜ VE EKLENMESİ
     SELECT garanti_firma_id INTO p_out_garanti_firma_id 
-    FROM garanti_firma 
-    WHERE UPPER(TRIM(g_firma_adi)) = v_clean_g_firma;
+    FROM public.garanti_firma 
+    WHERE UPPER(TRIM(firma_adi)) = v_clean_g_firma;
 
     IF p_out_garanti_firma_id IS NULL THEN
-        INSERT INTO garanti_firma (g_firma_adi, iletisim_id) 
+        INSERT INTO public.garanti_firma (firma_adi, iletisim_id) 
         VALUES (v_clean_g_firma, v_iletisim_id) 
         RETURNING garanti_firma_id INTO p_out_garanti_firma_id;
     END IF;
@@ -1989,7 +2017,7 @@ CREATE VIEW public.view_dashboard_bakim_bekleyenler AS
         END AS "Aciliyet Durumu"
    FROM ((((public.ariza_kaydi ak
      JOIN public.makine m ON ((ak.makine_id = m.makine_id)))
-     JOIN public.ariza_turu att ON ((ak.ariza_id = att.ariza_tur_id)))
+     JOIN public.ariza_turu att ON ((ak.ariza_tur_id = att.ariza_tur_id)))
      JOIN public.risk_skoru rs ON ((m.makine_id = rs.makine_id)))
      JOIN public.lokasyon l ON ((m.makine_id = l.makine_id)))
   WHERE (ak.bitis_zamani IS NULL)
@@ -2051,9 +2079,9 @@ CREATE VIEW public.view_dashboard_makine_masraf_detayli AS
     (bk.bakim_maliyet + COALESCE((p.parca_maliyeti)::numeric, (0)::numeric)) AS genel_toplam_maliyet
    FROM ((((public.makine m
      LEFT JOIN public.bakim_kaydi bk ON ((m.makine_id = bk.makine_id)))
-     LEFT JOIN public.bakim_turu bt ON ((bk.bakim_id = bt.bakim_tur_id)))
+     LEFT JOIN public.bakim_turu bt ON ((bk.bakim_tur_id = bt.bakim_tur_id)))
      LEFT JOIN public.parca_degisim pd ON ((bk.bakim_id = pd.bakim_id)))
-     LEFT JOIN public.parca p ON ((pd.parca_degisim_id = p.parca_id)))
+     LEFT JOIN public.parca p ON ((pd.parca_id = p.parca_id)))
   ORDER BY m.makine_id, 'detay'::text DESC, bk.bakim_id, pd.parca_degisim_id;
 
 
@@ -2072,7 +2100,7 @@ CREATE VIEW public.view_dashboard_masraf_analizi AS
          SELECT bk.makine_id,
             COALESCE((sum(p.parca_maliyeti))::numeric, (0)::numeric) AS toplam_parca_maliyeti
            FROM ((public.parca p
-             JOIN public.parca_degisim pd ON ((p.parca_id = pd.parca_degisim_id)))
+             JOIN public.parca_degisim pd ON ((p.parca_id = pd.parca_id)))
              JOIN public.bakim_kaydi bk ON ((pd.bakim_id = bk.bakim_id)))
           GROUP BY bk.makine_id
         )
@@ -2158,7 +2186,7 @@ CREATE VIEW public.view_teknisyen_bakim_ozeti AS
     bk.bakim_maliyet
    FROM (((public.servis_sorumlusu t
      JOIN public.bakim_kaydi bk ON ((t.sorumlu_id = bk.sorumlu_id)))
-     JOIN public.bakim_turu bt ON ((bk.bakim_id = bt.bakim_tur_id)))
+     JOIN public.bakim_turu bt ON ((bk.bakim_tur_id = bt.bakim_tur_id)))
      JOIN public.makine m ON ((bk.makine_id = m.makine_id)))
   WHERE (t.aktiflik = true);
 
