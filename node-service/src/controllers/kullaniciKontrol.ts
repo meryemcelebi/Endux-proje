@@ -7,17 +7,17 @@ export async function personelEkle(req: Request, res: Response, next: NextFuncti
     try {
         const { ad, soyad, rol, sifre, telefon, eposta, firma_id } = req.body;
 
-        // Zorunlu alan kontrolü
-        if (!ad || !soyad || !rol || !sifre || telefon === undefined || !firma_id) {
+        // Zorunlu alan kontrolü (firma_id opsiyonel, varsayılan 1)
+        if (!ad || !soyad || !rol || !sifre || telefon === undefined) {
             res.status(400).json({
                 success: false,
-                message: "Ad, soyad, rol, şifre, telefon ve firma_id alanları zorunludur."
+                message: "Ad, soyad, rol, şifre ve telefon alanları zorunludur."
             });
             return;
         }
 
         // Geçerli rol kontrolü
-        const gecerliRoller = ["OPERATOR", "TEKNISYEN", "YONETICI"];
+        const gecerliRoller = ["OPERATOR", "TEKNISYEN", "YONETICI", "SERVIS"];
         if (!gecerliRoller.includes(rol)) {
             res.status(400).json({
                 success: false,
@@ -65,7 +65,7 @@ export async function personelEkle(req: Request, res: Response, next: NextFuncti
                 kullanici_adi: kullanici_adi,
                 sifre: hashlenmisSifre,
                 rol_id: rolKaydi.rol_id,
-                firma_id: Number(firma_id),
+                firma_id: Number(firma_id) || 1,
                 ad: ad,
                 soyad: soyad,
                 telefon: telefon,
@@ -90,3 +90,114 @@ export async function personelEkle(req: Request, res: Response, next: NextFuncti
         });
     }
 }
+
+
+
+
+
+
+export async function tumKullanicilariGetir(req: Request, res: Response): Promise<void> {
+    try {
+        const kullanicilar = await prisma.kullanici.findMany({
+            where: {
+                OR: [
+                    { aktiflik: true },
+                    { aktiflik: null }
+                ]
+            },
+            select: {
+                kullanici_id: true,
+                kullanici_adi: true,
+                firma_id: true,
+                rol_id: true,
+                ad: true,
+                soyad: true,
+                telefon: true,
+                eposta: true,
+                aktiflik: true,
+                baslama_tarihi: true,
+                //sifre:false, //select kullanıldığında eklenmediği sürece gelmez
+                firma: {
+                    select: {
+                        firma_id: true,
+                        firma_adi: true
+                    }
+                },
+                rol: {
+                    select: {
+                        rol_id: true,
+                        rol_adi: true
+                    }
+                }
+            }
+        });
+        res.status(200).json({
+            success: true,
+            message: "Kullanıcılar başarıyla getirildi.",
+            kullanicilar: kullanicilar
+        });
+    } catch (error) {
+        console.error("Kullanıcıları getirme hatası:", error);
+        res.status(500).json({
+            success: false,
+            message: "Kullanıcılar getirilirken bir hata oluştu."
+        });
+
+    }
+
+}
+
+export async function personelSil(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+        const { id } = req.params;
+
+        if (!id) {
+            res.status(400).json({
+                success: false,
+                message: "Kullanıcı ID gereklidir."
+            });
+            return;
+        }
+
+        // Kullanıcıyı bul
+        const kullanici = await prisma.kullanici.findUnique({
+            where: { kullanici_id: Number(id) }
+        });
+
+        if (!kullanici) {
+            res.status(404).json({
+                success: false,
+                message: "Kullanıcı bulunamadı."
+            });
+            return;
+        }
+
+        // Önce silmeyi dene (eğer ilişkili kayıt yoksa)
+        // Eğer hata alırsa aktifliğini false yap (soft delete)
+        try {
+            await prisma.kullanici.delete({
+                where: { kullanici_id: Number(id) }
+            });
+            res.status(200).json({
+                success: true,
+                message: "Personel başarıyla silindi."
+            });
+        } catch (error) {
+            // İlişkili kayıtlar varsa silinemez, bu durumda pasife çekiyoruz
+            await prisma.kullanici.update({
+                where: { kullanici_id: Number(id) },
+                data: { aktiflik: false }
+            });
+            res.status(200).json({
+                success: true,
+                message: "Personel ilişkili kayıtları olduğu için silinemedi ancak erişimi kesildi (pasif yapıldı)."
+            });
+        }
+    } catch (error) {
+        console.error("Personel silme hatası:", error);
+        res.status(500).json({
+            success: false,
+            message: "Personel silinirken bir hata oluştu."
+        });
+    }
+}
