@@ -576,5 +576,23 @@ export const api = {
     const json = await handleResponse(res);
     return json.data;
   },
-};
 
+  // ═══════════════ 29. OEE (VERİMLİLİK) VERİLERİ ═══════════════
+  // GET /api/oee/toplu
+  // Tüm fabrikanın ortalama OEE skorunu ve haftalık OEE trendini döner
+  getFactoryOee: async (baslangic, bitis) => {
+    const query = `?baslangic=${baslangic}&bitis=${bitis}`;
+    const res = await fetch(`${API_BASE}/oee/toplu${query}`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json.data;
+  },
+
+  // GET /api/oee/:id
+  // Tekil bir makinenin OEE detaylarını ve duruş pasta grafiği verilerini döner
+  getMachineOee: async (makine_id, baslangic, bitis) => {
+    const query = `?baslangic=${baslangic}&bitis=${bitis}`;
+    const res = await fetch(`${API_BASE}/oee/${makine_id}${query}`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json.data;
+  },
+};

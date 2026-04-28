@@ -9,7 +9,7 @@ import { TedarikciRouter, ServisFirmasiRouter } from "./firmaRoutes";
 import gorevRoutes from "./gorevRoutes";
 import { ServisPuanRouter, TedarikciPuanRouter } from "./puanRoute";
 import aiRoutes from "./aiRoutes";
-
+import oeeRoutes from "./oeeRoutes";
 
 
 
@@ -43,5 +43,6 @@ router.use("/tedarikci-puan", TedarikciPuanRouter);
 
 router.use("/ai", aiRoutes); // /api/ai/*
 
+router.use("/oee", oeeRoutes); // /api/oee/*
 
 export default router;
