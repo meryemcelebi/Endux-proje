@@ -29,23 +29,30 @@ export default function Dashboard() {
   const [firmsMetadata, setFirmsMetadata] = useState([]); // Servis firmalarının değerlendirme ve iletişim bilgileri
 
   // --- OEE ANALİZ VERİLERİ (Haftalık Verimlilik Değerleri) ---
-  const oeeWeeklyData = [
-    { week: "1. Hafta", oee: 82.5, a: 90, p: 95, q: 96.5 },
-    { week: "2. Hafta", oee: 84.0, a: 91, p: 96, q: 96.2 },
-    { week: "3. Hafta", oee: 83.2, a: 89, p: 95, q: 98.4 },
-    { week: "4. Hafta", oee: 85.1, a: 92, p: 94, q: 98.3 },
-    { week: "5. Hafta", oee: 86.5, a: 93, p: 95, q: 97.8 },
-    { week: "6. Hafta", oee: 87.2, a: 94, p: 95, q: 97.6 },
-    { week: "Geçen H.", oee: 87.2, a: 93, p: 96, q: 97.7 },
-    { week: "Bu Hafta", oee: 88.4, a: 95, p: 95, q: 98.0 },
-  ];
+  // --- OEE ANALİZ VERİLERİ (Haftalık Verimlilik Değerleri) ---
+  const [oeeWeeklyData, setOeeWeeklyData] = useState([]); // Sabit dizi yerine state
+  const [fabrikaOee, setFabrikaOee] = useState(0); // Ana OEE skorunu tutmak için
+
 
   // --- VERİ ÇEKME VE ZENGİNLEŞTİRME SÜRECİ ---
   React.useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        // 1. Tüm makineleri API'den al
-        const machinesData = await api.getMachines();
+        // Son 1 aylık veriyi çekmek için tarih aralığı oluştur
+        const bitis = new Date().toISOString().split("T")[0];
+        const baslangicDate = new Date();
+        baslangicDate.setDate(baslangicDate.getDate() - 30);
+        const baslangic = baslangicDate.toISOString().split("T")[0];
+
+        // 1. Makineleri ve OEE verilerini paralel olarak API'den al
+        const [machinesData, oeeVerisi] = await Promise.all([
+          api.getMachines(),
+          api.getFactoryOee(baslangic, bitis)
+        ]);
+
+        // Gelen haftalık OEE trendini State'e aktar
+        setOeeWeeklyData(oeeVerisi.fabrika_trend);
+        setFabrikaOee(oeeVerisi.fabrika_ortalama_oee);
 
         // Ham veriyi analiz ederek Dashboard'a uygun hale getir (Zenginleştirme)
         const enrichedData = machinesData.map(m => {
@@ -602,8 +609,8 @@ export default function Dashboard() {
               onMouseOut={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 15px rgba(0,0,0,0.05)"; }}
             >
               <div style={{ fontSize: "13px", color: "#7f8c8d", fontWeight: "700", textTransform: "uppercase", letterSpacing: "1px" }}>Fabrika OEE</div>
-              <div style={{ fontSize: "42px", fontWeight: "900", color: "#27ae60", marginTop: "5px", textShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>%88.4</div>
-              <div style={{ fontSize: "12px", color: "#2ecc71", fontWeight: "bold", background: "rgba(46, 204, 113, 0.1)", padding: "4px 8px", borderRadius: "15px", marginTop: "8px" }}>▲ %1.2 (Geçen Hafta)</div>
+              <div style={{ fontSize: "42px", fontWeight: "900", color: "#27ae60", marginTop: "5px", textShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>%{fabrikaOee}</div>
+              <div style={{ fontSize: "12px", color: "#2ecc71", fontWeight: "bold", background: "rgba(46, 204, 113, 0.1)", padding: "4px 8px", borderRadius: "15px", marginTop: "8px" }}></div>
             </div>
           </div>
 

@@ -439,6 +439,79 @@ async function main() {
         await prisma.bakim_kaydi.create({ data: { makine_id: allMachines[15 + i].makine_id, servis_firma_id: currentServis, bakim_maliyet: costM[i], bakim_tarihi: new Date(new Date().getFullYear(), new Date().getMonth(), 5 + i), aciklama: "Ağır bakım maliyeti." } });
     }
 
+    console.log("OEE, Üretim ve Duruş verileri üretiliyor...");
+    await prisma.uretim_kaydi.deleteMany({});
+    await prisma.durus_kaydi.deleteMany({});
+    await prisma.oee_raporlari.deleteMany({});
+
+    for (const makine of allMachines) {
+        for (let j = 0; j < 30; j++) {
+            const date = new Date();
+            date.setDate(date.getDate() - j);
+            date.setHours(0, 0, 0, 0);
+
+            const planlanan_sure_dk = 480;
+            const durus_sure_dk = Math.floor(Math.random() * 61); // 0-60 dk arası
+            const fiili_sure_dk = planlanan_sure_dk - durus_sure_dk;
+            const teorik_uretim = 1000;
+            
+            // %80 ile %98 arası
+            const percentGercek = 0.8 + Math.random() * 0.18;
+            const gercek_uretim = Math.floor(teorik_uretim * percentGercek);
+            
+            // %1 ile %5 arası
+            const percentHatali = 0.01 + Math.random() * 0.04;
+            const hatali_uretim = Math.floor(gercek_uretim * percentHatali);
+
+            await prisma.uretim_kaydi.create({
+                data: {
+                    makine_id: makine.makine_id,
+                    vardiya_tarihi: date,
+                    vardiya_turu: "Gündüz",
+                    planlanan_sure_dk,
+                    fiili_sure_dk,
+                    durus_sure_dk,
+                    teorik_uretim,
+                    gercek_uretim,
+                    hatali_uretim
+                }
+            });
+
+            if (durus_sure_dk > 0) {
+                const nedenler = ["Mekanik Arıza", "Ayar", "Parça Bekleme"];
+                const neden = nedenler[Math.floor(Math.random() * nedenler.length)];
+                
+                await prisma.durus_kaydi.create({
+                    data: {
+                        makine_id: makine.makine_id,
+                        vardiya_tarihi: date,
+                        baslangic_saati: new Date(date.getTime() + 8 * 60 * 60 * 1000), // Gündüz 08:00
+                        bitis_saati: new Date(date.getTime() + 8 * 60 * 60 * 1000 + durus_sure_dk * 60 * 1000),
+                        durus_sure_dk,
+                        durus_nedeni: neden
+                    }
+                });
+            }
+
+            const kullanilabilirlik_orani = (fiili_sure_dk / planlanan_sure_dk) * 100;
+            const performans_orani = (gercek_uretim / teorik_uretim) * 100;
+            const saglam_uretim = gercek_uretim - hatali_uretim;
+            const kalite_orani = (saglam_uretim / gercek_uretim) * 100;
+            const oee_skoru = (kullanilabilirlik_orani / 100) * (performans_orani / 100) * (kalite_orani / 100) * 100;
+
+            await prisma.oee_raporlari.create({
+                data: {
+                    makine_id: makine.makine_id,
+                    tarih: date,
+                    kullanilabilirlik_orani: parseFloat(kullanilabilirlik_orani.toFixed(2)),
+                    performans_orani: parseFloat(performans_orani.toFixed(2)),
+                    kalite_orani: parseFloat(kalite_orani.toFixed(2)),
+                    oee_skoru: parseFloat(oee_skoru.toFixed(2))
+                }
+            });
+        }
+    }
+
     console.log("✅ Seed işlemi %100 tamamlandı! Tüm senaryo verileri eklendi.");
 }
 
