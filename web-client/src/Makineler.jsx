@@ -32,30 +32,27 @@ export default function Makineler() {
           api.getSystemMachineTypes()
         ]);
 
-        // API'den gelen veriyi yerel state'e uygun hale getir (ID ve durum eşleştirmesi)
-        const formattedData = machinesData.map(m => ({
-          ...m,
-          id: m.makine_id,
-          makineid: "MKN-" + m.makine_id,
-          aktiflik_durumu: typeof m.aktiflik_durumu === "string" ? m.aktiflik_durumu : (m.aktiflik_durumu ? "Aktif" : "Pasif")
-        }));
-        const formattedData = data.map((m) => ({
-          ...m,
-          id: m.makine_id,
-          makineid: "MKN-" + m.makine_id,
-          makine_ad: m.makine_adi || m.makine_ad,
-          aktiflik_durumu:
-            typeof m.aktiflik_durumu === "string"
-              ? m.aktiflik_durumu
-              : (m.aktiflik_durumu ? "Aktif" : "Pasif")
-        }));
 
-        setMachines(formattedData);
-        setMachineTypes(typesData);
-      } catch (err) {
-        console.error("Veriler yüklenirken hata oluştu", err);
-      }
-    };
+        // API'den gelen veriyi yerel state'e uygun hale getir (ID ve durum eşleştirmesi)
+      const formattedData = machinesData.map(m => ({
+        ...m,
+        id: m.makine_id,
+        makineid: "MKN-" + m.makine_id,
+        makine_ad: m.makine_adi || m.makine_ad, // İkinci bloktan aldığımız güvenlik önlemi
+        aktiflik_durumu: typeof m.aktiflik_durumu === "string" ? m.aktiflik_durumu : (m.aktiflik_durumu ? "Aktif" : "Pasif")
+      }));
+
+      // formatedData bloğunu tamamen sildik!
+
+      setMachines(formattedData);
+      setMachineTypes(typesData);
+    } catch (err) {
+      console.error("Veriler yüklenirken hata oluştu", err);
+    }
+  };
+
+       
+   
     fetchData();
   }, []);
 
@@ -469,7 +466,7 @@ export default function Makineler() {
             } else {
               img.onload = doPrint;
             }
-          <\/script>
+          </script>
         </body>
       </html>
     `);

@@ -87,45 +87,6 @@ export async function tedarikciEkle(req: Request, res: Response) {
     }
 }
 
-export async function tedarikciSil(req: Request, res: Response) {
-    try {
-        const { id } = req.params;
-
-        if (!id) {
-            res.status(400).json({
-                success: false,
-                message: "Tedarikçi ID gereklidir."
-            });
-            return;
-        }
-
-        const tedarikci = await prisma.tedarikci.findUnique({
-            where: { tedarikci_id: Number(id) }
-        });
-
-        if (!tedarikci) {
-            res.status(404).json({
-                success: false,
-                message: "Tedarikçi bulunamadı."
-            });
-            return;
-        }
-
-        await prisma.tedarikci.delete({
-            where: { tedarikci_id: Number(id) }
-        });
-        res.status(200).json({
-            success: true,
-            message: "Tedarikçi başarıyla silindi."
-        });
-    } catch (error) {
-        console.error("Tedarikçi silme hatası:", error);
-        res.status(500).json({
-            success: false,
-            message: "Tedarikçi silinirken bir hata oluştu."
-        });
-    }
-}
 
 
 
@@ -271,7 +232,7 @@ export async function servisFirmasiSil(req: Request, res: Response): Promise<voi
     try {
         const id = Number(req.params.id);
 
-        // Hard delete yerine Soft Delete (aktiflik = false) yapıyoruz
+      
         // Bu sayede geçmiş bakım kayıtları ve teknisyen bilgileri korunur
         await prisma.servis_firma.update({
             where: { servis_firma_id: id },
@@ -287,44 +248,7 @@ export async function servisFirmasiSil(req: Request, res: Response): Promise<voi
         res.status(500).json({
             success: false,
             message: 'Servis firması iptal edilirken bir hata oluştu.'
-        };
+        });
 
-        export async function servisFirmasiSil(req: Request, res: Response): Promise<void> {
-            try {
-                const { id } = req.params;
-
-                if (!id) {
-                    res.status(400).json({
-                        success: false,
-                        message: "Servis firması ID gereklidir."
-                    });
-                    return;
-                }
-
-                const servisFirmasi = await prisma.servis_firma.findUnique({
-                    where: { servis_firma_id: Number(id) }
-                });
-
-                if (!servisFirmasi) {
-                    res.status(404).json({
-                        success: false,
-                        message: "Servis firması bulunamadı."
-                    });
-                    return;
-                }
-
-                await prisma.servis_firma.delete({
-                    where: { servis_firma_id: Number(id) }
-                });
-                res.status(200).json({
-                    success: true,
-                    message: "Servis firması başarıyla silindi."
-                });
-            } catch (error) {
-                console.error("Servis firması silme hatası:", error);
-                res.status(500).json({
-                    success: false,
-                    message: "Servis firması silinirken bir hata oluştu."
-                });
-            }
-        }
+    }
+}
