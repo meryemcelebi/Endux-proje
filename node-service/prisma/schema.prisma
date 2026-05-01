@@ -105,23 +105,25 @@ model arizayi_tetikleyen_form {
 }
 
 model bakim_kaydi {
-  bakim_id        Int             @id @default(autoincrement())
-  makine_id       Int
-  sorumlu_id      Int?
-  servis_firma_id Int
-  bakim_tarihi    DateTime?       @default(now()) @db.Timestamptz(6)
-  bakim_maliyet   Decimal         @db.Decimal
-  aciklama        String?
-  ariza_id        Int?
-  bakim_tur_id    Int?
-  durus_suresi    Decimal?        @db.Decimal(15, 2)
-  kullanici_id    Int?
-  ariza_kaydi     ariza_kaydi?    @relation(fields: [ariza_id], references: [ariza_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ariza")
-  bakim_turu      bakim_turu?     @relation(fields: [bakim_tur_id], references: [bakim_tur_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_bakim")
-  makine          makine          @relation(fields: [makine_id], references: [makine_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_makine")
+  bakim_id         Int               @id @default(autoincrement())
+  makine_id        Int
+  sorumlu_id       Int?
+  servis_firma_id  Int
+  bakim_tarihi     DateTime?         @default(now()) @db.Timestamptz(6)
+  bakim_maliyet    Decimal           @db.Decimal
+  aciklama         String?
+  ariza_id         Int?
+  bakim_tur_id     Int?
+  durus_suresi     Decimal?          @db.Decimal(15, 2)
+  kullanici_id     Int?
+  puan_onaylandi   Boolean           @default(false)
+  ariza_kaydi      ariza_kaydi?      @relation(fields: [ariza_id], references: [ariza_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ariza")
+  bakim_turu       bakim_turu?       @relation(fields: [bakim_tur_id], references: [bakim_tur_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_bakim")
+  makine           makine            @relation(fields: [makine_id], references: [makine_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_makine")
   servis_firma     servis_firma      @relation(fields: [servis_firma_id], references: [servis_firma_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_servis")
   servis_sorumlusu servis_sorumlusu? @relation(fields: [sorumlu_id], references: [sorumlu_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_servis_sorumlu")
   parca_degisim    parca_degisim[]
+  servis_puan      servis_puan?
 
   @@index([makine_id], map: "idx_bakim_makine")
   @@index([servis_firma_id], map: "idx_bakim_servis")
@@ -272,6 +274,7 @@ model makine_turu {
   risk_katsayisi  Decimal?          @db.Decimal(5, 2)
   kontrol_sablonu kontrol_sablonu[]
   makine          makine[]
+  satin_alma      satin_alma[]
 }
 
 model parca {
@@ -338,10 +341,10 @@ model tedarikci {
   kayit_tarihi       DateTime?         @db.Timestamptz(6)
   iletisim_id        Int?
   parca              parca[]
+  satin_alma         satin_alma[]
   iletisim           iletisim?         @relation(fields: [iletisim_id], references: [iletisim_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_iletisim")
   tedarikci_parca    tedarikci_parca[]
   tedarikci_puan     tedarikci_puan[]
-  satin_alma         satin_alma[]
 }
 
 model ariza_turu {
@@ -381,24 +384,26 @@ model servis_puan {
   puan                   Int
   yorum                  String?
   tarih                  DateTime?    @db.Date
+  bakim_id               Int?         @unique
   servis_firma           servis_firma @relation(fields: [servis_firma_id], references: [servis_firma_id], onDelete: NoAction, onUpdate: NoAction, map: "firma_fk")
   kullanici              kullanici    @relation(fields: [puanlayan_kullanici_id], references: [kullanici_id], onDelete: NoAction, onUpdate: NoAction, map: "kullanici_fk")
+  bakim_kaydi            bakim_kaydi? @relation(fields: [bakim_id], references: [bakim_id])
 
   @@index([servis_firma_id], map: "idx_spuan_firma")
   @@index([puanlayan_kullanici_id], map: "idx_spuan_kullanici")
 }
 
 model servis_sorumlusu {
-  sorumlu_id      Int          @id @default(autoincrement())
+  sorumlu_id      Int           @id @default(autoincrement())
   servis_firma_id Int
-  ad              String       @db.VarChar(55)
-  soyad           String       @db.VarChar(55)
-  telefon         String       @db.VarChar(20)
+  ad              String        @db.VarChar(55)
+  soyad           String        @db.VarChar(55)
+  telefon         String        @db.VarChar(20)
   aktiflik        Boolean?
-  unvan           String?      @db.VarChar
-  sorumlu_adi     String?      @db.VarChar(100)
-  servis_firma    servis_firma @relation(fields: [servis_firma_id], references: [servis_firma_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_sorumlusu")
+  unvan           String?       @db.VarChar
+  sorumlu_adi     String?       @db.VarChar(100)
   bakim_kaydi     bakim_kaydi[]
+  servis_firma    servis_firma  @relation(fields: [servis_firma_id], references: [servis_firma_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_sorumlusu")
 }
 
 model abonelik_tipi {
@@ -467,25 +472,28 @@ model tedarikci_puan {
 }
 
 model satin_alma {
-  satin_alma_id  Int       @id @default(autoincrement())
-  tedarikci_id   Int
-  parca_adi      String    @db.VarChar(150)
-  adet           Int
-  birim_fiyat    Decimal   @db.Decimal(12, 2)
-  tedarik_suresi Int?
-  tarih          DateTime  @default(now()) @db.Timestamptz(6)
-  puan           Int?
-  tedarikci      tedarikci @relation(fields: [tedarikci_id], references: [tedarikci_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_satin_alma_tedarikci")
+  satin_alma_id      Int          @id @default(autoincrement())
+  tedarikci_id       Int
+  parca_adi          String       @db.VarChar(150)
+  adet               Int
+  birim_fiyat        Decimal      @db.Decimal(12, 2)
+  tarih              DateTime     @default(now()) @db.Timestamptz(6)
+  puan               Int?
+  tedarik_suresi     Int?
+  makine_tur_id      Int?
+  tahmini_omur_saati Decimal?     @db.Decimal(10, 2)
+  tedarikci          tedarikci    @relation(fields: [tedarikci_id], references: [tedarikci_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_satin_alma_tedarikci")
+  makine_turu        makine_turu? @relation(fields: [makine_tur_id], references: [makine_tur_id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([tedarikci_id], map: "idx_satin_alma_tedarikci")
   @@index([parca_adi], map: "idx_satin_alma_parca")
 }
 
 model stok {
-  stok_id         Int      @id @default(autoincrement())
-  parca_adi       String   @unique @db.VarChar(150)
-  miktar          Int      @default(0)
-  son_guncelleme  DateTime @default(now()) @db.Timestamptz(6)
+  stok_id        Int      @id @default(autoincrement())
+  parca_adi      String   @unique @db.VarChar(150)
+  miktar         Int      @default(0)
+  son_guncelleme DateTime @default(now()) @db.Timestamptz(6)
 }
 
 enum du_ort_yuk {

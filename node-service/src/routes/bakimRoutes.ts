@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { bakimKaydiGir, makineBakimKayitlari } from "../controllers/bakimKontrol";
+import { bakimKaydiGir, makineBakimKayitlari, bakimPuanla, bakimOnayla } from "../controllers/bakimKontrol";
 import { oturumKontrol, rolKontrol } from "../middlewares/yetki";
 
 const router = Router();
@@ -9,8 +9,21 @@ router.get('/:makine_id', oturumKontrol, makineBakimKayitlari);
 // POST /api/bakimlar  — Yeni bakım kaydı oluşturur
 router.post('/',
     oturumKontrol,
-    rolKontrol('TEKNISYEN', 'YONETICI' , 'SERVIS'),
+    rolKontrol('TEKNISYEN', 'YONETICI', 'SERVIS'),
     bakimKaydiGir
+);
+// PATCH /api/bakimlar/:id/puan — Bakım işlemini puanlar
+router.patch('/:id/puan',
+    oturumKontrol,
+    rolKontrol('YONETICI'),
+    bakimPuanla
+);
+
+// PATCH /api/bakimlar/:id/onayla — Bakım işlemini onaylayıp listeden kaldırır
+router.patch('/:id/onayla',
+    oturumKontrol,
+    rolKontrol('YONETICI'),
+    bakimOnayla
 );
 
 

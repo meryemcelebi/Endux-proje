@@ -11,6 +11,7 @@ export default function Bakim() {
   const [loading, setLoading] = useState(true);
   const [machines, setMachines] = useState([]);
   const [history, setHistory] = useState([]);
+  const [isCostModalOpen, setIsCostModalOpen] = useState(false);
 
   // --- VERİ ÇEKME ---
   useEffect(() => {
@@ -69,6 +70,27 @@ export default function Bakim() {
     .sort((a, b) => b.mevcut_risk_skoru - a.mevcut_risk_skoru)
     .slice(0, 5);
 
+  // 6. Son 3 ayın maliyet verileri (Grafik için)
+  const last3Months = [];
+  for (let i = 2; i >= 0; i--) {
+    const targetDate = new Date();
+    targetDate.setMonth(targetDate.getMonth() - i);
+    const m = targetDate.getMonth();
+    const y = targetDate.getFullYear();
+    const monthName = targetDate.toLocaleString("tr-TR", { month: "short" });
+
+    const cost = history
+      .filter(h => {
+        const d = new Date(h.bakim_tarihi);
+        return d.getMonth() === m && d.getFullYear() === y;
+      })
+      .reduce((sum, h) => sum + (h.bakim_maliyet || 0), 0);
+
+    last3Months.push({ name: monthName, cost });
+  }
+
+  const maxCost = Math.max(...last3Months.map(d => d.cost), 1000);
+
   // Yeni bakım kaydı formu için state (Şu an bu sayfada render edilmiyor, Servis.jsx'de kullanılıyor)
   const [form, setForm] = useState({
     makineId: "",
@@ -82,10 +104,10 @@ export default function Bakim() {
   // Form alanlarındaki değişiklikleri yakalar
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  // Yeni bakım ekleme fonksiyonu (Mock işlem)
+  // Yeni bakım ekleme fonksiyonu
   const addBakim = () => {
     if (!form.makineId) return alert("Alanları doldurun.");
-    alert("Bakım başarıyla eklendi! (Mock)");
+    alert("Bakım başarıyla eklendi!");
     setForm({ makineId: "", kullaniciId: "", firmaId: "", bakimTuru: "", maliyet: "", aciklama: "" });
   };
 
@@ -128,10 +150,15 @@ export default function Bakim() {
               </div>
 
               {/* --- MALİYET ÖZETİ --- */}
-              <div style={{ ...kpiBox, flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <div
+                style={{ ...kpiBox, flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", cursor: "pointer", transition: "all 0.2s" }}
+                onClick={() => setIsCostModalOpen(true)}
+                onMouseOver={(e) => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 8px 16px rgba(0, 0, 0, 0.1)"; }}
+                onMouseOut={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 2px 10px rgba(0,0,0,0.05)"; }}
+              >
                 <span style={kpiTitle}>Aylık Bakım Maliyeti</span>
                 <span style={{ fontSize: "42px", color: "#27ae60", fontWeight: "bold", margin: "10px 0" }}>₺{thisMonthMaliyet.toLocaleString()}</span>
-                <p style={{ color: "#7f8c8d", fontSize: "13px", textAlign: "center", maxWidth: "200px" }}>Bu ay içerisinde tamamlanan işlemler toplamı.</p>
+                <p style={{ color: "#7f8c8d", fontSize: "13px", textAlign: "center", maxWidth: "200px" }}>Geçmiş maliyet analizini görmek için tıklayın.</p>
               </div>
             </div>
           )}
@@ -167,6 +194,47 @@ export default function Bakim() {
 
 
           </div>
+
+          {/* --- MALİYET ANALİZ MODAL (Son 3 Ay Grafiği) --- */}
+          {isCostModalOpen && (
+            <div style={modalOverlayStyle}>
+              <div style={modalContentStyle}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "30px", borderBottom: "1px solid #eee", paddingBottom: "15px" }}>
+                  <div>
+                    <h3 style={{ margin: 0, color: "#0f3460", fontSize: "20px" }}>Bakım Maliyeti Analizi</h3>
+                  </div>
+                  <button onClick={() => setIsCostModalOpen(false)} style={closeBtnStyle}>✕</button>
+                </div>
+
+                {/* Sütun Grafik Alanı */}
+                <div style={{ display: "flex", justifyContent: "space-around", alignItems: "flex-end", height: "250px", padding: "20px", background: "#f8fafc", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+                  {last3Months.map((data, idx) => {
+                    const barHeight = (data.cost / maxCost) * 200;
+                    return (
+                      <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "80px", gap: "10px" }}>
+                        <div style={{ fontSize: "12px", fontWeight: "bold", color: "#27ae60" }}>₺{data.cost.toLocaleString()}</div>
+                        <div style={{
+                          width: "45px",
+                          height: `${barHeight}px`,
+                          background: idx === 2 ? "linear-gradient(to top, #27ae60, #2ecc71)" : "#cbd5e0",
+                          borderRadius: "6px 6px 0 0",
+                          transition: "height 0.5s ease-out",
+                          boxShadow: idx === 2 ? "0 4px 10px rgba(39, 174, 96, 0.3)" : "none"
+                        }}></div>
+                        <div style={{ fontSize: "13px", fontWeight: "800", color: "#1e293b", textTransform: "capitalize" }}>{data.name}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+
+
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "25px" }}>
+                  <button onClick={() => setIsCostModalOpen(false)} style={{ ...saveBtnStyle, background: "#1e293b" }}>Kapat</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -189,3 +257,8 @@ const listItemStyle = { background: "#f8f9fa", padding: "15px", borderRadius: "8
 
 const inputStyle = { padding: "14px", border: "1px solid #e1e5eb", borderRadius: "8px", fontSize: "14px", outline: "none", width: "100%", boxSizing: "border-box", background: "#fafafa", color: "#333" };
 const buttonStyle = { padding: "14px", background: "#0f3460", color: "white", border: "none", borderRadius: "8px", fontSize: "16px", fontWeight: "bold", cursor: "pointer", transition: "0.2s", marginTop: "10px" };
+
+const modalOverlayStyle = { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000, backdropFilter: "blur(4px)" };
+const modalContentStyle = { background: "white", padding: "30px", borderRadius: "16px", width: "90%", maxWidth: "500px", boxShadow: "0 20px 50px rgba(0,0,0,0.2)" };
+const closeBtnStyle = { background: "transparent", border: "none", fontSize: "20px", cursor: "pointer", color: "#999" };
+const saveBtnStyle = { padding: "12px 24px", background: "#27ae60", color: "white", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" };

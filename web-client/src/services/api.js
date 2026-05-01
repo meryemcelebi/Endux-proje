@@ -42,7 +42,7 @@ export const api = {
     const json = await handleResponse(res);
     return (json.data || []).map((m) => ({
       ...m,
-      aktiflik_durumu: m.aktiflik_durumu === true ? "Aktif" : "Pasif",
+      aktiflik_durumu: typeof m.aktiflik_durumu === "boolean" ? (m.aktiflik_durumu ? "Aktif" : "Pasif") : (m.aktiflik_durumu || "Bilinmiyor"),
       mevcut_risk_skoru: Number(m.mevcut_risk_skoru || 0),
       satin_alma_maliyeti: Number(m.satin_alma_maliyeti || 0),
       top_calisma_saati: Number(m.toplam_calisma_saati || 0),
@@ -179,6 +179,7 @@ export const api = {
         bakim_maliyet: Number(recordData.bakim_maliyet),
         teknisyen_id: Number(recordData.teknisyen_id),
         degisen_Parcalar: recordData.degisen_Parcalar || [],
+        puan: recordData.puan ? Number(recordData.puan) : null,
       }),
     });
     return handleResponse(res);
@@ -334,10 +335,11 @@ export const api = {
           telefon: sf.iletisim?.telefon || null,
           email: sf.iletisim?.email || null,
           adres: sf.iletisim?.acik_adres || null,
-          uzmanlik_alani: sf.servis_firma_uzmanlik?.uzmanlik_adi || null,
+          uzmanlik_alani: sf.servis_firma_uzmanlik?.[0]?.uzmanlik_adi || null,
           sorumlu_ad: sf.servis_sorumlusu?.[0]?.ad || null,
           sorumlu_soyad: sf.servis_sorumlusu?.[0]?.soyad || null,
           aktiflik: sf.aktiflik,
+          ortalama_puan: sf.ortalama_puan || 0,
         });
       }
       for (const t of tedarikciler) {
@@ -356,6 +358,22 @@ export const api = {
       }
       return mapped;
     } catch { return []; }
+  },
+
+  deleteSupplier: async (id) => {
+    const res = await fetch(`${API_BASE}/tedarikciler/${id}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  deleteServiceFirm: async (id) => {
+    const res = await fetch(`${API_BASE}/servis-firmalari/${id}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    return handleResponse(res);
   },
 
   // ═══════════════ 16. FİRMA EKLE (TİP BAZLI) ═══════════════
@@ -399,25 +417,36 @@ export const api = {
     return handleResponse(res);
   },
 
-  // ═══════════════ 19. BAKIM KAYDI PUANlama ═══════════════
-  rateServiceRecord: async (servis_firma_id, puan, yorum) => {
-    const res = await fetch(`${API_BASE}/servis-puan`, {
-      method: "POST", headers: getHeaders(),
-      body: JSON.stringify({
-        servis_firma_id: Number(servis_firma_id),
-        puan: Number(puan),
-        yorum: yorum || null,
-      }),
+  // ═══════════════ 20. BAKIM İŞLEMİ PUANlama (Yeni) ═══════════════
+  rateMaintenance: async (bakimId, puan) => {
+    const res = await fetch(`${API_BASE}/bakimlar/${bakimId}/puan`, {
+      method: "PATCH", headers: getHeaders(),
+      body: JSON.stringify({ puan: Number(puan) }),
     });
     return handleResponse(res);
   },
 
-  // ═══════════════ 20. TEKNİSYEN GÖREVLERİ ═══════════════
+  // ═══════════════ 21. BAKIM İŞLEMİNİ ONAYLA (LİSTEDEN KALDIR) ═══════════════
+  approveMaintenance: async (bakimId) => {
+    const res = await fetch(`${API_BASE}/bakimlar/${bakimId}/onayla`, {
+      method: "PATCH", headers: getHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  // ═══════════════ 22. TEKNİSYEN GÖREVLERİ ═══════════════
   // GET /api/gorevler
   getTechTasks: async () => {
     const res = await fetch(`${API_BASE}/gorevler`, { headers: getHeaders() });
     const json = await handleResponse(res);
     return json.data || [];
+  },
+  updateTaskStatus: async (taskId, status) => {
+    const res = await fetch(`${API_BASE}/gorevler/${taskId}/durum`, {
+      method: "PATCH", headers: getHeaders(),
+      body: JSON.stringify({ durum: status }),
+    });
+    return handleResponse(res);
   },
 
   // ═══════════════ 21. PUANLANACAK FİRMALAR ═══════════════
@@ -530,6 +559,8 @@ export const api = {
         tedarik_suresi: purchaseData.tedarik_suresi ? Number(purchaseData.tedarik_suresi) : null,
         tarih: purchaseData.tarih || new Date().toISOString(),
         puan: Number(purchaseData.puan),
+        makine_tur_id: purchaseData.makine_tur_id ? Number(purchaseData.makine_tur_id) : null,
+        tahmini_omur: purchaseData.tahmini_omur ? Number(purchaseData.tahmini_omur) : null,
       }),
     });
     return handleResponse(res);

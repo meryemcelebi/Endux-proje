@@ -37,7 +37,7 @@ router.get('/:id/maliyet-analizi',
 
 router.get('/:id',
     oturumKontrol,
-    rolKontrol("YONETICI", "TEKNISYEN", "OPERATOR"),
+    rolKontrol("YONETICI", "TEKNISYEN"),
     makineDetayGetir
 );
 

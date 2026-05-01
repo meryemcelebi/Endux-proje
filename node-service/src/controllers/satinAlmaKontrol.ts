@@ -7,7 +7,7 @@ import prisma from "../config/prisma";
  */
 export async function satinAlmaEkle(req: Request, res: Response) {
     try {
-        const { tedarikci_id, parca_adi, adet, birim_fiyat, tarih, puan, tedarik_suresi } = req.body;
+        const { tedarikci_id, parca_adi, adet, birim_fiyat, tarih, puan, tedarik_suresi, makine_tur_id, tahmini_omur } = req.body;
 
         // ── Zorunlu alan kontrolü (Puan artık zorunlu değil) ──
         if (!tedarikci_id || !parca_adi || !adet || birim_fiyat === undefined) {
@@ -64,7 +64,9 @@ export async function satinAlmaEkle(req: Request, res: Response) {
                     birim_fiyat: Number(birim_fiyat),
                     tedarik_suresi: tedarikSuresiDegeri,
                     tarih: tarih ? new Date(tarih) : new Date(),
-                    puan: puanDegeri
+                    puan: puanDegeri,
+                    makine_tur_id: makine_tur_id ? Number(makine_tur_id) : null,
+                    tahmini_omur_saati: tahmini_omur ? Number(tahmini_omur) : null
                 }
             });
 
@@ -147,6 +149,12 @@ export async function tumSatinAlmalariGetir(req: Request, res: Response) {
                         tedarikci_id: true,
                         firma_adi: true,
                         aktiflik: true
+                    }
+                },
+                makine_turu: {
+                    select: {
+                        makine_tur_id: true,
+                        makine_tur_adi: true
                     }
                 }
             },
@@ -236,23 +244,63 @@ export async function tedarikciOrtalamaPuan(req: Request, res: Response) {
  */
 export async function tumStoklariGetir(req: Request, res: Response) {
     try {
-        const stoklar = await prisma.stok.findMany({
-            orderBy: {
-                parca_adi: "asc"
+        // 1. Tüm satın almaları gruplayarak toplam alınan miktarları bul
+        const alimlar = await prisma.satin_alma.groupBy({
+            by: ['parca_adi'],
+            _sum: { adet: true },
+        });
+
+        // 2. Tüm parça değişimlerini (kullanımları) saymak için parça tablosuyla joinli veriyi çek
+        const kullanimlar = await prisma.parca_degisim.findMany({
+            include: { parca: { select: { parca_adi: true } } }
+        });
+
+        // Kullanımları isim bazlı grupla
+        const kullanimSayilari: Record<string, number> = {};
+        kullanimlar.forEach(k => {
+            if (k.parca?.parca_adi) {
+                const ad = k.parca.parca_adi.toLowerCase();
+                kullanimSayilari[ad] = (kullanimSayilari[ad] || 0) + 1;
             }
+        });
+
+        // 3. Stok listesini oluştur (Alınan - Kullanılan)
+        // Mevcut stok tablosunu da baz alabiliriz veya doğrudan alımlardan üretebiliriz.
+        // Alımları baz almak daha tutarlıdır.
+        
+        // Tahmini ömür için en son alımları da alalım
+        const sonAlimlar = await prisma.satin_alma.findMany({
+            orderBy: { tarih: 'desc' }
+        });
+
+        const dinamikStok = alimlar.map(alim => {
+            const parcaAdi = alim.parca_adi;
+            const toplamAlinan = alim._sum.adet || 0;
+            const toplamKullanilan = kullanimSayilari[parcaAdi.toLowerCase()] || 0;
+            const netStok = toplamAlinan - toplamKullanilan;
+
+            // Bu parçaya ait en son ömür bilgisini bul
+            const sonAlim = sonAlimlar.find(sa => sa.parca_adi.toLowerCase() === parcaAdi.toLowerCase());
+
+            return {
+                parca_adi: parcaAdi,
+                miktar: netStok > 0 ? netStok : 0, // Negatife düşmesin
+                tahmini_omur_saati: sonAlim ? sonAlim.tahmini_omur_saati : null,
+                son_guncelleme: sonAlim ? sonAlim.tarih : new Date()
+            };
         });
 
         res.status(200).json({
             success: true,
-            message: `${stoklar.length} adet stok kaydı getirildi.`,
-            data: stoklar
+            message: "Dinamik stok verileri hesaplandı.",
+            data: dinamikStok
         });
 
     } catch (error) {
-        console.error("Stok listesi getirme hatası:", error);
+        console.error("Dinamik stok hesaplama hatası:", error);
         res.status(500).json({
             success: false,
-            message: "Stok kayıtları getirilirken bir hata oluştu."
+            message: "Stok verileri hesaplanırken bir hata oluştu."
         });
     }
 }
