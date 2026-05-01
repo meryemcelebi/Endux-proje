@@ -1,9 +1,6 @@
 import { Router } from "express";
-<<<<<<< HEAD
 import { bakimKaydiGir, makineBakimKayitlari, bakimPuanla, bakimOnayla } from "../controllers/bakimKontrol";
-=======
 import { bakimKaydiGir, makineBakimKayitlari, dusukStokUyarisi, bakimlariOnayla, bakimiYokSay, getOnayBekleyenler } from "../controllers/bakimKontrol";
->>>>>>> 5b8a9a331802ed33037242851251595a72e68397
 import { oturumKontrol, rolKontrol } from "../middlewares/yetki";
 
 const router = Router();

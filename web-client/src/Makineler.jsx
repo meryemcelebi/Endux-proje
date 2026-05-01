@@ -33,26 +33,23 @@ export default function Makineler() {
         ]);
 
         // API'den gelen veriyi yerel state'e uygun hale getir (ID ve durum eşleştirmesi)
-<<<<<<< HEAD
         const formattedData = machinesData.map(m => ({
           ...m,
           id: m.makine_id,
           makineid: "MKN-" + m.makine_id,
           aktiflik_durumu: typeof m.aktiflik_durumu === "string" ? m.aktiflik_durumu : (m.aktiflik_durumu ? "Aktif" : "Pasif")
         }));
-=======
         const formattedData = data.map((m) => ({
-  ...m,
-  id: m.makine_id,
-  makineid: "MKN-" + m.makine_id,
-  makine_ad: m.makine_adi || m.makine_ad,
-  aktiflik_durumu:
-    typeof m.aktiflik_durumu === "string"
-      ? m.aktiflik_durumu
-      : (m.aktiflik_durumu ? "Aktif" : "Pasif")
-}));
+          ...m,
+          id: m.makine_id,
+          makineid: "MKN-" + m.makine_id,
+          makine_ad: m.makine_adi || m.makine_ad,
+          aktiflik_durumu:
+            typeof m.aktiflik_durumu === "string"
+              ? m.aktiflik_durumu
+              : (m.aktiflik_durumu ? "Aktif" : "Pasif")
+        }));
 
->>>>>>> 5b8a9a331802ed33037242851251595a72e68397
         setMachines(formattedData);
         setMachineTypes(typesData);
       } catch (err) {

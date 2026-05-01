@@ -33,17 +33,13 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                     ariza_id: ariza_id ? Number(ariza_id) : null,
                     bakim_tur_id: bakim_tur_id ? Number(bakim_tur_id) : null,
                     bakim_maliyet: Number(bakim_maliyet),
-<<<<<<< HEAD
                     durus_suresi: durus_suresi ? new Prisma.Decimal(durus_suresi) : null,
-=======
                     durus_suresi: durus_suresi ? new Decimal(durus_suresi) : null,
->>>>>>> 5b8a9a331802ed33037242851251595a72e68397
                     aciklama: aciklama || null,
                     bakim_tarihi: new Date(),
                 },
             });
 
-<<<<<<< HEAD
             // Puan geldiyse servis_puan tablosuna ekle
             if (puan !== undefined && puan !== null) {
                 await tx.servis_puan.create({
@@ -66,53 +62,51 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                         parca_id: parca.parca_id ? Number(parca.parca_id) : null,
                     })),
                 });
-=======
-            // 🔧 Parça değişimleri + stok düşme
-            if (Array.isArray(degisen_Parcalar) && degisen_Parcalar.length > 0) {
-                for (const parca of degisen_Parcalar) {
-                    const parcaId = Number(parca.parca_id);
-                    const adet = Number(parca.adet) || 1;
+                // 🔧 Parça değişimleri + stok düşme
+                if (Array.isArray(degisen_Parcalar) && degisen_Parcalar.length > 0) {
+                    for (const parca of degisen_Parcalar) {
+                        const parcaId = Number(parca.parca_id);
+                        const adet = Number(parca.adet) || 1;
 
-                    if (!parcaId) continue;
+                        if (!parcaId) continue;
 
-                    // Parçayı bul
-                    const mevcutParca = await tx.parca.findUnique({
-                        where: { parca_id: parcaId }
-                    });
+                        // Parçayı bul
+                        const mevcutParca = await tx.parca.findUnique({
+                            where: { parca_id: parcaId }
+                        });
 
-                    if (!mevcutParca) {
-                        throw new Error(`parca_id ${parcaId} bulunamadı.`);
-                    }
-
-                    if ((mevcutParca.stok_miktari || 0) < adet) {
-                        throw new Error(
-                            `"${mevcutParca.parca_adi}" için yeterli stok yok. ` +
-                            `Mevcut: ${mevcutParca.stok_miktari}, İstenen: ${adet}`
-                        );
-                    }
-
-                    // Parça değişim kaydı
-                    await tx.parca_degisim.create({
-                        data: {
-                            bakim_id: bakimKaydi.bakim_id,
-                            parca_id: parcaId,
-                            adet: adet
+                        if (!mevcutParca) {
+                            throw new Error(`parca_id ${parcaId} bulunamadı.`);
                         }
-                    });
 
-                    // Stok düş
-                    await tx.parca.update({
-                        where: { parca_id: parcaId },
-                        data: {
-                            stok_miktari: { decrement: adet }
+                        if ((mevcutParca.stok_miktari || 0) < adet) {
+                            throw new Error(
+                                `"${mevcutParca.parca_adi}" için yeterli stok yok. ` +
+                                `Mevcut: ${mevcutParca.stok_miktari}, İstenen: ${adet}`
+                            );
                         }
-                    });
+
+                        // Parça değişim kaydı
+                        await tx.parca_degisim.create({
+                            data: {
+                                bakim_id: bakimKaydi.bakim_id,
+                                parca_id: parcaId,
+                                adet: adet
+                            }
+                        });
+
+                        // Stok düş
+                        await tx.parca.update({
+                            where: { parca_id: parcaId },
+                            data: {
+                                stok_miktari: { decrement: adet }
+                            }
+                        });
+                    }
                 }
->>>>>>> 5b8a9a331802ed33037242851251595a72e68397
-            }
 
-            return bakimKaydi;
-        });
+                return bakimKaydi;
+            });
 
         res.status(201).json({
             success: true,
@@ -452,9 +446,9 @@ export const getOnayBekleyenler = async (req: Request, res: Response) => {
         const zenginVeri = bekleyenler.map(bakim => {
             // Risk skoru (makine'den veya 0)
             const riskSkoru = (bakim.makine?.risk_skoru && bakim.makine.risk_skoru.length > 0)
-                ? Number(bakim.makine.risk_skoru[0].risk_skoru) 
+                ? Number(bakim.makine.risk_skoru[0].risk_skoru)
                 : Math.floor(Math.random() * 40) + 40; // DB'de yoksa 40-80 arası mock skor
-                
+
             // Öncelik belirleme
             let oncelik = "Düşük";
             if (riskSkoru > 75) oncelik = "Kritik";
