@@ -34,15 +34,15 @@ export default function Servis() {
 
   const handleRecordPuanla = async (bakimId, puan) => {
     try {
-      await api.rateServiceRecord(bakimId, puan);
-      setHistory(history.map(h => h.bakim_id === bakimId ? { ...h, puan: puan } : h));
+      await api.rateMaintenance(bakimId, puan);
+      setHistory(history.map(h => h.bakim_id === bakimId ? { ...h, servis_puan: { puan: puan } } : h));
       alert("Servis kaydı puanlaması başarıyla kaydedildi!");
     } catch (error) {
       alert("Puanlama sırasında hata oluştu!");
     }
   };
 
-  const sortedHistory = [...history].sort((a, b) => (b.puan || 0) - (a.puan || 0));
+  const sortedHistory = [...history].sort((a, b) => (b.servis_puan?.puan || 0) - (a.servis_puan?.puan || 0));
 
   const [form, setForm] = useState({
     ariza_sebebi: "",
@@ -148,7 +148,7 @@ export default function Servis() {
                               style={{
                                 cursor: "pointer",
                                 fontSize: "20px",
-                                color: (item.puan || 0) >= star ? "#f39c12" : "#dfe6e9",
+                                color: (item.servis_puan?.puan || 0) >= star ? "#f39c12" : "#dfe6e9",
                                 transition: "transform 0.1s"
                               }}
                               onMouseOver={(e) => e.target.style.transform = "scale(1.2)"}

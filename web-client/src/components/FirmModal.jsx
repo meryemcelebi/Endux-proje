@@ -15,7 +15,8 @@ export default function FirmModal({ isOpen, onClose, onSave, initialType = "Serv
     sorumlu_telefon: "", // İlgili personelin doğrudan ulaşım numarası
     yetkili_kisi: "", // Sadece Tedarikçiler için ana temas kişisi
     veri_no: "", // Vergi numarası veya resmi sicil no
-    guvenilirlik_skoru: "" // Tedarikçi performans puanı (0-100)
+    il: "", // İl bilgisi
+    ilce: "" // İlçe bilgisi
   });
 
   // Modal kapalıysa hiçbir şey render etme
@@ -40,7 +41,7 @@ export default function FirmModal({ isOpen, onClose, onSave, initialType = "Serv
     setForm({
       ad: "", tip: initialType, telefon: "", email: "", adres: "",
       uzmanlik_alani: "", sorumlu_ad: "", sorumlu_soyad: "", sorumlu_telefon: "",
-      yetkili_kisi: "", veri_no: "", guvenilirlik_skoru: ""
+      yetkili_kisi: "", veri_no: "", il: "", ilce: ""
     }); // Formu sıfırla
   };
 
@@ -79,60 +80,50 @@ export default function FirmModal({ isOpen, onClose, onSave, initialType = "Serv
           </div>
 
           {form.tip === "Servis" && (
-            <div style={{ background: "#f8f9fa", padding: "15px", borderRadius: "8px", border: "1px solid #e1e5eb" }}>
-              <h4 style={{ margin: "0 0 10px 0", color: "#34495e", fontSize: "14px" }}>Servis & Teknisyen Detayları</h4>
-
+            <React.Fragment>
               <div style={{ marginBottom: "12px" }}>
                 <label style={labelStil}>Uzmanlık Alanı</label>
                 <input type="text" name="uzmanlik_alani" value={form.uzmanlik_alani} onChange={handleChange} style={inputStil} placeholder="Örn: CNC Mekaniği, Motor Revizyon" />
               </div>
 
-              <div style={formRowStil}>
-                <div style={{ flex: 1 }}>
-                  <label style={labelStil}>Teknisyen (Sorumlu) Adı</label>
-                  <input type="text" name="sorumlu_ad" value={form.sorumlu_ad} onChange={handleChange} style={inputStil} placeholder="Örn: Ahmet" />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={labelStil}>Teknisyen Soyadı</label>
-                  <input type="text" name="sorumlu_soyad" value={form.sorumlu_soyad} onChange={handleChange} style={inputStil} placeholder="Örn: Yılmaz" />
-                </div>
+              <div style={{ marginBottom: "12px" }}>
+                <label style={labelStil}>Sorumlu Adı/Soyadı</label>
+                <input type="text" name="sorumlu_ad" value={form.sorumlu_ad} onChange={handleChange} style={inputStil} placeholder="Örn: Ahmet Yılmaz" />
               </div>
-
-              <div style={{ marginTop: "12px" }}>
-                <label style={labelStil}>Teknisyen Cep Telefonu</label>
-                <input type="text" name="sorumlu_telefon" value={form.sorumlu_telefon} onChange={handleChange} style={inputStil} placeholder="Örn: 05XX..." />
-              </div>
-            </div>
+            </React.Fragment>
           )}
 
           {form.tip === "Tedarikçi" && (
-            <div style={{ background: "#f0f7ff", padding: "15px", borderRadius: "8px", border: "1px solid #cce3ff" }}>
-              <h4 style={{ margin: "0 0 10px 0", color: "#0056b3", fontSize: "14px" }}>Tedarikçi Ek Bilgileri</h4>
-
+            <React.Fragment>
               <div style={{ marginBottom: "12px" }}>
-                <label style={labelStil}>Yetkili Kişi</label>
+                <label style={labelStil}>Yetkili Kişi Adı/Soyadı</label>
                 <input type="text" name="yetkili_kisi" value={form.yetkili_kisi} onChange={handleChange} style={inputStil} placeholder="Örn: Mehmet Özsoy" />
               </div>
 
-              <div style={formRowStil}>
-                <div style={{ flex: 1 }}>
-                  <label style={labelStil}>Veri / Vergi No</label>
-                  <input type="text" name="veri_no" value={form.veri_no} onChange={handleChange} style={inputStil} placeholder="Örn: TR123..." />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={labelStil}>Güvenilirlik Skoru (0-100)</label>
-                  <input type="number" name="guvenilirlik_skoru" value={form.guvenilirlik_skoru} onChange={handleChange} style={inputStil} placeholder="Örn: 90" min="0" max="100" />
-                </div>
+              <div style={{ marginBottom: "12px" }}>
+                <label style={labelStil}>Veri / Vergi No</label>
+                <input type="text" name="veri_no" value={form.veri_no} onChange={handleChange} style={inputStil} placeholder="Örn: TR123..." />
               </div>
-            </div>
+            </React.Fragment>
           )}
 
-          <div>
-            <label style={labelStil}>Firma Adresi</label>
+          <div style={formRowStil}>
+            <div style={{ flex: 1 }}>
+              <label style={labelStil}>İl</label>
+              <input type="text" name="il" value={form.il} onChange={handleChange} style={inputStil} placeholder="Örn: İstanbul" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={labelStil}>İlçe</label>
+              <input type="text" name="ilce" value={form.ilce} onChange={handleChange} style={inputStil} placeholder="Örn: Üsküdar" />
+            </div>
+          </div>
+
+          <div style={{ marginTop: "12px" }}>
+            <label style={labelStil}>Firma Adresi (Açık Adres)</label>
             <textarea name="adres" value={form.adres} onChange={handleChange} style={{ ...inputStil, height: "60px" }} />
           </div>
 
-          <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+          <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
             <button type="button" onClick={onClose} style={{ ...butonStil, background: "#ccc", color: "#333" }}>İptal</button>
             <button type="submit" style={butonStil}>Kaydet</button>
           </div>

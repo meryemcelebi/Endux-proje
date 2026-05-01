@@ -18,7 +18,6 @@ export default function Dashboard() {
   // --- STATE TANIMLAMALARI (Uygulamanın Hafızası) ---
   const [machinesList, setMachinesList] = useState([]); // API'den gelen ve zenginleştirilen tüm makinelerin listesi
   const [isLoading, setIsLoading] = useState(true); // Veriler yüklenirken gösterilen yükleme durumu
-  const [ignoredIds, setIgnoredIds] = useState([]); // Kullanıcının listeden gizlemek istediği (yoksaydığı) makine ID'leri
   const [pendingApprovals, setPendingApprovals] = useState([]); // Servis firması tarafından tamamlanmış, kullanıcı puanı bekleyen kayıtlar
   const [pendingTasks, setPendingTasks] = useState([]); // Arıza kaydı açılmış ancak henüz teknisyen ataması bekleyen görevler
   const [allHistory, setAllHistory] = useState([]); // Grafikler için kullanılan geçmiş servis verileri
@@ -27,6 +26,11 @@ export default function Dashboard() {
   const [selectedTaskIds, setSelectedTaskIds] = useState([]); // Toplu onaylama işlemi için seçilen görevlerin ID'leri
   const [activeDetailTab, setActiveDetailTab] = useState(null); // Modalde hangi sekmenin (Bakımda, Bekleyen vs.) aktif olduğunu tutar
   const [firmsMetadata, setFirmsMetadata] = useState([]); // Servis firmalarının değerlendirme ve iletişim bilgileri
+  const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
+  const [activeBreakdownId, setActiveBreakdownId] = useState(null);
+  const [breakdownDesc, setBreakdownDesc] = useState("");
+  const [activeFloor, setActiveFloor] = useState(0); // Fabrika haritası kat kontrolü
+  const [isMapExpanded, setIsMapExpanded] = useState(false); // Harita büyütme durumu
 
   // --- OEE ANALİZ VERİLERİ (Haftalık Verimlilik Değerleri) ---
   // --- OEE ANALİZ VERİLERİ (Haftalık Verimlilik Değerleri) ---
@@ -58,10 +62,9 @@ export default function Dashboard() {
         const enrichedData = machinesData.map(m => {
           let kategori = "Aktif";
           // Risk skoruna veya arıza durumuna göre kategorize et
-          if (m.mevcut_risk_skoru > 0.5) kategori = "Yüksek Riskli";
-          else if (m.aktiflik_durumu === "Bakımda") kategori = "Bakımda Olan";
+          if (m.mevcut_risk_skoru > 0.5 || m.aktiflik_durumu === "Arızalı") kategori = "Yüksek Riskli";
+          else if (m.aktiflik_durumu === "Bakımda" || m.aktiflik_durumu === "Bakımda Olan") kategori = "Bakımda Olan";
           else if (m.aktiflik_durumu === "Bakımı Yaklaşan") kategori = "Bakımı Yaklaşan";
-          else if (m.aktiflik_durumu === "Arızalı") kategori = "Yüksek Riskli";
 
           // --- Garanti Bitiş Kontrolü Mantığı ---
           let garantiDurumu = "Normal";
@@ -77,8 +80,9 @@ export default function Dashboard() {
           }
 
           // UI'da kullanılacak standart bir veri objesi döndür
-          return { ...m, id: m.makine_id, ad: m.makine_ad, kategori, garantiDurumu };
+          return { ...m, id: m.makine_id, ad: m.makine_adi || m.makine_ad, kategori, garantiDurumu };
         });
+
         setMachinesList(enrichedData);
 
         // 2. Bakım Onaylarını, Teknik Görevleri ve Firma Bilgilerini Paralel Çek
@@ -98,14 +102,7 @@ export default function Dashboard() {
         // Sisteme girilmiş ancak işlem görmemiş (BEKLEYEN) görevleri süz
         const pendingStart = techTasks.filter(t => t.durum === "BEKLEYEN");
 
-        // Simüle edilmiş görevler (Sistemin dolu görünmesi için örnek veriler)
-        const mockTasks = [
-          { id: "mock-1", makine_ad: "CNC Lazer Kesim 02", ariza_notu: "Yüksek sıcaklık uyarısı - Soğutma kontrolü bekliyor.", durum: "BEKLEYEN" },
-          { id: "mock-2", makine_ad: "Hidrolik Pres Hattı A", ariza_notu: "Periyodik yağ değişimi ve valf kontrolü onayı.", durum: "BEKLEYEN" },
-          { id: "mock-3", makine_ad: "Montaj Robotu R-4", ariza_notu: "Servo motor ses şikayeti - Teknik inceleme talebi.", durum: "BEKLEYEN" }
-        ];
-
-        setPendingTasks([...pendingStart, ...mockTasks]);
+        setPendingTasks(pendingStart);
 
       } catch (err) {
         console.error("Dashboard verileri yüklenemedi", err);
@@ -117,22 +114,14 @@ export default function Dashboard() {
   }, []);
 
   // --- KRİTİK ALARMLARI BELİRLE ---
-  // Sadece Yüksek Riskli olanlar veya Garantisi bitmek üzere (Kritik) olanları "Risky Machines" olarak al
+  // Sadece Yüksek Riskli olanları "Risky Machines" olarak al
   const riskyMachines = machinesList.filter(m =>
-    (m.kategori === "Yüksek Riskli" || m.garantiDurumu === "Kritik")
-    && !ignoredIds.includes(m.id) // Kullanıcının 'Yoksay' dediklerini listeleme
+    m.kategori === "Yüksek Riskli"
   );
 
-  // Sayısal özet verileri (Dashboard kartlarında gösterilecek rakamlar)
-  const yRCount = riskyMachines.filter(m => m.kategori === "Yüksek Riskli").length;
-  const gKCount = riskyMachines.filter(m => m.garantiDurumu === "Kritik").length;
+  // Sayısal özet verileri
+  const yRCount = riskyMachines.length;
 
-  // Form ve UI kontrol state'leri
-  const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
-  const [activeBreakdownId, setActiveBreakdownId] = useState(null);
-  const [breakdownDesc, setBreakdownDesc] = useState("");
-  const [activeFloor, setActiveFloor] = useState(0); // Fabrika haritası kat kontrolü
-  const [isMapExpanded, setIsMapExpanded] = useState(false); // Harita büyütme durumu
 
   // --- MALİYET VE BÜTÇE ANALİZİ (Reduce Kullanımı) ---
   // Tüm makinelerin toplam satın alma bedelini hesapla
@@ -161,11 +150,14 @@ export default function Dashboard() {
     setBreakdownDesc("");
   };
 
-  // Bir uyarıyı geçici olarak listeden gizleme işlemi
-  const handleIgnoreMachine = (machineId, machineName) => {
-    const confirmIgnore = window.confirm(`"${machineName}" uyarısını yoksaymak üzeresiniz. Bu makine listeden kaldırılacak. Emin misiniz?`);
-    if (confirmIgnore) {
-      setIgnoredIds([...ignoredIds, machineId]);
+
+  // Toplu Yoksayma İşlemi (Sadece listeden kaldırır)
+  const handleBulkIgnore = () => {
+    if (selectedTaskIds.length === 0) return;
+    const confirmBulk = window.confirm(`${selectedTaskIds.length} adet görevi listeden kaldırmak istediğinize emin misiniz?`);
+    if (confirmBulk) {
+      setPendingTasks(prev => prev.filter(t => !selectedTaskIds.includes(t.id)));
+      setSelectedTaskIds([]); // Seçimleri temizle
     }
   };
 
@@ -187,15 +179,25 @@ export default function Dashboard() {
   // --- TOPLU İŞLEM VE MODAL YÖNETİMİ ---
 
   // Seçili tüm bakım görevlerini tek seferde onaylayan fonksiyon
-  const handleBulkApprove = () => {
+  const handleBulkApprove = async () => {
     if (selectedTaskIds.length === 0) return;
-    const count = selectedTaskIds.length;
-    alert(`${count} Adet bakım görevi onaylandı ve teknisyenlere iletildi! 🛠️`);
 
-    // Onaylananları listeden çıkar ve seçimleri sıfırla
-    setPendingTasks(prev => prev.filter(t => !selectedTaskIds.includes(t.id)));
-    setSelectedTaskIds([]);
-    setIsApprovalModalOpen(false);
+    try {
+      if (selectedTaskIds.length > 0) {
+        await Promise.all(selectedTaskIds.map(id => api.updateTaskStatus(id, "ONAYLANDI")));
+      }
+
+      const count = selectedTaskIds.length;
+      alert(`${count} Adet bakım görevi onaylandı ve teknik servis listesine aktarıldı!`);
+
+      // Onaylananları listeden çıkar ve seçimleri sıfırla
+      setPendingTasks(prev => prev.filter(t => !selectedTaskIds.includes(t.id)));
+      setSelectedTaskIds([]);
+      setIsApprovalModalOpen(false);
+    } catch (err) {
+      console.error("Görevler onaylanırken hata oluştu", err);
+      alert("Görevler onaylanırken bir hata oluştu!");
+    }
   };
 
   // Bir görevi onay listesine ekleme veya listeden çıkarma
@@ -213,16 +215,27 @@ export default function Dashboard() {
 
   // --- GRAFİKSEL HESAPLAMALAR VE ORANLAR ---
 
-  const totalMachinesCount = machinesList.length || 1; // Toplam makine sayısı
-  const bakimdaMakineCount = machinesList.filter(m => m.aktiflik_durumu === "Bakımda").length; // Bakımdaki makineler
-  const onayBekleyenCount = pendingTasks.length + pendingApprovals.length; // Bekleyen tüm bakım onayları + görevler
-  const bakimiYaklasanCount = machinesList.filter(m => m.aktiflik_durumu === "Bakımı Yaklaşan").length; // Takvimi yaklaşanlar
-
   // Hiçbir sorunu olmayan, normal çalışan aktif makine sayısını bul
-  const activeMachinesCount = Math.max(0, totalMachinesCount - bakimdaMakineCount - bakimiYaklasanCount);
+  const totalMachinesCount = machinesList.length || 0;
+  const bakimdaMakineCount = machinesList.filter(m => m.kategori === "Bakımda Olan").length;
+  const activeMachinesCount = machinesList.filter(m => m.kategori === "Aktif").length;
+
+  const onayBekleyenCount = pendingTasks.length + pendingApprovals.length; // Bekleyen tüm bakım onayları + görevler
+  const bakimiYaklasanCount = machinesList.filter(m => m.kategori === "Bakımı Yaklaşan").length; // Takvimi yaklaşanlar
 
   // Grafik paydası: Tüm kalemlerin toplamı (Grafiğin %100 tam daire görünmesi için)
   const chartTotal = (onayBekleyenCount + bakimdaMakineCount + bakimiYaklasanCount + activeMachinesCount) || 1;
+
+  // Fabrika OEE Hesaplaması (Availability temelli)
+  const factoryOee = totalMachinesCount > 0 ? ((activeMachinesCount / totalMachinesCount) * 100).toFixed(1) : 0;
+
+  // 8 Haftalık OEE Geçmişi Hazırlığı (7 Hafta Boş + Mevcut Hafta)
+  const oeeHistory = [
+    { week: "H-7", oee: 0 }, { week: "H-6", oee: 0 }, { week: "H-5", oee: 0 },
+    { week: "H-4", oee: 0 }, { week: "H-3", oee: 0 }, { week: "H-2", oee: 0 },
+    { week: "Geçen H.", oee: 0 },
+    { week: "Bu Hafta", oee: Number(factoryOee) }
+  ];
 
   // Doughnut grafiği dilimlerinin yüzde (%) oranları
   const bakimdaRatio = (bakimdaMakineCount / chartTotal) * 100;
@@ -238,157 +251,259 @@ export default function Dashboard() {
       const makineMaliyeti = m.satin_alma_maliyeti ? Number(m.satin_alma_maliyeti) : 100000;
       const toplamBakimGideri = (m.bakim_kaydi || []).reduce((sum, kayit) => sum + Number(kayit.bakim_maliyet || 0), 0);
       let gercekMaliyetYuzdesi = (toplamBakimGideri / makineMaliyeti) * 100;
-      if (toplamBakimGideri === 0) gercekMaliyetYuzdesi = Math.random() * 30;
       gercekMaliyetYuzdesi = parseFloat(gercekMaliyetYuzdesi.toFixed(1));
 
-      // 3 Renk Mantığı (İdeal, Dikkat, Kritik)
+      // 3 Renk Mantığı (İdeal, Dikkat, Kritik) - Kullanıcı Talebi: %5 Uyarı, %10 Kritik
       let renkCode = "#22C55E";
       let kRit = "İdeal";
-      if (gercekMaliyetYuzdesi >= 25) { renkCode = "#EF4444"; kRit = "Kritik Kayıp"; }
-      else if (gercekMaliyetYuzdesi >= 10) { renkCode = "#F59E0B"; kRit = "Uyarı / Risk"; }
+      if (gercekMaliyetYuzdesi >= 10) { renkCode = "#EF4444"; kRit = "Kritik Kayıp"; }
+      else if (gercekMaliyetYuzdesi >= 5) { renkCode = "#F59E0B"; kRit = "Uyarı / Risk"; }
       else { renkCode = "#22C55E"; kRit = "İdeal"; }
 
       const dbAlan = m.lokasyon?.[0]?.fabrika_alani;
-      let targetKat = m.lokasyon?.[0]?.kat || (index % 2 === 0 ? "Zemin Kat" : "1. Kat");
+      // Kat ataması: %50 zemin, %50 1. kat (ancak sıralı değil, daha karışık)
+      let targetKat = m.lokasyon?.[0]?.kat || (index % 5 < 3 ? "Zemin Kat" : "1. Kat");
 
       let targetBlock = dbAlan;
       if (!targetBlock) {
+        const mName = (m.ad || "").toUpperCase();
         if (targetKat === "Zemin Kat") {
-          const zones = ["Blok A", "Blok B", "Blok C", "Sevkiyat Alanı"];
-          targetBlock = zones[index % 4];
+          if (mName.includes("PRES") || mName.includes("BASKI")) targetBlock = "BÖLGE 1";
+          else if (mName.includes("LAZER") || mName.includes("KESİM")) targetBlock = "BÖLGE 2";
+          else if (mName.includes("MONTAJ") || mName.includes("HATT")) targetBlock = "BÖLGE 3";
+          else if (mName.includes("DEPO") || mName.includes("LOJİSTİK") || mName.includes("STOK")) targetBlock = "DEPO";
+          // Dağıtımı düzelttik: index % 4 yerine farklı bir çarpan kullanarak tüm bölgelere yayıyoruz
+          else targetBlock = ["BÖLGE 1", "BÖLGE 2", "BÖLGE 3", "DEPO"][(index * 3) % 4];
         } else {
-          const zones = ["Blok D", "Blok E", "Ofisler", "Blok F"];
-          targetBlock = zones[index % 4];
+          if (mName.includes("OFİS") || mName.includes("MASA")) targetBlock = "OFİS";
+          else if (mName.includes("KALİTE") || mName.includes("TEST")) targetBlock = "KALİTE";
+          else if (mName.includes("TEKNİK") || mName.includes("BAKIM")) targetBlock = "TEKNİK";
+          else targetBlock = ["BÖLGE D", "TEKNİK", "OFİS", "KALİTE"][(index * 7) % 4];
         }
       }
 
       if (!acc[targetKat]) acc[targetKat] = {};
       if (!acc[targetKat][targetBlock]) acc[targetKat][targetBlock] = [];
 
-      const displayNo = index + 1; // 1'den 100'e kadar sıralı numara
+      const displayNo = index + 1;
       acc[targetKat][targetBlock].push({ ...m, gercekMaliyetYuzdesi, renkCode, kRit, displayNo });
       return acc;
     }, {});
 
-    const renderMachinesInBlock = (katAdi, blokAdi) => {
-      const machs = groupedMachines[katAdi]?.[blokAdi] || [];
+    const renderMachinesInZone = (machines) => {
+      // Makineleri bölgenin kenarlarına (duvar diplerine) dizmek için özel mantık
       return (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '12px', justifyContent: 'center', maxWidth: '100%' }}>
-          {machs.map(m => (
-            <div
-              key={m.id}
-              onClick={(e) => { e.stopPropagation(); navigate(`/makine/${m.id}`); }}
-              style={{
-                width: isLarge ? '28px' : '20px',
-                height: isLarge ? '28px' : '20px',
-                borderRadius: '50%',
-                backgroundColor: m.renkCode,
-                cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: isLarge ? '11px' : '9px', fontWeight: 'bold',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                transition: 'transform 0.2s',
-                position: "relative"
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.transform = 'scale(1.2)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-              title={`${m.ad}\n(Sıra: ${m.displayNo}) - Risk: %${m.gercekMaliyetYuzdesi} (${m.kRit})`}
-            >
-              {m.displayNo}
-            </div>
-          ))}
+        <div style={{
+          position: 'relative',
+          width: '100%',
+          height: '100%',
+          minHeight: isLarge ? '120px' : '80px',
+          padding: '10px'
+        }}>
+          {machines.map((m, i) => {
+            // Kenar dizilimi hesaplama (Basit bir çevre dizilimi)
+            let pos = {};
+            const count = machines.length;
+            const sideCount = Math.ceil(count / 4);
+
+            if (i < sideCount) { // Üst kenar
+              pos = { top: '5px', left: `${(i / sideCount) * 85 + 5}%` };
+            } else if (i < sideCount * 2) { // Sağ kenar
+              pos = { right: '5px', top: `${((i - sideCount) / sideCount) * 75 + 15}%` };
+            } else if (i < sideCount * 3) { // Alt kenar
+              pos = { bottom: '5px', right: `${((i - sideCount * 2) / sideCount) * 85 + 5}%` };
+            } else { // Sol kenar
+              pos = { left: '5px', bottom: `${((i - sideCount * 3) / sideCount) * 75 + 15}%` };
+            }
+
+            return (
+              <div
+                key={m.id}
+                onClick={(e) => { e.stopPropagation(); navigate(`/makine/${m.id}`); }}
+                style={{
+                  position: 'absolute',
+                  ...pos,
+                  width: isLarge ? '24px' : '18px',
+                  height: isLarge ? '24px' : '18px',
+                  borderRadius: '4px',
+                  backgroundColor: m.renkCode,
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff', fontSize: isLarge ? '10px' : '8px', fontWeight: '950',
+                  boxShadow: `0 2px 4px rgba(0,0,0,0.15)`,
+                  border: "1.5px solid #fff",
+                  zIndex: 5,
+                  transition: 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                }}
+                onMouseOver={(e) => { e.currentTarget.style.transform = 'scale(1.3) rotate(5deg)'; e.currentTarget.style.zIndex = 20; }}
+                onMouseOut={(e) => { e.currentTarget.style.transform = 'scale(1) rotate(0deg)'; e.currentTarget.style.zIndex = 5; }}
+                title={`${m.ad}\nRisk: %${m.gercekMaliyetYuzdesi}`}
+              >
+                {m.displayNo}
+              </div>
+            );
+          })}
+          {/* Bölge ortasında teknik bir boşluk hissi */}
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            fontSize: '9px',
+            fontWeight: '900',
+            color: '#f1f5f9',
+            opacity: 0.5,
+            pointerEvents: 'none',
+            textTransform: 'uppercase',
+            letterSpacing: '2px'
+          }}>
+            İŞLEM ALANI
+          </div>
         </div>
       );
     }
 
-    const currentBlockStyle = { ...blokStyle, background: "#f0f7ff", borderTop: "4px solid #000", padding: isLarge ? "30px" : "15px", justifyContent: 'flex-start' };
-    const titleCol = { ...blokTitleStyle, fontSize: isLarge ? "20px" : "14px", color: "#000" };
-    const subCol = { ...blokSubTitleStyle, fontSize: isLarge ? "14px" : "11px", color: "#111" };
+    const gridZoneStyle = {
+      background: "#fff",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      padding: "8px",
+      position: "relative",
+      border: "2px solid #e2e8f0",
+      borderRadius: "12px",
+      boxShadow: "0 2px 4px rgba(0,0,0,0.02)",
+      zIndex: 2,
+      overflow: "hidden"
+    };
+    const aisleStyleV = {
+      background: "#f8fafc",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: "10px",
+      fontWeight: "950",
+      color: "#cbd5e1",
+      writingMode: "vertical-rl",
+      letterSpacing: "4px",
+      borderLeft: "1px dashed #e2e8f0",
+      borderRight: "1px dashed #e2e8f0"
+    };
+    const aisleStyleH = {
+      background: "#f8fafc",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: "10px",
+      fontWeight: "950",
+      color: "#cbd5e1",
+      letterSpacing: "8px",
+      borderTop: "1px dashed #e2e8f0",
+      borderBottom: "1px dashed #e2e8f0",
+      height: "30px"
+    };
+    const zoneLabelStyle = {
+      fontSize: "10px",
+      fontWeight: "950",
+      color: "#1e293b",
+      marginBottom: "6px",
+      borderBottom: "2px solid #3498db",
+      paddingBottom: "2px",
+      width: "100%",
+      textAlign: "center",
+      textTransform: "uppercase"
+    };
 
     return (
-      <div style={{ width: "100%", height: "100%", padding: isLarge ? "20px" : "40px 10px 10px 10px", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
-        <style>
-          {`
-            .no-scrollbar::-webkit-scrollbar { display: none; }
-          `}
-        </style>
-
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-          <span style={{ fontSize: isLarge ? "24px" : "16px", fontWeight: "bold", color: "#2c3e50" }}>
-            Fabrika Yerleşim Planı - {activeFloor === 0 ? "Zemin Kat" : "1. Kat"}
-          </span>
+      <div style={{
+        width: "100%",
+        height: "100%",
+        padding: isLarge ? "20px" : "10px",
+        display: "flex",
+        flexDirection: "column",
+        backgroundColor: "#ffffff",
+        borderRadius: "20px",
+        position: "relative",
+        overflow: "hidden",
+        border: "1px solid #e2e8f0",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "15px", zIndex: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: isLarge ? "20px" : "16px", fontWeight: "950", color: "#1e293b", letterSpacing: "1px" }}>
+                FABRİKA YERLEŞİM ALANI
+              </span>
+              <div style={{ padding: "3px 8px", background: "#f1f5f9", color: "#1e293b", border: "1px solid #e2e8f0", borderRadius: "5px", fontSize: "10px", fontWeight: "900" }}>
+                {activeFloor === 0 ? "ZEMİN KAT" : "1. KAT"}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: "10px", fontSize: "10px", fontWeight: "950" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "5px", color: "#22c55e" }}>● İDEAL (%0-5)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "5px", color: "#f59e0b" }}>● UYARI (%5-10)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#ef4444" }}>● KRİTİK (%10+)</div>
+            </div>
+          </div>
         </div>
 
-        {/* Legend (Harita Açıklaması) */}
-        <div style={{ display: "flex", gap: "10px", width: "100%", marginBottom: "15px", fontSize: "12px", fontWeight: "bold", flexWrap: "wrap", justifyContent: "flex-start", alignItems: "center" }}>
-          <span style={{ color: "#22C55E" }}>● İdeal (%0 - %10)</span>
-          <span style={{ color: "#F59E0B" }}>● Uyarı / Risk (%10 - %25)</span>
-          <span style={{ color: "#EF4444" }}>● Kritik Kayıp (%25+)</span>
-        </div>
-
-        {/* Fabrika Blokları (Grid Yapısı) */}
-        <div
-          className="no-scrollbar"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gridTemplateRows: isLarge ? "auto max-content" : "repeat(2, 1fr)",
-            gap: isLarge ? "15px" : "15px",
-            flex: 1,
-            minHeight: 0,
-            overflowY: "auto",
-            paddingRight: "5px",
-            msOverflowStyle: "none",
-            scrollbarWidth: "none"
-          }}>
+        <div style={{
+          flex: 1,
+          display: "grid",
+          gridTemplateColumns: "1fr 30px 1fr 30px 1fr",
+          gridTemplateRows: "1fr 30px 1fr",
+          gap: "0",
+          borderRadius: "12px",
+          position: "relative",
+          overflow: "hidden",
+          border: "2px solid #e2e8f0",
+          boxShadow: "0 5px 15px rgba(0,0,0,0.03)"
+        }}>
           {activeFloor === 0 ? (
             <>
-              {/* Zemin Kat Blokları */}
-              <div style={currentBlockStyle}>
-                <span style={titleCol}>Blok A</span>
-                <span style={subCol}>Pres Hattı</span>
-                {renderMachinesInBlock("Zemin Kat", "Blok A")}
+              <div style={gridZoneStyle}>
+                <span style={zoneLabelStyle}>BÖLGE 1 (PRES)</span>
+                {renderMachinesInZone(groupedMachines["Zemin Kat"]?.["BÖLGE 1"] || [])}
               </div>
-              <div style={currentBlockStyle}>
-                <span style={titleCol}>Blok B</span>
-                <span style={subCol}>Lazer Kesim</span>
-                {renderMachinesInBlock("Zemin Kat", "Blok B")}
+              <div style={aisleStyleV}>YOL</div>
+              <div style={gridZoneStyle}>
+                <span style={zoneLabelStyle}>BÖLGE 2 (LAZER)</span>
+                {renderMachinesInZone(groupedMachines["Zemin Kat"]?.["BÖLGE 2"] || [])}
               </div>
-              <div style={currentBlockStyle}>
-                <span style={titleCol}>Blok C</span>
-                <span style={subCol}>Lojistik & Ambar</span>
-                {renderMachinesInBlock("Zemin Kat", "Blok C")}
+              <div style={aisleStyleV}>YOL</div>
+              <div style={gridZoneStyle}>
+                <span style={zoneLabelStyle}>BÖLGE 3 (MONTAJ)</span>
+                {renderMachinesInZone(groupedMachines["Zemin Kat"]?.["BÖLGE 3"] || [])}
               </div>
-              <div style={{ ...currentBlockStyle, gridColumn: "span 3", border: "2px dashed #000", borderTop: "4px solid #000" }}>
-                <span style={titleCol}>Sevkiyat Alanı</span>
-                {renderMachinesInBlock("Zemin Kat", "Sevkiyat Alanı")}
+              <div style={{ ...aisleStyleH, gridColumn: "span 5" }}>ANA LOJİSTİK AKSI</div>
+              <div style={{ ...gridZoneStyle, gridColumn: "span 5" }}>
+                <span style={zoneLabelStyle}>DEPO VE SEVKİYAT MERKEZİ</span>
+                {renderMachinesInZone(groupedMachines["Zemin Kat"]?.["DEPO"] || [])}
               </div>
             </>
           ) : (
             <>
-              {/* 1. Kat Blokları */}
-              <div style={{ ...currentBlockStyle, gridColumn: "span 2" }}>
-                <span style={titleCol}>Blok D</span>
-                <span style={subCol}>Montaj Hattı</span>
-                {renderMachinesInBlock("1. Kat", "Blok D")}
+              <div style={gridZoneStyle}>
+                <span style={zoneLabelStyle}>BÖLGE D</span>
+                {renderMachinesInZone(groupedMachines["1. Kat"]?.["BÖLGE D"] || [])}
               </div>
-              <div style={currentBlockStyle}>
-                <span style={titleCol}>Blok E</span>
-                <span style={subCol}>Bakım & Teknik</span>
-                {renderMachinesInBlock("1. Kat", "Blok E")}
+              <div style={aisleStyleV}>YOL</div>
+              <div style={gridZoneStyle}>
+                <span style={zoneLabelStyle}>TEKNİK SERVİS</span>
+                {renderMachinesInZone(groupedMachines["1. Kat"]?.["TEKNİK"] || [])}
               </div>
-              <div style={{ ...currentBlockStyle, gridColumn: "span 1" }}>
-                <span style={titleCol}>Ofisler</span>
-                {renderMachinesInBlock("1. Kat", "Ofisler")}
+              <div style={aisleStyleV}>YOL</div>
+              <div style={gridZoneStyle}>
+                <span style={zoneLabelStyle}>LABORATUVAR</span>
+                {renderMachinesInZone(groupedMachines["1. Kat"]?.["OFİS"] || [])}
               </div>
-              <div style={{ ...currentBlockStyle, gridColumn: "span 2" }}>
-                <span style={titleCol}>Blok F</span>
-                <span style={subCol}>Kalite Kontrol</span>
-                {renderMachinesInBlock("1. Kat", "Blok F")}
+              <div style={{ ...aisleStyleH, gridColumn: "span 5" }}>YÖNETİM KORİDORU</div>
+              <div style={gridZoneStyle}>
+                <span style={zoneLabelStyle}>İDARİ OFİSLER</span>
+                {renderMachinesInZone([])}
+              </div>
+              <div style={aisleStyleV}>YOL</div>
+              <div style={{ ...gridZoneStyle, gridColumn: "span 3" }}>
+                <span style={zoneLabelStyle}>KALİTE KONTROL</span>
+                {renderMachinesInZone(groupedMachines["1. Kat"]?.["KALİTE"] || [])}
               </div>
             </>
           )}
@@ -396,56 +511,6 @@ export default function Dashboard() {
       </div>
     );
   };
-
-  // Frontend - Kat Planı Bileşeni (Recharts ile Maliyet Analizli Harita)
-  function KatPlani({ katVerisi, openMachineDetail }) {
-    // Recharts Scatter için özel Tooltip
-    const CustomTooltip = ({ active, payload }) => {
-      if (active && payload && payload.length) {
-        const data = payload[0].payload;
-        return (
-          <div style={{ backgroundColor: '#fff', border: `2px solid ${data.renkCode}`, padding: '12px', borderRadius: '8px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-            <p style={{ margin: '0 0 5px 0', fontWeight: 'bold', color: '#1e293b' }}>{data.makine_adi}</p>
-            <p style={{ margin: '0 0 5px 0', fontSize: '13px', color: '#475569' }}>📍 Makine ID: {data.makine_id}</p>
-            <p style={{ margin: '0 0 5px 0', fontSize: '14px', fontWeight: 'bold', color: data.renkCode }}>
-              Maliyet Oranı: %{data.maliyet_orani_yuzdesi}
-            </p>
-            <p style={{ margin: 0, fontSize: '11px', color: '#94a3b8', fontStyle: 'italic' }}>Tıklayarak Detaylara Git 🔍</p>
-          </div>
-        );
-      }
-      return null;
-    };
-
-    return (
-      <div className="grid-container" style={{ position: 'relative', width: '100%', height: '500px', background: '#f8fafc', border: '1px solid #cbd5e0', borderRadius: '12px', padding: '15px' }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.5} />
-            {/* X ve Y eksenlerinin fabrika zeminini taklit etmesi için */}
-            <XAxis type="number" dataKey="x" name="X Koordinatı" tick={{ fontSize: 11 }} domain={[0, 800]} />
-            <YAxis type="number" dataKey="y" name="Y Koordinatı" tick={{ fontSize: 11 }} domain={[0, 600]} />
-
-            {/* Noktaların (Bubble) büyüklüğünü sabitlemek için ZAxis */}
-            <ZAxis type="number" range={[500, 500]} />
-
-            <Tooltip content={<CustomTooltip />} cursor={{ strokeDasharray: '3 3' }} />
-
-            <Scatter
-              name="Makineler"
-              data={katVerisi}
-              onClick={(data) => openMachineDetail(data.makine_id)}
-              style={{ cursor: 'pointer' }}
-            >
-              {katVerisi.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.renkCode} stroke="#fff" strokeWidth={2} />
-              ))}
-            </Scatter>
-          </ScatterChart>
-        </ResponsiveContainer>
-      </div>
-    );
-  }
 
   // --- ANA RENDER SÜRECİ (Görünüm) ---
   return (
@@ -471,8 +536,8 @@ export default function Dashboard() {
               onMouseOut={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.05)"; }}
             >
               {/* Kart Başlığı */}
-              <div style={{ fontWeight: "800", fontSize: "15px", marginBottom: "12px", borderBottom: "2px solid #f1f2f6", paddingBottom: "8px", width: "100%", textAlign: "left", color: "#2c3e50", display: "flex", alignItems: "center", gap: "8px" }}>
-                Günlük Kritik Uyarılar
+              <div style={{ fontWeight: "800", fontSize: "15px", marginBottom: "12px", borderBottom: "2px solid #f1f2f6", paddingBottom: "8px", width: "100%", textAlign: "left", color: "#e74c3c", display: "flex", alignItems: "center", gap: "8px" }}>
+                Kritik Uyarılar
               </div>
               <div style={{ fontSize: "14px", fontWeight: "600", display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
 
@@ -503,32 +568,7 @@ export default function Dashboard() {
                   <strong style={{ fontSize: "18px", color: "#e74c3c", fontWeight: "900" }}>{yRCount}</strong>
                 </div>
 
-                {/* Kritik Garanti Rozeti: Garantisi bitmek üzere olanları listeler */}
-                <div
-                  onClick={() => setIsAlertModalOpen(true)}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    cursor: "pointer",
-                    padding: "8px 12px",
-                    background: "#f8fafc",
-                    borderRadius: "8px",
-                    border: "1px solid #e2e8f0",
-                    transition: "all 0.2s"
-                  }}
-                  onMouseOver={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = "#94a3b8"; }}
-                  onMouseOut={(e) => { e.currentTarget.style.background = "#f8fafc"; e.currentTarget.style.borderColor = "#e2e8f0"; }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <span style={{ fontSize: "16px" }}>⌛</span>
-                    <div style={{ display: "flex", flexDirection: "column" }}>
-                      <span style={{ fontSize: "11px", fontWeight: "700", color: "#334155", textTransform: "uppercase" }}>Kritik Garanti</span>
-                      <span style={{ fontSize: "10px", color: "#64748b" }}>Süresi Dolanlar</span>
-                    </div>
-                  </div>
-                  <strong style={{ fontSize: "18px", color: "#1e293b", fontWeight: "900" }}>{gKCount}</strong>
-                </div>
+
               </div>
             </div>
 
@@ -609,15 +649,18 @@ export default function Dashboard() {
               onMouseOut={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 15px rgba(0,0,0,0.05)"; }}
             >
               <div style={{ fontSize: "13px", color: "#7f8c8d", fontWeight: "700", textTransform: "uppercase", letterSpacing: "1px" }}>Fabrika OEE</div>
+              <div style={{ fontSize: "42px", fontWeight: "900", color: "#27ae60", marginTop: "5px", textShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>%{factoryOee}</div>
+              <div style={{ fontSize: "11px", color: "#2ecc71", fontWeight: "bold", background: "rgba(46, 204, 113, 0.1)", padding: "4px 8px", borderRadius: "15px", marginTop: "8px" }}>Canlı Verimlilik Analizi</div>
               <div style={{ fontSize: "42px", fontWeight: "900", color: "#27ae60", marginTop: "5px", textShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>%{fabrikaOee}</div>
               <div style={{ fontSize: "12px", color: "#2ecc71", fontWeight: "bold", background: "rgba(46, 204, 113, 0.1)", padding: "4px 8px", borderRadius: "15px", marginTop: "8px" }}></div>
-            </div>
-          </div>
+            </div >
+          </div >
 
           {/* ALT ALAN (Geniş Kaplama) */}
-          <div style={{ display: "flex", gap: "20px", width: "100%", flex: 1, minHeight: "450px" }}>
+          < div style={{ display: "flex", gap: "20px", width: "100%", flex: 1, minHeight: "450px" }
+          }>
             {/* FABRİKA HARİTASI (Dinamik) */}
-            <div
+            < div
               onClick={() => setIsMapExpanded(true)}
               style={{ ...mapBox, flex: 1.8, position: "relative", padding: "20px", cursor: "zoom-in", transition: "transform 0.2s" }}
               onMouseOver={(e) => e.currentTarget.style.transform = "scale(1.005)"}
@@ -638,10 +681,10 @@ export default function Dashboard() {
                 </button>
               </div>
               {renderFloorPlan(false)}
-            </div>
+            </div >
 
             {/* MAKİNE BAKIM YÖNETİMİ (Maliyet Grafiği) */}
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "20px" }}>
+            < div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "20px" }}>
               <div style={{ ...analizKartStil, flex: 1 }}>
                 <div style={analizBaslikStil}>Maliyet Analizi</div>
 
@@ -691,429 +734,428 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </div >
+          </div >
 
           {/* TAM EKRAN HARİTA MODAL */}
-          {isMapExpanded && (
-            <div style={modalOverlayStyle} onClick={() => setIsMapExpanded(false)}>
-              <div style={{ ...modalContentStyle, maxWidth: "90%", width: "1200px", height: "80vh", position: "relative" }} onClick={(e) => e.stopPropagation()}>
-                <button onClick={() => setIsMapExpanded(false)} style={{ ...closeBtnStyle, position: "absolute", top: "20px", right: "20px", fontSize: "30px" }}>✕</button>
+          {
+            isMapExpanded && (
+              <div style={modalOverlayStyle} onClick={() => setIsMapExpanded(false)}>
+                <div style={{ ...modalContentStyle, maxWidth: "90%", width: "1200px", height: "80vh", position: "relative" }} onClick={(e) => e.stopPropagation()}>
+                  <button onClick={() => setIsMapExpanded(false)} style={{ ...closeBtnStyle, position: "absolute", top: "20px", right: "20px", fontSize: "30px" }}>✕</button>
 
-                <div style={{ position: "absolute", top: "25px", right: "80px", display: "flex", gap: "10px", zIndex: 10 }}>
-                  <button
-                    onClick={() => setActiveFloor(0)}
-                    style={{ ...floorBtnStyle, padding: "10px 20px", background: activeFloor === 0 ? "#34495e" : "#f1f2f6", color: activeFloor === 0 ? "white" : "#333" }}
-                  >
-                    Zemin Kat
-                  </button>
-                  <button
-                    onClick={() => setActiveFloor(1)}
-                    style={{ ...floorBtnStyle, padding: "10px 20px", background: activeFloor === 1 ? "#34495e" : "#f1f2f6", color: activeFloor === 1 ? "white" : "#333" }}
-                  >
-                    1. Kat
-                  </button>
+                  <div style={{ position: "absolute", top: "25px", right: "80px", display: "flex", gap: "10px", zIndex: 10 }}>
+                    <button
+                      onClick={() => setActiveFloor(0)}
+                      style={{ ...floorBtnStyle, padding: "10px 20px", background: activeFloor === 0 ? "#34495e" : "#f1f2f6", color: activeFloor === 0 ? "white" : "#333" }}
+                    >
+                      Zemin Kat
+                    </button>
+                    <button
+                      onClick={() => setActiveFloor(1)}
+                      style={{ ...floorBtnStyle, padding: "10px 20px", background: activeFloor === 1 ? "#34495e" : "#f1f2f6", color: activeFloor === 1 ? "white" : "#333" }}
+                    >
+                      1. Kat
+                    </button>
+                  </div>
+
+                  {renderFloorPlan(true)}
+
+
                 </div>
-
-                {renderFloorPlan(true)}
-
-
               </div>
-            </div>
-          )}
+            )
+          }
 
 
 
-          {isApprovalModalOpen && (
-            <div style={modalOverlayStyle} onClick={() => setIsApprovalModalOpen(false)}>
-              <div style={{ ...modalContentStyle, maxWidth: "900px" }} onClick={(e) => e.stopPropagation()}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", borderBottom: "1px solid #eee", paddingBottom: "15px" }}>
-                  <h3 style={{ margin: 0, color: "#0f3460", fontSize: "20px" }}>🔧 Bakım Yönetim Merkezi</h3>
-                  <button onClick={() => setIsApprovalModalOpen(false)} style={closeBtnStyle}>✕</button>
-                </div>
+          {
+            isApprovalModalOpen && (
+              <div style={modalOverlayStyle} onClick={() => setIsApprovalModalOpen(false)}>
+                <div style={{ ...modalContentStyle, maxWidth: "900px" }} onClick={(e) => e.stopPropagation()}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", borderBottom: "1px solid #eee", paddingBottom: "15px" }}>
+                    <h3 style={{ margin: 0, color: "#0f3460", fontSize: "20px" }}>Makine Durumları</h3>
+                    <button onClick={() => setIsApprovalModalOpen(false)} style={closeBtnStyle}>✕</button>
+                  </div>
 
-                <div style={{ display: "flex", gap: "25px", alignItems: "flex-start" }}>
-                  {/* LEFT COLUMN: Chart + Stats + Machine List */}
-                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "20px" }}>
+                  <div style={{ display: "flex", gap: "25px", alignItems: "flex-start" }}>
+                    {/* LEFT COLUMN: Chart + Stats + Machine List */}
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "20px" }}>
 
-                    {/* Modern Top Chart Section (KPI 2 ile Senkronize) */}
-                    <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: "25px", boxShadow: "0 4px 12px rgba(0,0,0,0.03)" }}>
-                      <div style={{ position: "relative", width: "115px", height: "115px", flexShrink: 0 }}>
-                        <div style={{ position: "absolute", inset: "-6px", borderRadius: "50%", background: "rgba(241, 245, 249, 0.4)", zIndex: 0, border: "1px solid #e2e8f0" }}></div>
-                        <svg width="115" height="115" viewBox="0 0 42 42" style={{ transform: "rotate(-90deg)", position: "relative", zIndex: 1, filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.08))" }}>
-                          <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#f1f5f9" strokeWidth="6"></circle>
-                          <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#2ecc71" strokeWidth="6" strokeDasharray={`${activeRatio} 100`} strokeDashoffset="0"></circle>
-                          <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#3498db" strokeWidth="6" strokeDasharray={`${yaklasanRatio} 100`} strokeDashoffset={-activeRatio}></circle>
-                          <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#f39c12" strokeWidth="6" strokeDasharray={`${bakimdaRatio} 100`} strokeDashoffset={-(activeRatio + yaklasanRatio)}></circle>
-                          <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#e94560" strokeWidth="6" strokeDasharray={`${onayBekleyenRatio} 100`} strokeDashoffset={-(activeRatio + yaklasanRatio + bakimdaRatio)}></circle>
-                        </svg>
-                        <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", zIndex: 2 }}>
-                          <div style={{ fontSize: "24px", fontWeight: "950", color: "#0f3460", lineHeight: 1 }}>{chartTotal}</div>
-                          <div style={{ fontSize: "8px", color: "#64748b", fontWeight: "800", marginTop: "2px" }}>TOPLAM</div>
+                      {/* Modern Top Chart Section (KPI 2 ile Senkronize) */}
+                      <div style={{ background: "#fff", padding: "20px", borderRadius: "12px", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: "25px", boxShadow: "0 4px 12px rgba(0,0,0,0.03)" }}>
+                        <div style={{ position: "relative", width: "115px", height: "115px", flexShrink: 0 }}>
+                          <div style={{ position: "absolute", inset: "-6px", borderRadius: "50%", background: "rgba(241, 245, 249, 0.4)", zIndex: 0, border: "1px solid #e2e8f0" }}></div>
+                          <svg width="115" height="115" viewBox="0 0 42 42" style={{ transform: "rotate(-90deg)", position: "relative", zIndex: 1, filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.08))" }}>
+                            <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#f1f5f9" strokeWidth="6"></circle>
+                            <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#2ecc71" strokeWidth="6" strokeDasharray={`${activeRatio} 100`} strokeDashoffset="0"></circle>
+                            <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#3498db" strokeWidth="6" strokeDasharray={`${yaklasanRatio} 100`} strokeDashoffset={-activeRatio}></circle>
+                            <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#f39c12" strokeWidth="6" strokeDasharray={`${bakimdaRatio} 100`} strokeDashoffset={-(activeRatio + yaklasanRatio)}></circle>
+                            <circle cx="21" cy="21" r="15.915" fill="transparent" stroke="#e94560" strokeWidth="6" strokeDasharray={`${onayBekleyenRatio} 100`} strokeDashoffset={-(activeRatio + yaklasanRatio + bakimdaRatio)}></circle>
+                          </svg>
+                          <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", zIndex: 2 }}>
+                            <div style={{ fontSize: "24px", fontWeight: "950", color: "#0f3460", lineHeight: 1 }}>{chartTotal}</div>
+                            <div style={{ fontSize: "8px", color: "#64748b", fontWeight: "800", marginTop: "2px" }}>TOPLAM</div>
+                          </div>
+                        </div>
+
+                        {/* Modal Stat Breakdown (Mini Daireler Eklenmiş Legend) */}
+                        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "6px" }}>
+                          {[
+                            { id: "pending", label: "Onay Bekleyenler", count: onayBekleyenCount, color: "#e94560", ratio: onayBekleyenRatio },
+                            { id: "maintenance", label: "Şu An Bakımda", count: bakimdaMakineCount, color: "#f39c12", ratio: bakimdaRatio },
+                            { id: "upcoming", label: "Bakımı Yaklaşan", count: bakimiYaklasanCount, color: "#3498db", ratio: yaklasanRatio },
+                            { id: "active", label: "Aktif / Normal", count: activeMachinesCount, color: "#2ecc71", ratio: activeRatio }
+                          ].map(item => (
+                            <div
+                              key={item.id}
+                              onClick={() => setActiveDetailTab(item.id)}
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                padding: "6px 12px",
+                                background: activeDetailTab === item.id ? "#f8fafc" : "transparent",
+                                borderRadius: "8px",
+                                border: "1px solid",
+                                borderColor: activeDetailTab === item.id ? item.color : "transparent",
+                                cursor: "pointer",
+                                transition: "all 0.2s"
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <svg width="14" height="14" viewBox="0 0 42 42">
+                                  <circle cx="21" cy="21" r="15.9" fill="transparent" stroke="#eee" strokeWidth="8"></circle>
+                                  <circle cx="21" cy="21" r="15.9" fill="transparent" stroke={item.color} strokeWidth="8" strokeDasharray={`${item.ratio} 100`} transform="rotate(-90 21 21)"></circle>
+                                </svg>
+                                <span style={{ fontWeight: "700", fontSize: "11px", color: "#475569" }}>{item.label}</span>
+                              </div>
+                              <span style={{ fontWeight: "900", fontSize: "13px", color: item.color }}>{item.count}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
 
-                      {/* Modal Stat Breakdown (Mini Daireler Eklenmiş Legend) */}
-                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "6px" }}>
-                        {[
-                          { id: "pending", label: "Onay Bekleyenler", count: onayBekleyenCount, color: "#e94560", ratio: onayBekleyenRatio },
-                          { id: "maintenance", label: "Şu An Bakımda", count: bakimdaMakineCount, color: "#f39c12", ratio: bakimdaRatio },
-                          { id: "upcoming", label: "Bakımı Yaklaşan", count: bakimiYaklasanCount, color: "#3498db", ratio: yaklasanRatio },
-                          { id: "total", label: "Aktif / Normal", count: activeMachinesCount, color: "#2ecc71", ratio: activeRatio }
-                        ].map(item => (
-                          <div
-                            key={item.id}
-                            onClick={() => setActiveDetailTab(item.id === "pending" ? "total" : item.id)}
+                      {/* Machine Names List (Single Neutral Color, Clean) */}
+                      <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", flex: 1, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+                        <div style={{ padding: "14px 16px", borderBottom: "1px solid #e2e8f0", fontSize: "13px", fontWeight: "700", color: "#1e293b", background: "#f8fafc", borderTopLeftRadius: "12px", borderTopRightRadius: "12px" }}>
+                          {activeDetailTab === "active" ? "Aktif Makineler" : activeDetailTab === "upcoming" ? "Yaklaşan Bakımlar" : activeDetailTab === "maintenance" ? "Bakımda Olanlar" : activeDetailTab === "pending" ? "Onay Bekleyen Makineler" : "Tüm Makineler"}
+                        </div>
+                        <div style={{ maxHeight: "250px", overflowY: "auto", padding: "8px" }}>
+                          {(activeDetailTab === "active"
+                            ? machinesList.filter(m => m.aktiflik_durumu !== "Bakımda" && m.aktiflik_durumu !== "Bakımı Yaklaşan")
+                            : activeDetailTab === "upcoming"
+                              ? machinesList.filter(m => m.aktiflik_durumu === "Bakımı Yaklaşan")
+                              : activeDetailTab === "maintenance"
+                                ? machinesList.filter(m => m.aktiflik_durumu === "Bakımda")
+                                : activeDetailTab === "pending"
+                                  ? machinesList.filter(m => pendingTasks.some(t => t.makine_ad === (m.makine_adi || m.makine_ad)))
+                                  : machinesList
+                          ).map(m => (
+                            <div key={m.id} style={{
+                              padding: "10px 12px",
+                              borderBottom: "1px solid #f1f5f9",
+                              fontSize: "14px",
+                              fontWeight: "800",
+                              color: "#000" // Premium dark black
+                            }}>
+                              {m.makine_adi || m.makine_ad}
+                            </div>
+                          ))}
+                          {((activeDetailTab !== "total" && activeDetailTab !== "active" && activeDetailTab !== "pending") &&
+                            machinesList.filter(m => activeDetailTab === "upcoming" ? m.aktiflik_durumu === "Bakımı Yaklaşan" : m.aktiflik_durumu === "Bakımda").length === 0) && (
+                              <div style={{ textAlign: "center", padding: "20px", color: "#94a3b8", fontSize: "13px" }}>Makine bulunmuyor.</div>
+                            )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* RIGHT COLUMN: Actionable Approval Box */}
+                    <div style={{ flex: 1.2, background: "#fff", borderRadius: "16px", border: "2px solid #e94560", padding: "20px", boxShadow: "0 10px 25px rgba(233,69,96,0.1)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+                        <h4 style={{ margin: 0, color: "#e94560", fontSize: "17px", fontWeight: "800" }}>Onay Bekleyenler</h4>
+                        <span style={{ fontSize: "11px", background: "#e94560", color: "#fff", padding: "2px 8px", borderRadius: "20px", fontWeight: "bold" }}>{onayBekleyenCount} GÖREV</span>
+                      </div>
+
+                      <div style={{ maxHeight: "380px", overflowY: "auto", paddingRight: "5px" }}>
+                        {pendingTasks.length === 0 ? (
+                          <div style={{ textAlign: "center", padding: "40px 20px", color: "#94a3b8", background: "#f8fafc", borderRadius: "12px", border: "1px dashed #cbd5e0" }}>
+                            <span style={{ fontSize: "24px" }}>✅</span>
+                            <div style={{ marginTop: "10px", fontSize: "13px", fontWeight: "bold" }}>Onay Bekleyen İş Yok</div>
+                          </div>
+                        ) : (
+                          pendingTasks.map(t => {
+                            const isSelected = selectedTaskIds.includes(t.id);
+                            return (
+                              <label key={t.id}
+                                style={{
+                                  padding: "12px",
+                                  background: isSelected ? "#fff1f2" : "#fff",
+                                  borderRadius: "12px",
+                                  border: isSelected ? "1px solid #e94560" : "1px solid #f1f5f9",
+                                  marginBottom: "10px",
+                                  cursor: "pointer",
+                                  transition: "all 0.2s",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "15px"
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => toggleTaskSelection(t.id)}
+                                  style={{
+                                    width: "20px",
+                                    height: "20px",
+                                    accentColor: "#e94560",
+                                    cursor: "pointer"
+                                  }}
+                                />
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontWeight: "700", color: "#1e293b", fontSize: "14px" }}>{t.makine_ad}</div>
+                                  <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>{t.ariza_notu}</div>
+                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    const machine = machinesList.find(m => m.ad === t.makine_ad);
+                                    if (machine) navigate(`/makine/${machine.id}`);
+                                    else alert("Makine detay bilgisi bulunamadı.");
+                                  }}
+                                  style={{
+                                    padding: "6px 12px",
+                                    background: "#f1f5f9",
+                                    color: "#475569",
+                                    border: "1px solid #e2e8f0",
+                                    borderRadius: "8px",
+                                    fontSize: "11px",
+                                    fontWeight: "800",
+                                    cursor: "pointer",
+                                    transition: "0.2s",
+                                    whiteSpace: "nowrap"
+                                  }}
+                                  onMouseOver={(e) => { e.currentTarget.style.background = "#e2e8f0"; e.currentTarget.style.color = "#1e293b"; }}
+                                  onMouseOut={(e) => { e.currentTarget.style.background = "#f1f5f9"; e.currentTarget.style.color = "#475569"; }}
+                                >
+                                  Detay Gör
+                                </button>
+                              </label>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {selectedTaskIds.length > 0 && (
+                        <div style={{ marginTop: "20px", display: "flex", gap: "10px" }}>
+                          <button
+                            onClick={handleBulkApprove}
                             style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              padding: "6px 12px",
-                              background: (activeDetailTab === item.id || (activeDetailTab === "total" && item.id === "total")) ? "#f8fafc" : "transparent",
-                              borderRadius: "8px",
-                              border: "1px solid",
-                              borderColor: (activeDetailTab === item.id || (activeDetailTab === "total" && item.id === "total")) ? item.color : "transparent",
+                              flex: 2,
+                              padding: "15px",
+                              background: "linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "12px",
+                              fontSize: "14px",
+                              fontWeight: "900",
+                              cursor: "pointer",
+                              boxShadow: "0 6px 15px rgba(46, 204, 113, 0.3)",
+                              transition: "all 0.2s"
+                            }}
+                          >
+                            {selectedTaskIds.length} BAKIMI ONAYLA
+                          </button>
+                          <button
+                            onClick={handleBulkIgnore}
+                            style={{
+                              flex: 1,
+                              padding: "15px",
+                              background: "#94a3b8",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "12px",
+                              fontSize: "14px",
+                              fontWeight: "900",
                               cursor: "pointer",
                               transition: "all 0.2s"
                             }}
                           >
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <svg width="14" height="14" viewBox="0 0 42 42">
-                                <circle cx="21" cy="21" r="15.9" fill="transparent" stroke="#eee" strokeWidth="8"></circle>
-                                <circle cx="21" cy="21" r="15.9" fill="transparent" stroke={item.color} strokeWidth="8" strokeDasharray={`${item.ratio} 100`} transform="rotate(-90 21 21)"></circle>
-                              </svg>
-                              <span style={{ fontWeight: "700", fontSize: "11px", color: "#475569" }}>{item.label}</span>
-                            </div>
-                            <span style={{ fontWeight: "900", fontSize: "13px", color: item.color }}>{item.count}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Machine Names List (Single Neutral Color, Clean) */}
-                    <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", flex: 1, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-                      <div style={{ padding: "14px 16px", borderBottom: "1px solid #e2e8f0", fontSize: "13px", fontWeight: "700", color: "#1e293b", background: "#f8fafc", borderTopLeftRadius: "12px", borderTopRightRadius: "12px" }}>
-                        {activeDetailTab === "total" ? "Tüm Makineler" : activeDetailTab === "upcoming" ? "Yaklaşan Bakımlar" : "Bakımda Olanlar"}
-                      </div>
-                      <div style={{ maxHeight: "250px", overflowY: "auto", padding: "8px" }}>
-                        {(activeDetailTab === "total"
-                          ? machinesList
-                          : activeDetailTab === "upcoming"
-                            ? machinesList.filter(m => m.aktiflik_durumu === "Bakımı Yaklaşan")
-                            : machinesList.filter(m => m.aktiflik_durumu === "Bakımda")
-                        ).map(m => (
-                          <div key={m.id} style={{
-                            padding: "10px 12px",
-                            borderBottom: "1px solid #f1f5f9",
-                            fontSize: "13px",
-                            fontWeight: "500",
-                            color: "#334155" // Neutral dark grey
-                          }}>
-                            {m.makine_ad}
-                          </div>
-                        ))}
-                        {(activeDetailTab !== "total" && machinesList.filter(m => activeDetailTab === "upcoming" ? m.aktiflik_durumu === "Bakımı Yaklaşan" : m.aktiflik_durumu === "Bakımda").length === 0) && (
-                          <div style={{ textAlign: "center", padding: "20px", color: "#94a3b8", fontSize: "13px" }}>Makine bulunmuyor.</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* RIGHT COLUMN: Actionable Approval Box */}
-                  <div style={{ flex: 1.2, background: "#fff", borderRadius: "16px", border: "2px solid #e94560", padding: "20px", boxShadow: "0 10px 25px rgba(233,69,96,0.1)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-                      <h4 style={{ margin: 0, color: "#e94560", fontSize: "17px", fontWeight: "800" }}>Onay Bekleyenler</h4>
-                      <span style={{ fontSize: "11px", background: "#e94560", color: "#fff", padding: "2px 8px", borderRadius: "20px", fontWeight: "bold" }}>{onayBekleyenCount} GÖREV</span>
-                    </div>
-
-                    <div style={{ maxHeight: "380px", overflowY: "auto", paddingRight: "5px" }}>
-                      {pendingTasks.length === 0 ? (
-                        <div style={{ textAlign: "center", padding: "40px 20px", color: "#94a3b8", background: "#f8fafc", borderRadius: "12px", border: "1px dashed #cbd5e0" }}>
-                          <span style={{ fontSize: "24px" }}>✅</span>
-                          <div style={{ marginTop: "10px", fontSize: "13px", fontWeight: "bold" }}>Onay Bekleyen İş Yok</div>
+                            YOKSAY
+                          </button>
                         </div>
-                      ) : (
-                        pendingTasks.map(t => {
-                          const isSelected = selectedTaskIds.includes(t.id);
-                          return (
-                            <label key={t.id}
-                              style={{
-                                padding: "12px",
-                                background: isSelected ? "#fff1f2" : "#fff",
-                                borderRadius: "12px",
-                                border: isSelected ? "1px solid #e94560" : "1px solid #f1f5f9",
-                                marginBottom: "10px",
-                                cursor: "pointer",
-                                transition: "all 0.2s",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "15px"
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => toggleTaskSelection(t.id)}
-                                style={{
-                                  width: "20px",
-                                  height: "20px",
-                                  accentColor: "#e94560",
-                                  cursor: "pointer"
-                                }}
-                              />
-                              <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: "700", color: "#1e293b", fontSize: "14px" }}>{t.makine_ad}</div>
-                                <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>{t.ariza_notu}</div>
-                              </div>
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  const machine = machinesList.find(m => m.ad === t.makine_ad);
-                                  if (machine) navigate(`/makine/${machine.id}`);
-                                  else alert("Makine detay bilgisi bulunamadı.");
-                                }}
-                                style={{
-                                  padding: "6px 12px",
-                                  background: "#f1f5f9",
-                                  color: "#475569",
-                                  border: "1px solid #e2e8f0",
-                                  borderRadius: "8px",
-                                  fontSize: "11px",
-                                  fontWeight: "800",
-                                  cursor: "pointer",
-                                  transition: "0.2s",
-                                  whiteSpace: "nowrap"
-                                }}
-                                onMouseOver={(e) => { e.currentTarget.style.background = "#e2e8f0"; e.currentTarget.style.color = "#1e293b"; }}
-                                onMouseOut={(e) => { e.currentTarget.style.background = "#f1f5f9"; e.currentTarget.style.color = "#475569"; }}
-                              >
-                                Detay Gör
-                              </button>
-                            </label>
-                          );
-                        })
                       )}
                     </div>
-
-                    {selectedTaskIds.length > 0 && (
-                      <button
-                        onClick={handleBulkApprove}
-                        style={{
-                          marginTop: "20px",
-                          width: "100%",
-                          padding: "15px",
-                          background: "linear-gradient(135deg, #e94560 0%, #c0392b 100%)",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "12px",
-                          fontSize: "14px",
-                          fontWeight: "900",
-                          cursor: "pointer",
-                          boxShadow: "0 6px 15px rgba(233, 69, 96, 0.3)",
-                          transition: "all 0.2s"
-                        }}
-                      >
-                        {selectedTaskIds.length} BAKIMI ONAYLA
-                      </button>
-                    )}
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            )
+          }
 
           {/* ONAYLAR VE ARIZA LİSTESİ MODAL (POP-UP) */}
-          {isAlertModalOpen && (
-            <div style={modalOverlayStyle}>
-              <div style={modalContentStyle}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", borderBottom: "1px solid #eee", paddingBottom: "15px" }}>
-                  <h3 style={{ margin: 0, color: "#0f3460", fontSize: "20px" }}>Riskli Makineler Tablosu</h3>
-                  <button onClick={() => { setIsAlertModalOpen(false); setActiveBreakdownId(null); }} style={closeBtnStyle}>✕</button>
-                </div>
+          {
+            isAlertModalOpen && (
+              <div style={modalOverlayStyle}>
+                <div style={modalContentStyle}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", borderBottom: "1px solid #eee", paddingBottom: "15px" }}>
+                    <h3 style={{ margin: 0, color: "#0f3460", fontSize: "20px" }}>Riskli Makineler Tablosu</h3>
+                    <button onClick={() => { setIsAlertModalOpen(false); setActiveBreakdownId(null); }} style={closeBtnStyle}>✕</button>
+                  </div>
 
-                <div style={{ maxHeight: "60vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px", paddingRight: "10px" }}>
-                  {riskyMachines
-                    .sort((a, b) => {
-                      const priority = { "Yüksek Riskli": 3, "Bakımı Yaklaşan": 2, "Bakımda Olan": 1 };
-                      return (priority[b.kategori] || 0) - (priority[a.kategori] || 0);
-                    })
-                    .map(m => (
-                      <div key={m.id} style={{ position: "relative", padding: "20px", background: "white", borderRadius: "12px", border: "1px solid #e1e5eb", borderLeft: `6px solid ${getCategoryColor(m.kategori, m.garantiDurumu)}`, boxShadow: "0 2px 8px rgba(0,0,0,0.02)", overflow: "hidden" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                          <div>
-                            {m.garantiDurumu === "Kritik" && (
-                              <div style={{
-                                position: "absolute",
-                                top: "0",
-                                right: "20px",
-                                background: "#fefce8",
-                                color: "#854d0e",
-                                padding: "4px 12px",
-                                borderRadius: "0 0 8px 8px",
-                                fontSize: "10px",
-                                fontWeight: "900",
-                                border: "1px solid #fef08a",
-                                borderTop: "none",
-                                textTransform: "uppercase",
-                                letterSpacing: "1px",
-                                boxShadow: "0 2px 4px rgba(0,0,0,0.05)"
-                              }}>
-                                Garanti Riskli
-                              </div>
-                            )}
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px", borderBottom: "1px solid #f1f5f9", transition: "0.2s" }}>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "4px" }}>
-                                  <strong style={{ fontSize: "19px", color: "#1e293b" }}>{m.ad}</strong>
-                                </div>
-                                <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
-                                  {/* Yüksek riskli makineler için kırmızı/gri rozet */}
-                                  {m.kategori === "Yüksek Riskli" && (
+                  <div style={{ maxHeight: "60vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px", paddingRight: "10px" }}>
+                    {riskyMachines
+                      .sort((a, b) => {
+                        const priority = { "Yüksek Riskli": 3, "Bakımı Yaklaşan": 2, "Bakımda Olan": 1 };
+                        return (priority[b.kategori] || 0) - (priority[a.kategori] || 0);
+                      })
+                      .map(m => (
+                        <div key={m.id} style={{ position: "relative", padding: "20px", background: "white", borderRadius: "12px", border: "1px solid #e1e5eb", borderLeft: "6px solid #e74c3c", boxShadow: "0 2px 8px rgba(0,0,0,0.02)", overflow: "hidden" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px", borderBottom: "1px solid #f1f5f9", transition: "0.2s" }}>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "4px" }}>
+                                    <strong style={{ fontSize: "19px", color: "#1e293b" }}>{m.ad}</strong>
+                                  </div>
+                                  <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
                                     <span style={{ fontSize: "11px", fontWeight: "800", color: "#64748b", background: "#f1f5f9", padding: "4px 12px", borderRadius: "20px", display: "inline-flex", alignItems: "center", gap: "5px", border: "1px solid #e2e8f0" }}>
-                                      🚩 Yüksek Risk
+                                      🚩 Yüksek Riskli Makine
                                     </span>
-                                  )}
+                                  </div>
+                                </div>
+                                {/* Aksiyon Butonları: Detay, Arıza Kaydı ve Yoksay */}
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", minWidth: "360px" }}>
+                                  <button
+                                    onClick={() => navigate(`/makine/${m.id}`)}
+                                    style={{ ...btnStyle, background: "#1e293b", width: "100%", minWidth: "0" }}
+                                  >
+                                    Detay Gör
+                                  </button>
+                                  <button
+                                    onClick={() => setActiveBreakdownId(activeBreakdownId === m.id ? null : m.id)}
+                                    style={{ ...btnStyle, background: "#e94560", width: "100%", minWidth: "0" }}
+                                  >
+                                    {activeBreakdownId === m.id ? "Gizle" : "Arıza Kaydı"}
+                                  </button>
+                                  <button
+                                    onClick={() => handleIgnoreMachine(m.id, m.ad)}
+                                    style={{ ...btnStyle, background: "#94a3b8", width: "100%", minWidth: "0" }}
+                                  >
+                                    Yoksay
+                                  </button>
                                 </div>
                               </div>
-                              {/* Aksiyon Butonları: Detay, Arıza Kaydı ve Yoksay */}
-                              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", minWidth: "360px" }}>
-                                <button
-                                  onClick={() => navigate(`/makine/${m.id}`)}
-                                  style={{ ...btnStyle, background: "#1e293b", width: "100%", minWidth: "0" }}
-                                >
-                                  Detay Gör
-                                </button>
-                                <button
-                                  onClick={() => setActiveBreakdownId(activeBreakdownId === m.id ? null : m.id)}
-                                  style={{ ...btnStyle, background: "#e94560", width: "100%", minWidth: "0" }}
-                                >
-                                  {activeBreakdownId === m.id ? "Gizle" : "Arıza Kaydı"}
-                                </button>
-                                <button
-                                  onClick={() => handleIgnoreMachine(m.id, m.ad)}
-                                  style={{ ...btnStyle, background: "#94a3b8", width: "100%", minWidth: "0" }}
-                                >
-                                  Yoksay
-                                </button>
-                              </div>
-                            </div>
 
-                            {/* ARIZA KAYDI FORMU */}
-                            {activeBreakdownId === m.id && (
-                              <div style={{ marginTop: "20px", padding: "20px", background: "white", borderRadius: "8px", border: "2px solid #e1e5eb" }}>
-                                <div style={{ marginBottom: "12px", fontWeight: "bold", fontSize: "16px", color: "#333" }}>Detaylı Arıza Açıklaması:</div>
-                                <textarea
-                                  value={breakdownDesc}
-                                  onChange={(e) => setBreakdownDesc(e.target.value)}
-                                  placeholder="Açıklama..."
-                                  style={{ width: "100%", padding: "15px", boxSizing: "border-box", borderRadius: "6px", border: "1px solid #ccc", outline: "none", minHeight: "100px", marginBottom: "15px", fontSize: "15px", resize: "vertical" }}
-                                />
-                                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                                  <button onClick={() => handleCreateBreakdown(m)} style={saveBtnStyle}>Kaydet ve Bildir</button>
+                              {/* ARIZA KAYDI FORMU */}
+                              {activeBreakdownId === m.id && (
+                                <div style={{ marginTop: "20px", padding: "20px", background: "white", borderRadius: "8px", border: "2px solid #e1e5eb" }}>
+                                  <div style={{ marginBottom: "12px", fontWeight: "bold", fontSize: "16px", color: "#333" }}>Detaylı Arıza Açıklaması:</div>
+                                  <textarea
+                                    value={breakdownDesc}
+                                    onChange={(e) => setBreakdownDesc(e.target.value)}
+                                    placeholder="Açıklama..."
+                                    style={{ width: "100%", padding: "15px", boxSizing: "border-box", borderRadius: "6px", border: "1px solid #ccc", outline: "none", minHeight: "100px", marginBottom: "15px", fontSize: "15px", resize: "vertical" }}
+                                  />
+                                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                                    <button onClick={() => handleCreateBreakdown(m)} style={saveBtnStyle}>Kaydet ve Bildir</button>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )
+          }
 
           {/* OEE HAFTALIK DETAY MODAL */}
-          {isOeeModalOpen && (
-            <div style={modalOverlayStyle} onClick={() => setIsOeeModalOpen(false)}>
-              <div style={{ ...modalContentStyle, maxWidth: "800px" }} onClick={(e) => e.stopPropagation()}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", borderBottom: "1px solid #eee", paddingBottom: "15px" }}>
-                  <h3 style={{ margin: 0, color: "#27ae60", fontSize: "22px", display: "flex", alignItems: "center", gap: "10px" }}>
-                    Fabrika OEE (Genel Ekipman Etkinliği) Gelişimi
-                  </h3>
-                  <button onClick={() => setIsOeeModalOpen(false)} style={closeBtnStyle}>✕</button>
-                </div>
+          {
+            isOeeModalOpen && (
+              <div style={modalOverlayStyle} onClick={() => setIsOeeModalOpen(false)}>
+                <div style={{ ...modalContentStyle, maxWidth: "800px" }} onClick={(e) => e.stopPropagation()}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", borderBottom: "1px solid #eee", paddingBottom: "15px" }}>
+                    <h3 style={{ margin: 0, color: "#27ae60", fontSize: "22px", display: "flex", alignItems: "center", gap: "10px" }}>
+                      Fabrika OEE (Genel Ekipman Etkinliği) Gelişimi
+                    </h3>
+                    <button onClick={() => setIsOeeModalOpen(false)} style={closeBtnStyle}>✕</button>
+                  </div>
 
-                <div style={{ padding: "15px", background: "rgba(46, 204, 113, 0.05)", borderRadius: "12px", marginBottom: "25px", border: "1px solid rgba(46, 204, 113, 0.2)" }}>
-                  <p style={{ margin: 0, color: "#2c3e50", fontSize: "14px", lineHeight: "1.6" }}>
-                    OEE skorumuz son haftalarda istikrarlı bir şekilde yükseliyor. Bu artış, özellikle kestirimci bakım stratejilerinin devreye sokulmasıyla <strong>Kullanılabilirlik (Availability)</strong> oranındaki iyileşmeden kaynaklanmaktadır.
-                  </p>
-                </div>
+                  <div style={{ padding: "15px", background: "rgba(46, 204, 113, 0.05)", borderRadius: "12px", marginBottom: "25px", border: "1px solid rgba(46, 204, 113, 0.2)" }}>
+                    <p style={{ margin: 0, color: "#2c3e50", fontSize: "14px", lineHeight: "1.6" }}>
+                      OEE skoru, fabrikadaki makinelerin <strong>Kullanılabilirlik (Availability)</strong>, Performans ve Kalite oranlarının bileşkesidir. Şu anki veriler canlı makine durumlarına dayanmaktadır.
+                    </p>
+                  </div>
 
-                {/* Sütun Grafiği (Bar Chart): Haftalık OEE skorlarını barlarla görselleştirir */}
-                <div style={{ height: "250px", display: "flex", alignItems: "flex-end", gap: "30px", padding: "20px 10px", borderBottom: "2px solid #ecf0f1", overflowX: "auto" }}>
-                  {oeeWeeklyData.map((d, i) => {
-                    const barHeight = (d.oee - 70) * 3; // Ölçeklendirme hesabıyla bar yüksekliği
-                    const isCurrent = i === oeeWeeklyData.length - 1; // En son (mevcut) haftayı kontrol et
-                    return (
-                      <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1, minWidth: "50px", position: "relative", group: "true" }}>
-                        <div style={{
-                          fontSize: "12px",
-                          fontWeight: "bold",
-                          marginBottom: "8px",
-                          color: isCurrent ? "#27ae60" : "#34495e",
-                          position: "absolute",
-                          top: `-${barHeight + 25}px`,
-                          width: "100%",
-                          textAlign: "center"
-                        }}>
-                          %{d.oee}
+                  <div style={{ height: "250px", display: "flex", alignItems: "flex-end", gap: "20px", padding: "20px 10px", borderBottom: "2px solid #ecf0f1", overflowX: "auto" }}>
+                    {oeeHistory.map((d, i) => {
+                      const isCurrent = i === oeeHistory.length - 1;
+                      const barHeight = d.oee > 0 ? Math.max((d.oee - 50) * 3, 20) : 4; // Değer yoksa min 4px çizgi
+                      return (
+                        <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1, minWidth: "40px", position: "relative" }}>
+                          {d.oee > 0 && (
+                            <div style={{
+                              fontSize: "11px",
+                              fontWeight: "bold",
+                              marginBottom: "6px",
+                              color: isCurrent ? "#27ae60" : "#94a3b8",
+                              position: "absolute",
+                              top: `-${barHeight + 22}px`,
+                              width: "100%",
+                              textAlign: "center"
+                            }}>
+                              %{d.oee}
+                            </div>
+                          )}
+                          <div style={{
+                            width: "35px",
+                            height: `${barHeight}px`,
+                            background: isCurrent
+                              ? "linear-gradient(to top, #2ecc71, #27ae60)"
+                              : (d.oee > 0 ? "#cbd5e0" : "#f1f5f9"),
+                            borderRadius: "4px 4px 0 0",
+                            boxShadow: isCurrent ? "0 4px 10px rgba(39, 174, 96, 0.3)" : "none",
+                            border: d.oee > 0 ? "none" : "1px dashed #cbd5e0"
+                          }}></div>
+                          <div style={{ marginTop: "12px", fontSize: "10px", fontWeight: isCurrent ? "800" : "500", color: isCurrent ? "#27ae60" : "#94a3b8", whiteSpace: "nowrap" }}>
+                            {d.week}
+                          </div>
                         </div>
-                        {/* Dinamik bar çubuğu */}
-                        <div style={{
-                          width: "35px",
-                          height: `${barHeight}px`,
-                          background: isCurrent ? "linear-gradient(to top, #2ecc71, #27ae60)" : "linear-gradient(to top, #bdc3c7, #95a5a6)",
-                          borderRadius: "4px 4px 0 0",
-                          transition: "all 0.3s ease",
-                          cursor: "pointer",
-                          boxShadow: isCurrent ? "0 4px 10px rgba(39, 174, 96, 0.3)" : "none"
-                        }}
-                          onMouseOver={(e) => e.target.style.transform = "scaleY(1.05)"}
-                          onMouseOut={(e) => e.target.style.transform = "scaleY(1)"}
-                        ></div>
-                        <div style={{
-                          marginTop: "12px",
-                          fontSize: "11px",
-                          fontWeight: isCurrent ? "800" : "500",
-                          color: isCurrent ? "#27ae60" : "#7f8c8d",
-                          whiteSpace: "nowrap"
-                        }}>
-                          {d.week}
-                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{ marginTop: "30px" }}>
+                    <h4 style={{ margin: "0 0 15px 0", color: "#34495e", fontSize: "15px" }}>OEE Bileşenleri (A x P x Q)</h4>
+                    <div style={{ display: "flex", gap: "20px" }}>
+                      <div style={{ flex: 1, padding: "15px", background: "#f8f9fa", borderRadius: "10px", textAlign: "center", border: "1px solid #e1e5eb" }}>
+                        <div style={{ fontSize: "12px", color: "#7f8c8d", fontWeight: "bold", textTransform: "uppercase" }}>Kullanılabilirlik</div>
+                        <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%{factoryOee}</div>
+                        <div style={{ fontSize: "11px", color: "#95a5a6", marginTop: "4px" }}>Aktif Makine Oranı</div>
                       </div>
-                    );
-                  })}
-                </div>
-
-                {/* Veri Özeti (Aktif Hafta Dağılımı) */}
-                <div style={{ marginTop: "30px" }}>
-                  <h4 style={{ margin: "0 0 15px 0", color: "#34495e", fontSize: "15px" }}>Bu Haftanın OEE Bileşenleri (A x P x Q)</h4>
-                  <div style={{ display: "flex", gap: "20px" }}>
-                    <div style={{ flex: 1, padding: "15px", background: "#f8f9fa", borderRadius: "10px", textAlign: "center", border: "1px solid #e1e5eb" }}>
-                      <div style={{ fontSize: "12px", color: "#7f8c8d", fontWeight: "bold", textTransform: "uppercase" }}>Kullanılabilirlik</div>
-                      <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%95.0</div>
-                      <div style={{ fontSize: "11px", color: "#95a5a6", marginTop: "4px" }}>Arızasız çalışma süresi</div>
-                    </div>
-                    <div style={{ flex: 1, padding: "15px", background: "#f8f9fa", borderRadius: "10px", textAlign: "center", border: "1px solid #e1e5eb" }}>
-                      <div style={{ fontSize: "12px", color: "#7f8c8d", fontWeight: "bold", textTransform: "uppercase" }}>Performans</div>
-                      <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%95.0</div>
-                      <div style={{ fontSize: "11px", color: "#95a5a6", marginTop: "4px" }}>Nominal hıza oranı</div>
-                    </div>
-                    <div style={{ flex: 1, padding: "15px", background: "#f8f9fa", borderRadius: "10px", textAlign: "center", border: "1px solid #e1e5eb" }}>
-                      <div style={{ fontSize: "12px", color: "#7f8c8d", fontWeight: "bold", textTransform: "uppercase" }}>Kalite</div>
-                      <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%98.0</div>
-                      <div style={{ fontSize: "11px", color: "#95a5a6", marginTop: "4px" }}>Sağlam ürün oranı</div>
+                      <div style={{ flex: 1, padding: "15px", background: "#f8f9fa", borderRadius: "10px", textAlign: "center", border: "1px solid #e1e5eb" }}>
+                        <div style={{ fontSize: "12px", color: "#7f8c8d", fontWeight: "bold", textTransform: "uppercase" }}>Performans</div>
+                        <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%100</div>
+                        <div style={{ fontSize: "11px", color: "#95a5a6", marginTop: "4px" }}>Nominal hıza oranı</div>
+                      </div>
+                      <div style={{ flex: 1, padding: "15px", background: "#f8f9fa", borderRadius: "10px", textAlign: "center", border: "1px solid #e1e5eb" }}>
+                        <div style={{ fontSize: "12px", color: "#7f8c8d", fontWeight: "bold", textTransform: "uppercase" }}>Kalite</div>
+                        <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%100</div>
+                        <div style={{ fontSize: "11px", color: "#95a5a6", marginTop: "4px" }}>Sağlam ürün oranı</div>
+                      </div>
                     </div>
                   </div>
                 </div>
-
               </div>
-            </div>
-          )}
+            )
+          }
 
-        </div>
-      </div>
+
+        </div >
+      </div >
     </div >
   );
 }

@@ -188,23 +188,23 @@ export default function MakineDetay() {
                                     <h3 style={{ ...bolumBaslikStil, borderBottom: "none", marginBottom: 0, paddingBottom: 0 }}>Tedarikçi/Satıcı Bilgileri</h3>
                                 </div>
 
-                                {machine.tedarikci ? (
+                                {machine.garanti_firma ? (
                                     <div style={{ ...tedarikciListeStil, gap: "18px" }}>
                                         <div style={{ ...tedarikciSatirStil, padding: "12px", borderRadius: "8px" }}>
                                             <span style={tedarikciEtiketStil}>Firma Adı:</span>
-                                            <strong style={{ color: "#0f3460", fontSize: "17px" }}>{machine.tedarikci?.firma_adi || "-"}</strong>
+                                            <strong style={{ color: "#0f3460", fontSize: "17px" }}>{machine.garanti_firma?.firma_adi || "-"}</strong>
                                         </div>
                                         <div style={{ ...tedarikciSatirStil, padding: "8px 12px" }}>
                                             <span style={tedarikciEtiketStil}>İletişim Hattı:</span>
-                                            <strong style={{ color: "#2c3e50" }}>{machine.tedarikci?.telefon || "-"}</strong>
+                                            <strong style={{ color: "#2c3e50" }}>{machine.garanti_firma?.iletisim?.telefon || "-"}</strong>
                                         </div>
                                         <div style={{ ...tedarikciSatirStil, padding: "8px 12px" }}>
                                             <span style={tedarikciEtiketStil}>E-Posta Adresi:</span>
-                                            <u style={{ color: "#3498db" }}>{machine.tedarikci?.email || "-"}</u>
+                                            <u style={{ color: "#3498db" }}>{machine.garanti_firma?.iletisim?.mail || "-"}</u>
                                         </div>
                                         <div style={{ ...tedarikciSatirStil, padding: "8px 12px", borderBottom: "none" }}>
-                                            <span style={tedarikciEtiketStil}>Genel Merkez / Adres:</span>
-                                            <span style={{ textAlign: "right", maxWidth: "250px", fontWeight: "500" }}>{machine.tedarikci?.adres || "-"}</span>
+                                            <span style={tedarikciEtiketStil}>İl / İlçe:</span>
+                                            <span style={{ textAlign: "right", maxWidth: "250px", fontWeight: "500" }}>{machine.garanti_firma?.iletisim?.il} / {machine.garanti_firma?.iletisim?.ilce}</span>
                                         </div>
                                     </div>
                                 ) : (
@@ -221,18 +221,16 @@ export default function MakineDetay() {
                                 <div style={{ ...tedarikciListeStil, gap: "18px" }}>
                                     <div style={{ ...tedarikciSatirStil, padding: "12px", borderRadius: "8px" }}>
                                         <span style={tedarikciEtiketStil}>Sistem Lokasyon No:</span>
-                                        <strong style={{ color: "#e94560", fontSize: "17px" }}>{machine.lo_id || "Tanımlanmamış"}</strong>
+                                        <strong style={{ color: "#e94560", fontSize: "17px" }}>{machine.lokasyon?.[0]?.fabrika_alani || "Tanımlanmamış"}</strong>
                                     </div>
                                     <div style={{ ...tedarikciSatirStil, padding: "8px 12px" }}>
                                         <span style={tedarikciEtiketStil}>Makine Kategori ID:</span>
-                                        <strong style={{ color: "#2c3e50" }}>{machine.m_tur_id || "N/A"}</strong>
+                                        <strong style={{ color: "#2c3e50" }}>{machine.makine_tur_id || "N/A"}</strong>
                                     </div>
                                     <div style={{ ...tedarikciSatirStil, padding: "8px 12px", borderBottom: "none" }}>
                                         <span style={tedarikciEtiketStil}>Kapasite & Donanım Özellikleri:</span>
                                         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", justifyContent: "flex-end" }}>
-                                            {Array.isArray(machine.makine_ozellikleri) ? machine.makine_ozellikleri.map((oz, i) => (
-                                                <span key={i} style={{ background: "#e1e5eb", padding: "4px 10px", borderRadius: "6px", fontSize: "12px", fontWeight: "600" }}>{oz}</span>
-                                            )) : (machine.makine_ozellikleri || "-")}
+                                            {safeVal(machine.makine_ozellikleri?.teknik_ozellikler)}
                                         </div>
                                     </div>
                                 </div>

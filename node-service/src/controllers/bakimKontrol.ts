@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
-import { Decimal } from '@prisma/client/runtime/client';
+import { Prisma } from '@prisma/client';
 
 
 
@@ -14,11 +14,12 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
             servis_firma_id,
             ariza_id,
             bakim_maliyet,
-            sorumlu_id,
-            degisen_Parcalar } = req.body;
+            teknisyen_id,
+            degisen_Parcalar,
+            puan } = req.body;
 
 
-        if (!makine_id || !bakim_maliyet || !sorumlu_id || !servis_firma_id) {
+        if (!makine_id || !bakim_maliyet || !teknisyen_id || !servis_firma_id) {
             return res.status(400).json({ error: 'makine_id, bakim_maliyet, teknisyen_id ve servis_firma_id zorunludur.' });
         }
 
@@ -27,62 +28,85 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
             const bakimKaydi = await tx.bakim_kaydi.create({
                 data: {
                     makine_id: Number(makine_id),
-                    sorumlu_id: Number(sorumlu_id),
+                    sorumlu_id: Number(teknisyen_id),
                     servis_firma_id: Number(servis_firma_id),
                     ariza_id: ariza_id ? Number(ariza_id) : null,
                     bakim_tur_id: bakim_tur_id ? Number(bakim_tur_id) : null,
                     bakim_maliyet: Number(bakim_maliyet),
+                    durus_suresi: durus_suresi ? new Prisma.Decimal(durus_suresi) : null,
                     durus_suresi: durus_suresi ? new Decimal(durus_suresi) : null,
                     aciklama: aciklama || null,
                     bakim_tarihi: new Date(),
                 },
             });
 
-            // 🔧 Parça değişimleri + stok düşme
-            if (Array.isArray(degisen_Parcalar) && degisen_Parcalar.length > 0) {
-                for (const parca of degisen_Parcalar) {
-                    const parcaId = Number(parca.parca_id);
-                    const adet = Number(parca.adet) || 1;
-
-                    if (!parcaId) continue;
-
-                    // Parçayı bul
-                    const mevcutParca = await tx.parca.findUnique({
-                        where: { parca_id: parcaId }
-                    });
-
-                    if (!mevcutParca) {
-                        throw new Error(`parca_id ${parcaId} bulunamadı.`);
+            // Puan geldiyse servis_puan tablosuna ekle
+            if (puan !== undefined && puan !== null) {
+                await tx.servis_puan.create({
+                    data: {
+                        servis_firma_id: Number(servis_firma_id),
+                        puan: Number(puan),
+                        bakim_id: bakimKaydi.bakim_id,
+                        puanlayan_kullanici_id: Number(teknisyen_id), // Şimdilik işlemi yapan sorumlu puanlıyor
+                        tarih: new Date()
                     }
-
-                    if ((mevcutParca.stok_miktari || 0) < adet) {
-                        throw new Error(
-                            `"${mevcutParca.parca_adi}" için yeterli stok yok. ` +
-                            `Mevcut: ${mevcutParca.stok_miktari}, İstenen: ${adet}`
-                        );
-                    }
-
-                    // Parça değişim kaydı
-                    await tx.parca_degisim.create({
-                        data: {
-                            bakim_id: bakimKaydi.bakim_id,
-                            parca_id: parcaId,
-                            adet: adet
-                        }
-                    });
-
-                    // Stok düş
-                    await tx.parca.update({
-                        where: { parca_id: parcaId },
-                        data: {
-                            stok_miktari: { decrement: adet }
-                        }
-                    });
-                }
+                });
             }
+            // ... (rest of the logic for degisen_Parcalar)
+            // degisen parçaların kaydedilmesi
+            // parca_degisim tablosu sadece 3 kolon içerir: parca_degisim_id, bakim_id, parca_id
+            if (degisen_Parcalar && Array.isArray(degisen_Parcalar) && degisen_Parcalar.length > 0) {
+                await tx.parca_degisim.createMany({
+                    data: degisen_Parcalar.map((parca: any) => ({
+                        bakim_id: bakimKaydi.bakim_id,
+                        parca_id: parca.parca_id ? Number(parca.parca_id) : null,
+                    })),
+                });
+                // 🔧 Parça değişimleri + stok düşme
+                if (Array.isArray(degisen_Parcalar) && degisen_Parcalar.length > 0) {
+                    for (const parca of degisen_Parcalar) {
+                        const parcaId = Number(parca.parca_id);
+                        const adet = Number(parca.adet) || 1;
 
-            return bakimKaydi;
-        });
+                        if (!parcaId) continue;
+
+                        // Parçayı bul
+                        const mevcutParca = await tx.parca.findUnique({
+                            where: { parca_id: parcaId }
+                        });
+
+                        if (!mevcutParca) {
+                            throw new Error(`parca_id ${parcaId} bulunamadı.`);
+                        }
+
+                        if ((mevcutParca.stok_miktari || 0) < adet) {
+                            throw new Error(
+                                `"${mevcutParca.parca_adi}" için yeterli stok yok. ` +
+                                `Mevcut: ${mevcutParca.stok_miktari}, İstenen: ${adet}`
+                            );
+                        }
+
+                        // Parça değişim kaydı
+                        await tx.parca_degisim.create({
+                            data: {
+                                bakim_id: bakimKaydi.bakim_id,
+                                parca_id: parcaId,
+                                adet: adet
+                            }
+                        });
+
+                        // Stok düş
+                        await tx.parca.update({
+                            where: { parca_id: parcaId },
+                            data: {
+                                stok_miktari: { decrement: adet }
+                            }
+                        });
+                    }
+                }
+
+                return bakimKaydi;
+            });
 
         res.status(201).json({
             success: true,
@@ -146,6 +170,12 @@ export const makineBakimKayitlari = async (req: Request, res: Response) => {
                         }
                     }
                 },
+                // servis_puan bilgisini dahil et
+                servis_puan: {
+                    select: {
+                        puan: true
+                    }
+                },
                 //bakım yapan servis firmasının bilgileri (servis_firma tablosundan)
                 // servis_firma'da telefon yok — iletisim tablosundan çekilir
                 servis_firma: {
@@ -196,6 +226,39 @@ export const makineBakimKayitlari = async (req: Request, res: Response) => {
     }
 };
 
+<<<<<<< HEAD
+export const bakimPuanla = async (req: Request, res: Response) => {
+    try {
+        const bakim_id = Number(req.params.id);
+        const { puan } = req.body;
+
+        if (isNaN(bakim_id) || puan === undefined) {
+            return res.status(400).json({
+                success: false,
+                message: "Bakım ID ve puan zorunludur."
+            });
+        }
+
+        // Önce bakım kaydını bul (firma_id ve sorumlu_id lazım)
+        const bakim = await prisma.bakim_kaydi.findUnique({
+            where: { bakim_id: bakim_id }
+        });
+
+        if (!bakim) {
+            return res.status(404).json({ success: false, message: "Bakım kaydı bulunamadı." });
+        }
+
+        // servis_puan tablosuna upsert yap (bakim_id unique olduğu için)
+        const guncelPuan = await prisma.servis_puan.upsert({
+            where: { bakim_id: bakim_id },
+            update: { puan: Number(puan) },
+            create: {
+                bakim_id: bakim_id,
+                servis_firma_id: bakim.servis_firma_id,
+                puan: Number(puan),
+                puanlayan_kullanici_id: bakim.sorumlu_id || 1, // Varsayılan sistem kullanıcısı
+                tarih: new Date()
+=======
 export async function dusukStokUyarisi(req: Request, res: Response): Promise<void> {
     try {
         const dusukStokParcalar = await prisma.$queryRaw<any[]> `
@@ -238,11 +301,22 @@ export const bakimlariOnayla = async (req: Request, res: Response) => {
             },
             data: {
                 durum: 'Teknik Serviste'
+>>>>>>> 5b8a9a331802ed33037242851251595a72e68397
             }
         });
 
         res.status(200).json({
             success: true,
+<<<<<<< HEAD
+            message: "İşlem puanı başarıyla kaydedildi.",
+            data: guncelPuan
+        });
+    } catch (error) {
+        console.error("Bakım puanlama hatası:", error);
+        res.status(500).json({
+            success: false,
+            message: "Puan kaydedilirken bir hata oluştu."
+=======
             message: `${updated.count} adet bakım talebi başarıyla onaylandı ve Teknik Servis listesine aktarıldı.`,
             data: updated
         });
@@ -252,10 +326,41 @@ export const bakimlariOnayla = async (req: Request, res: Response) => {
         res.status(500).json({
             success: false,
             message: 'Bakım kayıtları onaylanırken bir hata oluştu.'
+>>>>>>> 5b8a9a331802ed33037242851251595a72e68397
         });
     }
 };
 
+<<<<<<< HEAD
+export const bakimOnayla = async (req: Request, res: Response) => {
+    try {
+        const bakim_id = Number(req.params.id);
+
+        if (isNaN(bakim_id)) {
+            return res.status(400).json({ success: false, message: "Geçerli bir Bakım ID gereklidir." });
+        }
+
+        // Önce puanlanmış mı kontrol et
+        const bakim = await prisma.bakim_kaydi.findUnique({
+            where: { bakim_id: bakim_id },
+            include: { servis_puan: true }
+        });
+
+        if (!bakim) {
+            return res.status(404).json({ success: false, message: "Bakım kaydı bulunamadı." });
+        }
+
+        if (!bakim.servis_puan) {
+            return res.status(400).json({
+                success: false,
+                message: "Bu işlem henüz puanlanmamış. Listeden kaldırmadan önce puanlamanız gerekmektedir."
+            });
+        }
+
+        await prisma.bakim_kaydi.update({
+            where: { bakim_id: bakim_id },
+            data: { puan_onaylandi: true }
+=======
 export const bakimiYokSay = async (req: Request, res: Response) => {
     try {
         const { bakim_idler } = req.body;
@@ -278,10 +383,18 @@ export const bakimiYokSay = async (req: Request, res: Response) => {
             data: {
                 durum: 'İptal Edildi'
             }
+>>>>>>> 5b8a9a331802ed33037242851251595a72e68397
         });
 
         res.status(200).json({
             success: true,
+<<<<<<< HEAD
+            message: "İşlem başarıyla onaylandı ve listeden kaldırıldı."
+        });
+    } catch (error) {
+        console.error("Bakım onaylama hatası:", error);
+        res.status(500).json({ success: false, message: "Onaylama sırasında bir hata oluştu." });
+=======
             message: `${updated.count} adet bakım talebi reddedildi / arşive taşındı.`,
             data: updated
         });
@@ -333,9 +446,9 @@ export const getOnayBekleyenler = async (req: Request, res: Response) => {
         const zenginVeri = bekleyenler.map(bakim => {
             // Risk skoru (makine'den veya 0)
             const riskSkoru = (bakim.makine?.risk_skoru && bakim.makine.risk_skoru.length > 0)
-                ? Number(bakim.makine.risk_skoru[0].risk_skoru) 
+                ? Number(bakim.makine.risk_skoru[0].risk_skoru)
                 : Math.floor(Math.random() * 40) + 40; // DB'de yoksa 40-80 arası mock skor
-                
+
             // Öncelik belirleme
             let oncelik = "Düşük";
             if (riskSkoru > 75) oncelik = "Kritik";
@@ -378,5 +491,6 @@ export const getOnayBekleyenler = async (req: Request, res: Response) => {
             success: false,
             message: 'Onay bekleyen kayıtlar getirilirken bir hata oluştu.'
         });
+>>>>>>> 5b8a9a331802ed33037242851251595a72e68397
     }
 };

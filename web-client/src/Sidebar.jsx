@@ -13,10 +13,17 @@ const Sidebar = () => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   // Oturum açan kullanıcının bilgilerini ve yetki seviyesini al
-  const payloadStr = localStorage.getItem("user_payload");
-  const userPayload = payloadStr ? JSON.parse(payloadStr) : { ad: "Yönetici", rol_id: 1 };
-  const kullaniciAdi = userPayload.ad || "Kullanıcı";
-  const userRole = userPayload.rol_id;
+  let userPayload = { ad: "Yönetici", rol_id: 1 };
+  try {
+    const payloadStr = localStorage.getItem("user_payload");
+    if (payloadStr && payloadStr !== "undefined") {
+      userPayload = JSON.parse(payloadStr);
+    }
+  } catch (err) {
+    console.error("Sidebar user payload parse hatası:", err);
+  }
+  const kullaniciAdi = userPayload?.ad || "Kullanıcı";
+  const userRole = userPayload?.rol_id;
 
   // Yetki Kontrolü: Sadece rolü 0 (Süper Admin) ve 1 (Yönetici) olanlar tüm menüleri görebilir
   const isAdmin = userRole === 0 || userRole === 1;

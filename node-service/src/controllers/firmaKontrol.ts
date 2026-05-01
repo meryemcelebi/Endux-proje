@@ -35,14 +35,14 @@ export async function tumTedarikcileriGetir(req: Request, res: Response) {
             message: 'Tedarikçiler getirilirken bir hata oluştu.'
         });
     }
-};
+}
 
 export async function tedarikciEkle(req: Request, res: Response) {
     try {
         const { firma_adi, telefon, email, adres, il, ilce, aktiflik, yetkili_kisi, vergi_no } = req.body;
 
         if (!firma_adi || aktiflik === undefined) {
-            res.status(400).json({
+            return res.status(400).json({
                 success: false,
                 message: "Firma adı ve aktiflik alanları zorunludur."
             });
@@ -85,7 +85,7 @@ export async function tedarikciEkle(req: Request, res: Response) {
             message: 'Tedarikçi eklenirken bir hata oluştu.'
         });
     }
-};
+}
 
 export async function tedarikciSil(req: Request, res: Response) {
     try {
@@ -147,15 +147,35 @@ export async function tumServisFirmalariniGetir(req: Request, res: Response) {
                 },
                 iletisim: true,
                 servis_firma_uzmanlik: true,
+                servis_puan: {
+                    select: {
+                        puan: true
+                    }
+                }
             },
             orderBy: {
                 servis_firma_id: "asc"
             }
         });
+
+        const dataWithAvg = servisFirmalari.map(f => {
+            const puanlar = f.servis_puan.map(sp => Number(sp.puan));
+            const ortalama = puanlar.length > 0
+                ? Number((puanlar.reduce((a, b) => a + b, 0) / puanlar.length).toFixed(1))
+                : 0;
+
+            return {
+                ...f,
+                ortalama_puan: ortalama,
+                toplam_islem: puanlar.length,
+                servis_puan: undefined // Veriyi şişirmemek için
+            };
+        });
+
         res.status(200).json({
             success: true,
             message: `${servisFirmalari.length} adet servis firması getirildi.`,
-            data: servisFirmalari
+            data: dataWithAvg
         });
     } catch (error) {
         console.error("Servis firmalarını getirme hatası:", error);
@@ -164,7 +184,7 @@ export async function tumServisFirmalariniGetir(req: Request, res: Response) {
             message: 'Servis firmaları getirilirken bir hata oluştu.'
         });
     }
-};
+}
 
 export async function servisFirmasiEkle(req: Request, res: Response): Promise<void> {
     try {
@@ -222,44 +242,89 @@ export async function servisFirmasiEkle(req: Request, res: Response): Promise<vo
             message: 'Servis firması eklenirken bir hata oluştu.'
         });
     }
-};
-
-export async function servisFirmasiSil(req: Request, res: Response): Promise<void> {
+}
+export async function tedarikciSil(req: Request, res: Response): Promise<void> {
     try {
-        const { id } = req.params;
+        const id = Number(req.params.id);
 
-        if (!id) {
-            res.status(400).json({
-                success: false,
-                message: "Servis firması ID gereklidir."
-            });
-            return;
-        }
-
-        const servisFirmasi = await prisma.servis_firma.findUnique({
-            where: { servis_firma_id: Number(id) }
+        // Hard delete yerine Soft Delete (aktiflik = false) yapıyoruz
+        // Bu sayede geçmiş satın alma ve puanlama verileri korunur
+        await prisma.tedarikci.update({
+            where: { tedarikci_id: id },
+            data: { aktiflik: false }
         });
 
-        if (!servisFirmasi) {
-            res.status(404).json({
-                success: false,
-                message: "Servis firması bulunamadı."
-            });
-            return;
-        }
-
-        await prisma.servis_firma.delete({
-            where: { servis_firma_id: Number(id) }
-        });
         res.status(200).json({
             success: true,
-            message: "Servis firması başarıyla silindi."
+            message: 'Tedarikçi sözleşmesi iptal edildi (Pasif duruma getirildi).'
         });
     } catch (error) {
-        console.error("Servis firması silme hatası:", error);
+        console.error("Tedarikçi iptal hatası:", error);
         res.status(500).json({
             success: false,
-            message: "Servis firması silinirken bir hata oluştu."
+            message: 'Tedarikçi iptal edilirken bir hata oluştu.'
         });
     }
 }
+
+export async function servisFirmasiSil(req: Request, res: Response): Promise<void> {
+    try {
+        const id = Number(req.params.id);
+
+        // Hard delete yerine Soft Delete (aktiflik = false) yapıyoruz
+        // Bu sayede geçmiş bakım kayıtları ve teknisyen bilgileri korunur
+        await prisma.servis_firma.update({
+            where: { servis_firma_id: id },
+            data: { aktiflik: false }
+        });
+
+        res.status(200).json({
+            success: true,
+            message: 'Servis firması sözleşmesi iptal edildi (Pasif duruma getirildi).'
+        });
+    } catch (error) {
+        console.error("Servis firması iptal hatası:", error);
+        res.status(500).json({
+            success: false,
+            message: 'Servis firması iptal edilirken bir hata oluştu.'
+        };
+
+        export async function servisFirmasiSil(req: Request, res: Response): Promise<void> {
+            try {
+                const { id } = req.params;
+
+                if (!id) {
+                    res.status(400).json({
+                        success: false,
+                        message: "Servis firması ID gereklidir."
+                    });
+                    return;
+                }
+
+                const servisFirmasi = await prisma.servis_firma.findUnique({
+                    where: { servis_firma_id: Number(id) }
+                });
+
+                if (!servisFirmasi) {
+                    res.status(404).json({
+                        success: false,
+                        message: "Servis firması bulunamadı."
+                    });
+                    return;
+                }
+
+                await prisma.servis_firma.delete({
+                    where: { servis_firma_id: Number(id) }
+                });
+                res.status(200).json({
+                    success: true,
+                    message: "Servis firması başarıyla silindi."
+                });
+            } catch (error) {
+                console.error("Servis firması silme hatası:", error);
+                res.status(500).json({
+                    success: false,
+                    message: "Servis firması silinirken bir hata oluştu."
+                });
+            }
+        }

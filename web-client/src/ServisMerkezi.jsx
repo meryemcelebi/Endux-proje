@@ -11,25 +11,27 @@ export default function ServisMerkezi() {
   const [loading, setLoading] = useState(true); // Veri yükleme durumu
   const [activeTab, setActiveTab] = useState("gorevler"); // Aktif sekme kontrolü (gorevler, firmalar, onay-merkezi, disServis)
   const [isModalOpen, setIsModalOpen] = useState(false); // Firma ekleme modali durumu
+  const [searchTerm, setSearchTerm] = useState(""); // Firma arama terimi
   const [modalType, setModalType] = useState("Servis"); // Modal tipi (Servis Firması mı yoksa Parça Tedarikçisi mi?)
   const [allHistory, setAllHistory] = useState([]); // Tüm servis geçmişi (Onay merkezi puanlamaları için)
 
   // --- DIŞ SERVİS PUANLAMA STATE'LERİ ---
-  const [disRatingId, setDisRatingId] = useState(null); // Puanlanan dış servis ID'si
+  const [disRatingId, setDisRatingId] = useState(null); // Puanlanan bakım (işlem) ID'si
   const [disRatingValue, setDisRatingValue] = useState(0); // Verilen yıldız puanı
-  const [disRatingComment, setDisRatingComment] = useState(""); // Servis hakkında yorum
 
-  // Statik dış servis listesi (Simüle edilmiş veriler)
-  const [disServisler, setDisServisler] = useState([
-    { id: 1, firma: "Alfa Teknik Servis", uzmanlik: "Genel Mekanik", telefon: "0216 111 2233", email: "info@alfateknik.com", sorumlu_ad: "Hasan", sorumlu_soyad: "Demir", sorumlu_tel: "0532 111 2233", islem: 15, puan: 4.8, yorum: "" },
-    { id: 2, firma: "Beta Endüstriyel Tamir", uzmanlik: "Elektronik & PCB", telefon: "0212 444 5566", email: "destek@beta.com", sorumlu_ad: "Kemal", sorumlu_soyad: "Yıldız", sorumlu_tel: "0544 555 6677", islem: 4, puan: 3.2, yorum: "" },
-    { id: 3, firma: "Gama Otomasyon", uzmanlik: "Robotik Eğitim", telefon: "0232 555 6677", email: "info@gama.com", sorumlu_ad: "Zeynep", sorumlu_soyad: "Aydın", sorumlu_tel: "0505 999 8877", islem: 29, puan: 4.9, yorum: "" },
-    { id: 4, firma: "Delta Motor Revizyon", uzmanlik: "Motor & Spindle", telefon: "0312 222 3344", email: "servis@delta.com", sorumlu_ad: "Murat", sorumlu_soyad: "Kaya", sorumlu_tel: "0533 444 5566", islem: 1, puan: 2.0, yorum: "" },
-  ]);
+  // Dış servis listesi (allHistory'den türetilecek)
+  const [disServisler, setDisServisler] = useState([]);
 
-  const payloadStr = localStorage.getItem("user_payload");
-  const userPayload = payloadStr ? JSON.parse(payloadStr) : { ad: "Bilinmeyen", rol_id: 2 };
-  const isAdmin = userPayload.rol_id === 0 || userPayload.rol_id === 1;
+  let userPayload = { ad: "Bilinmeyen", rol_id: 2 };
+  try {
+    const payloadStr = localStorage.getItem("user_payload");
+    if (payloadStr && payloadStr !== "undefined") {
+      userPayload = JSON.parse(payloadStr);
+    }
+  } catch (err) {
+    console.error("User payload parse hatası:", err);
+  }
+  const isAdmin = userPayload?.rol_id === 0 || userPayload?.rol_id === 1;
 
   // --- VERİ ÇEKME (API) ---
   useEffect(() => {
@@ -41,9 +43,23 @@ export default function ServisMerkezi() {
           api.getFirms(),
           api.getAllServiceHistory()
         ]);
-        setTasks(taskData);
+
+        const formattedTasks = taskData.map(t => ({
+          ...t,
+          makine_ad: t.makine?.makine_adi || t.makine_adi || "Bilinmeyen",
+          ariza_notu: t.ariza_kaydi?.ariza_aciklama || t.aciklama || "Not yok",
+          tarih: t.bakim_tarihi ? new Date(t.bakim_tarihi).toLocaleDateString("tr-TR") : (t.tarih || "-"),
+          durum: t.durum || "ONAYLANDI"
+        }));
+
+        setTasks(formattedTasks);
         setFirms(firmData);
         setAllHistory(historyData);
+
+        // Dış servis işlemleri (Backend verileri - Onaylanmamış olanlar)
+        const liveHistory = historyData.filter(h => h.servis_firma_id && !h.puan_onaylandi);
+
+        setDisServisler(liveHistory);
       } catch (err) {
         console.error("Servis verileri yüklenirken hata oluştu:", err);
       } finally {
@@ -64,12 +80,54 @@ export default function ServisMerkezi() {
 
 
 
-  const handleDisRateSave = (id) => {
-    setDisServisler(disServisler.map(s => s.id === id ? { ...s, puan: disRatingValue, yorum: disRatingComment } : s));
-    setDisRatingId(null);
-    setDisRatingValue(0);
-    setDisRatingComment("");
-    alert("Puanlama ve yorum kaydedildi!");
+  const handleDisRateSave = async (bakimId) => {
+
+
+    try {
+      await api.rateMaintenance(bakimId, disRatingValue);
+
+      // Listeyi güncelle
+      const updatedHistory = allHistory.map(h =>
+        h.bakim_id === bakimId ? { ...h, puan: disRatingValue } : h
+      );
+      setAllHistory(updatedHistory);
+      setDisServisler(updatedHistory.filter(h => h.servis_firma_id && !h.puan_onaylandi));
+
+      // Firmaları da yeniden çek (Ortalama puanların güncellenmesi için)
+      const updatedFirms = await api.getFirms();
+      setFirms(updatedFirms);
+
+      setDisRatingId(null);
+      setDisRatingValue(0);
+      alert("İşlem puanı başarıyla kaydedildi!");
+    } catch (error) {
+      alert("Hata: " + error.message);
+    }
+  };
+
+  const handleApproveMaintenance = async (bakimId) => {
+    const record = disServisler.find(h => h.bakim_id === bakimId);
+    if (!record) return;
+
+    // Her işlem puanlanmak zorunda kontrolü
+    const currentRating = record.servis_puan?.puan || record.puan || 0;
+    if (currentRating === 0) {
+      alert("Her işlem puanlanmak zorundadır. Lütfen önce puan veriniz.");
+      return;
+    }
+
+    const confirmMsg = "Bu işlemi onaylayıp puanlama listesinden kaldırmak istediğinize emin misiniz?";
+    if (!window.confirm(confirmMsg)) return;
+
+
+
+    try {
+      await api.approveMaintenance(bakimId);
+      setDisServisler(disServisler.filter(h => h.bakim_id !== bakimId));
+      alert("İşlem onaylandı ve listeden kaldırıldı.");
+    } catch (error) {
+      alert("Hata: " + error.message);
+    }
   };
 
   const handleSaveFirm = async (firmData) => {
@@ -84,41 +142,48 @@ export default function ServisMerkezi() {
     }
   };
 
+
+
   // RENDER: GÖREV LİSTESİ
-  const renderGorevListesi = () => (
-    <div style={{ overflowX: "auto" }}>
-      <table style={tableStyle}>
-        <thead>
-          <tr>
-            <th style={thStyle}>Makine</th>
-            <th style={thStyle}>Durum</th>
-            <th style={thStyle}>Arıza Notu</th>
-            <th style={thStyle}>Kayıt Tarihi</th>
-          </tr>
-        </thead>
-        <tbody>
-          {tasks.length === 0 ? (
-            <tr><td colSpan="4" style={{ textAlign: "center", padding: "40px", color: "#95a5a6" }}>Bekleyen iş kaydı bulunamadı.</td></tr>
-          ) : (
-            tasks.map(t => (
-              <tr key={t.id} style={trStyle}>
-                <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>{t.makine_ad}</td>
-                <td style={tdStyle}>
-                  <span style={t.durum === "TAMAMLANDI" ? badgeActive : { ...badgeInactive, background: "rgba(241, 196, 15, 0.15)", color: "#f39c12", border: "1px solid rgba(241, 196, 15, 0.3)" }}>
-                    {t.durum}
-                  </span>
-                </td>
-                <td style={{ ...tdStyle, maxWidth: "300px", whiteSpace: "normal" }}>{t.ariza_notu}</td>
-                <td style={tdStyle}>
-                  <div style={{ fontSize: "14px", color: "#555" }}>📅 {t.tarih}</div>
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
+  const renderGorevListesi = () => {
+    // Sadece yöneticinin onayladığı veya tamamlanmış işleri göster
+    const approvedTasks = tasks.filter(t => t.durum !== "BEKLEYEN");
+
+    return (
+      <div style={{ overflowX: "auto" }}>
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th style={thStyle}>Makine</th>
+              <th style={thStyle}>Durum</th>
+              <th style={thStyle}>Arıza Notu</th>
+              <th style={thStyle}>Kayıt Tarihi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {approvedTasks.length === 0 ? (
+              <tr><td colSpan="4" style={{ textAlign: "center", padding: "40px", color: "#95a5a6" }}>Henüz onaylanmış veya devam eden bir iş kaydı bulunamadı.</td></tr>
+            ) : (
+              approvedTasks.map(t => (
+                <tr key={t.id} style={trStyle}>
+                  <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>{t.makine_ad}</td>
+                  <td style={tdStyle}>
+                    <span style={t.durum === "TAMAMLANDI" ? badgeActive : { ...badgeInactive, background: "rgba(46, 204, 113, 0.1)", color: "#27ae60", border: "1px solid rgba(46, 204, 113, 0.2)" }}>
+                      {t.durum === "ONAYLANDI" ? "İŞLEMDE" : t.durum}
+                    </span>
+                  </td>
+                  <td style={{ ...tdStyle, maxWidth: "300px", whiteSpace: "normal" }}>{t.ariza_notu}</td>
+                  <td style={tdStyle}>
+                    <div style={{ fontSize: "14px", color: "#555" }}>📅 {t.tarih}</div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   // RENDER: SİSTEM FIRMALARI (Servis Firmaları)
 
@@ -137,8 +202,32 @@ export default function ServisMerkezi() {
     alert("Firma puanlaması ve yorumu kaydedildi!");
   };
 
+  const handleDeleteFirm = async (firm) => {
+    const confirmMsg = `${firm.ad} firması ile olan sözleşmeyi iptal etmek ve tüm verilerini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      if (firm.tip === "Servis") {
+        await api.deleteServiceFirm(firm.id);
+      } else {
+        await api.deleteSupplier(firm.id);
+      }
+      setFirms(firms.filter(f => f.id !== firm.id));
+      alert("Sözleşme iptal edildi ve firma listeden kaldırıldı. Geçmiş veriler sistemde saklanmaya devam edecektir.");
+    } catch (err) {
+      console.error("Firma silme hatası:", err);
+      alert("Hata: " + err.message);
+    }
+  };
+
   const renderFirmalar = () => {
-    const servisFirms = firms.filter(f => f.tip === "Servis");
+    const filteredFirms = firms.filter(f =>
+      f.tip === "Servis" &&
+      f.aktiflik !== false &&
+      ((f.ad || f.firma_adi || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (f.email || "").toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
     return (
       <div style={{ overflowX: "auto" }}>
         <table style={tableStyle}>
@@ -147,13 +236,16 @@ export default function ServisMerkezi() {
               <th style={thStyle}>Firma Adı & Türü</th>
               <th style={thStyle}>İletişim</th>
               <th style={thStyle}>Adres</th>
+              <th style={thStyle}>Uzmanlık</th>
+              <th style={thStyle}>Sorumlu</th>
               <th style={thStyle}>Ortalama Puan</th>
               <th style={thStyle}>Durum</th>
+              <th style={thStyle}>İşlemler</th>
             </tr>
           </thead>
           <tbody>
-            {servisFirms.length > 0 ? (
-              servisFirms.map((f) => (
+            {filteredFirms.length > 0 ? (
+              filteredFirms.map((f) => (
                 <React.Fragment key={f.id}>
                   <tr style={trStyle}>
                     <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>
@@ -168,6 +260,12 @@ export default function ServisMerkezi() {
                       <div style={{ fontSize: "13px", color: "#555" }}>{f.adres || "-"}</div>
                     </td>
                     <td style={tdStyle}>
+                      <span style={{ fontSize: "12px", background: "#f1f2f6", padding: "4px 8px", borderRadius: "6px", color: "#57606f" }}>{f.uzmanlik_alani || "Belirtilmemiş"}</span>
+                    </td>
+                    <td style={tdStyle}>
+                      <div style={{ fontSize: "14px", fontWeight: "bold" }}>{f.sorumlu_ad ? `${f.sorumlu_ad} ${f.sorumlu_soyad || ""}` : "-"}</div>
+                    </td>
+                    <td style={tdStyle}>
                       <div style={{ display: "flex", gap: "2px", alignItems: "center" }}>
                         {[1, 2, 3, 4, 5].map((star) => (
                           <span key={star} style={{ fontSize: "18px", color: star <= Math.round(f.ortalama_puan || 0) ? "#f39c12" : "#dfe6e9" }}>
@@ -179,16 +277,36 @@ export default function ServisMerkezi() {
                       {f.yorum && <div style={{ fontSize: "12px", color: "#7f8c8d", marginTop: "4px", fontStyle: "italic" }}>💬 {f.yorum}</div>}
                     </td>
                     <td style={tdStyle}>
-                      <span style={f.aktif !== false ? badgeActive : badgeInactive}>
-                        {f.aktif !== false ? "Aktif" : "Pasif"}
+                      <span style={f.aktiflik !== false ? badgeActive : badgeInactive}>
+                        {f.aktiflik !== false ? "Aktif" : "Pasif"}
                       </span>
+                    </td>
+                    <td style={tdStyle}>
+                      <button
+                        onClick={() => handleDeleteFirm(f)}
+                        style={{
+                          background: "rgba(231, 76, 60, 0.1)",
+                          color: "#e74c3c",
+                          border: "1px solid rgba(231, 76, 60, 0.3)",
+                          padding: "8px 12px",
+                          borderRadius: "8px",
+                          fontSize: "12px",
+                          fontWeight: "bold",
+                          cursor: "pointer",
+                          transition: "0.2s"
+                        }}
+                        onMouseOver={(e) => { e.target.style.background = "#e74c3c"; e.target.style.color = "white"; }}
+                        onMouseOut={(e) => { e.target.style.background = "rgba(231, 76, 60, 0.1)"; e.target.style.color = "#e74c3c"; }}
+                      >
+                        Sözleşmeyi İptal Et
+                      </button>
                     </td>
                   </tr>
                 </React.Fragment>
               ))
             ) : (
               <tr>
-                <td colSpan="6" style={{ padding: "40px", textAlign: "center", color: "#95a5a6" }}>
+                <td colSpan="8" style={{ padding: "40px", textAlign: "center", color: "#95a5a6" }}>
                   Servis firması bulunamadı.
                 </td>
               </tr>
@@ -202,84 +320,125 @@ export default function ServisMerkezi() {
   // RENDER: DIŞ SERVİS PUANLAMALARI
   const renderDisServis = () => (
     <div style={{ overflowX: "auto" }}>
+
       <table style={tableStyle}>
         <thead>
           <tr>
-            <th style={thStyle}>Servis Firması & Uzmanlık</th>
-            <th style={thStyle}>Firma İletişim</th>
-            <th style={thStyle}>Sorumlu Teknisyen</th>
-            <th style={thStyle}>İşlemler</th>
-            <th style={thStyle}>Ortalama Puan</th>
-            <th style={thStyle}>Performans Durumu</th>
-            <th style={thStyle}>İşlem</th>
+            <th style={thStyle}>Tarih</th>
+            <th style={thStyle}>Servis Firması</th>
+            <th style={thStyle}>Makine</th>
+            <th style={thStyle}>Yapılan İşlem</th>
+            <th style={thStyle}>Maliyet</th>
+            <th style={thStyle}>İşlem Puanı</th>
+            <th style={thStyle}>Aksiyon</th>
           </tr>
         </thead>
         <tbody>
-          {disServisler.map((s) => (
-            <React.Fragment key={s.id}>
-              <tr style={trStyle}>
-                <td style={tdStyle}>
-                  <div style={{ color: "#0f3460", fontWeight: "bold", fontSize: "16px" }}>{s.firma}</div>
-                  <div style={{ fontSize: "12px", color: "white", background: "#f39c12", padding: "3px 8px", borderRadius: "10px", display: "inline-block", marginTop: "4px", fontWeight: "bold" }}>{s.uzmanlik}</div>
-                </td>
-                <td style={tdStyle}>
-                  <div style={{ fontSize: "13px", color: "#333", marginBottom: "4px" }}>📞 {s.telefon}</div>
-                  <div style={{ fontSize: "13px", color: "#666" }}>✉️ {s.email}</div>
-                </td>
-                <td style={tdStyle}>
-                  <div style={{ fontSize: "14px", fontWeight: "bold", color: "#2c3e50" }}>{s.sorumlu_ad} {s.sorumlu_soyad}</div>
-                  <div style={{ fontSize: "12px", color: "#7f8c8d", marginTop: "4px" }}>📱 {s.sorumlu_tel}</div>
-                </td>
-                <td style={tdStyle}>
-                  <span style={{ fontWeight: "bold", color: "#2980b9", fontSize: "15px" }}>{s.islem}</span> <span style={{ fontSize: "13px", color: "#7f8c8d" }}>Kayıt</span>
-                </td>
-                <td style={tdStyle}>
-                  <div style={{ display: "flex", gap: "2px", fontSize: "20px" }}>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <span key={star} style={{ color: star <= Math.round(s.puan) ? "#f39c12" : "#dfe6e9", textShadow: star <= Math.round(s.puan) ? "0 0 5px rgba(243, 156, 18, 0.4)" : "none" }}>
-                        ★
-                      </span>
-                    ))}
-                    <span style={{ fontSize: "16px", marginLeft: "12px", alignSelf: "center", color: "#0f3460", fontWeight: "bold" }}>{s.puan.toFixed(1)}</span>
-                  </div>
-                </td>
-                <td style={tdStyle}>
-                  {s.puan >= 4.0 ? (
-                    <span style={{ color: "#2ecc71", fontWeight: "bold", background: "rgba(46, 204, 113, 0.15)", padding: "5px 12px", borderRadius: "15px" }}>Mükemmel Performans</span>
-                  ) : s.puan >= 3.0 ? (
-                    <span style={{ color: "#f1c40f", fontWeight: "bold", background: "rgba(241, 196, 15, 0.15)", padding: "5px 12px", borderRadius: "15px" }}>Ortalama Üstü</span>
-                  ) : (
-                    <span style={{ color: "#e74c3c", fontWeight: "bold", background: "rgba(231, 76, 60, 0.15)", padding: "5px 12px", borderRadius: "15px" }}>Zayıf (Dikkate Alınmalı)</span>
-                  )}
-                </td>
-                <td style={tdStyle}>
-                  {s.yorum && <div style={{ fontSize: "12px", color: "#7f8c8d", marginTop: "4px", fontStyle: "italic" }}>💬 {s.yorum}</div>}
-                  <button onClick={() => { setDisRatingId(disRatingId === s.id ? null : s.id); setDisRatingValue(Math.round(s.puan)); setDisRatingComment(s.yorum || ""); }} style={{ padding: "8px 18px", color: "white", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", fontSize: "13px", background: disRatingId === s.id ? "#e74c3c" : "#e94560" }}>
-                    {disRatingId === s.id ? "Kapat" : "⭐ Puanla"}
-                  </button>
-                </td>
-              </tr>
-              {disRatingId === s.id && (
-                <tr>
-                  <td colSpan="7" style={{ padding: "0 16px 20px 16px", background: "#f8f9fa", borderBottom: "2px solid #e1e5eb" }}>
-                    <div style={{ padding: "20px", background: "white", borderRadius: "12px", border: "1px solid #e1e5eb", marginTop: "10px" }}>
-                      <div style={{ marginBottom: "12px", fontWeight: "bold", color: "#0f3460", fontSize: "15px" }}>Firma Puanlaması - {s.firma}</div>
-                      <div style={{ display: "flex", gap: "6px", marginBottom: "15px" }}>
-                        {[1, 2, 3, 4, 5].map(star => (
-                          <span key={star} onClick={() => setDisRatingValue(star)} style={{ cursor: "pointer", fontSize: "28px", color: disRatingValue >= star ? "#f39c12" : "#dfe6e9", transition: "0.2s" }}>★</span>
-                        ))}
-                        {disRatingValue > 0 && <span style={{ alignSelf: "center", marginLeft: "10px", fontWeight: "bold", color: "#f39c12", fontSize: "18px" }}>{disRatingValue}/5</span>}
-                      </div>
-                      <textarea value={disRatingComment} onChange={(e) => setDisRatingComment(e.target.value)} placeholder="Yorum yazınız..." style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #ddd", outline: "none", minHeight: "70px", fontSize: "14px", resize: "vertical", boxSizing: "border-box" }} />
-                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "12px" }}>
-                        <button onClick={() => handleDisRateSave(s.id)} disabled={disRatingValue === 0} style={{ padding: "10px 25px", background: "#27ae60", color: "white", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", fontSize: "14px", opacity: disRatingValue === 0 ? 0.5 : 1 }}>Kaydet</button>
-                      </div>
+          {disServisler.length > 0 ? (
+            disServisler.map((s) => (
+              <React.Fragment key={s.bakim_id}>
+                <tr style={trStyle}>
+                  <td style={tdStyle}>
+                    {s.bakim_tarihi ? new Date(s.bakim_tarihi).toLocaleDateString("tr-TR") : "-"}
+                  </td>
+                  <td style={tdStyle}>
+                    <div style={{ fontWeight: "bold", color: "#0f3460" }}>
+                      {s.servis_firmasi || s.servis_firma?.firma_adi || "Bilinmeyen Firma"}
+                    </div>
+                  </td>
+                  <td style={tdStyle}>{s.makine_ad || "Bilinmeyen Makine"}</td>
+                  <td style={tdStyle}>
+                    <div style={{ fontSize: "13px", fontWeight: "bold" }}>{s.bakim_turu || "Bakım"}</div>
+                    <div style={{ fontSize: "12px", color: "#7f8c8d", marginTop: "4px" }}>{s.aciklama}</div>
+                  </td>
+                  <td style={{ ...tdStyle, fontWeight: "bold", color: "#27ae60" }}>
+                    {Number(s.bakim_maliyet || 0).toLocaleString("tr-TR")} ₺
+                  </td>
+                  <td style={tdStyle}>
+                    <div style={{ display: "flex", gap: "2px", fontSize: "18px" }}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <span key={star} style={{ color: star <= (s.servis_puan?.puan || 0) ? "#f39c12" : "#dfe6e9" }}>
+                          ★
+                        </span>
+                      ))}
+                      {(s.servis_puan?.puan || 0) > 0 && <span style={{ fontSize: "14px", marginLeft: "8px", fontWeight: "bold", color: "#0f3460" }}>{s.servis_puan?.puan}/5</span>}
+                    </div>
+                  </td>
+                  <td style={tdStyle}>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button
+                        onClick={() => {
+                          setDisRatingId(disRatingId === s.bakim_id ? null : s.bakim_id);
+                          setDisRatingValue(s.servis_puan?.puan || 0);
+                        }}
+                        style={{
+                          padding: "8px 15px",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "8px",
+                          fontWeight: "bold",
+                          cursor: "pointer",
+                          fontSize: "12px",
+                          flex: 1,
+                          background: disRatingId === s.bakim_id ? "#7f8c8d" : "#e94560"
+                        }}
+                      >
+                        {disRatingId === s.bakim_id ? "Kapat" : ((s.servis_puan?.puan || 0) > 0 ? "Puanı Güncelle" : "⭐ Puanla")}
+                      </button>
+                      <button
+                        onClick={() => handleApproveMaintenance(s.bakim_id)}
+                        style={{
+                          padding: "8px 15px",
+                          color: (s.servis_puan?.puan || 0) > 0 ? "#27ae60" : "#95a5a6",
+                          border: `1px solid ${(s.servis_puan?.puan || 0) > 0 ? "#27ae60" : "#ddd"}`,
+                          borderRadius: "8px",
+                          fontWeight: "bold",
+                          cursor: (s.servis_puan?.puan || 0) > 0 ? "pointer" : "not-allowed",
+                          fontSize: "12px",
+                          background: "white",
+                          transition: "0.2s"
+                        }}
+                        title={(s.servis_puan?.puan || 0) > 0 ? "Listeden Kaldır" : "Önce Puanlamanız Gerekir"}
+                      >
+                        Kaldır
+                      </button>
                     </div>
                   </td>
                 </tr>
-              )}
-            </React.Fragment>
-          ))}
+                {disRatingId === s.bakim_id && (
+                  <tr>
+                    <td colSpan="7" style={{ padding: "0 16px 20px 16px", background: "#f8f9fa" }}>
+                      <div style={{ padding: "20px", background: "white", borderRadius: "12px", border: "1px solid #e1e5eb", marginTop: "10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div>
+                          <div style={{ marginBottom: "8px", fontWeight: "bold", color: "#0f3460" }}>İşlem Puanı Verin:</div>
+                          <div style={{ display: "flex", gap: "6px" }}>
+                            {[1, 2, 3, 4, 5].map(star => (
+                              <span
+                                key={star}
+                                onClick={() => setDisRatingValue(star)}
+                                style={{ cursor: "pointer", fontSize: "24px", color: disRatingValue >= star ? "#f39c12" : "#dfe6e9", transition: "0.2s" }}
+                              >
+                                ★
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleDisRateSave(s.bakim_id)}
+                          disabled={disRatingValue === 0}
+                          style={{ padding: "10px 25px", background: "#27ae60", color: "white", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", opacity: disRatingValue === 0 ? 0.5 : 1 }}
+                        >
+                          Puanı Kaydet
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))
+          ) : (
+            <tr><td colSpan="7" style={{ textAlign: "center", padding: "40px", color: "#95a5a6" }}>Servis kaydı bulunamadı.</td></tr>
+          )}
         </tbody>
       </table>
     </div>
@@ -299,11 +458,35 @@ export default function ServisMerkezi() {
                 Aşağıdaki seçenekleri kullanarak servis süreçlerini ve firma detaylarını yönetin.
               </p>
             </div>
-            {activeTab === "firmalar" && isAdmin && (
-              <button onClick={() => { setModalType("Servis"); setIsModalOpen(true); }} style={ekleButonStil}>
-                + Yeni Firma Ekle
-              </button>
-            )}
+            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+              {isAdmin && (
+                <button onClick={() => { setModalType("Servis"); setIsModalOpen(true); }} style={ekleButonStil}>
+                  + Yeni Firma Ekle
+                </button>
+              )}
+              {activeTab === "firmalar" && (
+                <div style={{ position: "relative", width: "250px" }}>
+                  <input
+                    type="text"
+                    placeholder="İsim veya e-posta..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "12px 15px 12px 40px",
+                      borderRadius: "10px",
+                      border: "1px solid #e1e5eb",
+                      fontSize: "14px",
+                      outline: "none",
+                      background: "white",
+                      boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
+                      boxSizing: "border-box"
+                    }}
+                  />
+                  <span style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#95a5a6" }}>🔍</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* YATAY SEÇENEKLER MENÜSÜ */}

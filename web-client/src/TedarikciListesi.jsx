@@ -22,7 +22,10 @@ export default function TedarikciListesi() {
     tedarik_suresi: "",
     tarih: new Date().toISOString().split("T")[0],
     puan: 0,
+    makine_tur_id: "",
+    tahmini_omur: "",
   });
+  const [machineTypes, setMachineTypes] = useState([]);
   const [hoverPuan, setHoverPuan] = useState(0);
   const [formLoading, setFormLoading] = useState(false);
   const [formSuccess, setFormSuccess] = useState("");
@@ -37,17 +40,20 @@ export default function TedarikciListesi() {
 
   // --- VERİ ÇEKME (Tedarikçiler) ---
   useEffect(() => {
-    const fetchSuppliers = async () => {
+    const fetchSuppliersAndTypes = async () => {
       try {
-        const allFirms = await api.getFirms();
-        const suppliersOnly = allFirms.filter(f => f.tip === "Tedarikçi");
+        const [allFirms, types] = await Promise.all([
+          api.getFirms(),
+          api.getSystemMachineTypes()
+        ]);
+        const suppliersOnly = allFirms.filter(f => f.tip === "Tedarikçi" && f.aktiflik !== false);
         setTedarikciler(suppliersOnly);
+        setMachineTypes(types);
       } catch (error) {
-        console.error("Tedarikçi verileri çekilirken hata:", error);
-      } finally {
+        console.error("Veriler çekilirken hata:", error);
       }
     };
-    fetchSuppliers();
+    fetchSuppliersAndTypes();
   }, []);
 
   // --- SEKME DEĞİŞTİĞİNDE VERİ ÇEKME ---
@@ -88,6 +94,20 @@ export default function TedarikciListesi() {
     }
   };
 
+  const handleDeleteSupplier = async (supplier) => {
+    const confirmMsg = `${supplier.firma_adi || supplier.ad} firması ile olan sözleşmeyi iptal etmek ve tüm verilerini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await api.deleteSupplier(supplier.tedarikci_id || supplier.id);
+      setTedarikciler(tedarikciler.filter(t => (t.tedarikci_id || t.id) !== (supplier.tedarikci_id || supplier.id)));
+      alert("Tedarikçi sözleşmesi iptal edildi ve listeden kaldırıldı. Geçmiş veriler korunmaktadır.");
+    } catch (err) {
+      console.error("Tedarikçi silme hatası:", err);
+      alert("Hata: " + err.message);
+    }
+  };
+
   // --- SATIN ALMA FORMU SUBMIT ---
   const handlePurchaseSubmit = async (e) => {
     e.preventDefault();
@@ -100,7 +120,7 @@ export default function TedarikciListesi() {
     try {
       await api.addPurchase(formData);
       setFormSuccess("✅ Satın alma kaydı başarıyla oluşturuldu ve stok güncellendi!");
-      setFormData({ tedarikci_id: "", parca_adi: "", adet: "", birim_fiyat: "", tedarik_suresi: "", tarih: new Date().toISOString().split("T")[0], puan: 0 });
+      setFormData({ tedarikci_id: "", parca_adi: "", adet: "", birim_fiyat: "", tedarik_suresi: "", tarih: new Date().toISOString().split("T")[0], puan: 0, makine_tur_id: "", tahmini_omur: "" });
       setHoverPuan(0);
       setTimeout(() => setFormSuccess(""), 4000);
     } catch (error) {
@@ -219,61 +239,87 @@ export default function TedarikciListesi() {
                     <th style={thStyle}>Yetkili Kişi</th>
                     <th style={thStyle}>İletişim Bilgileri</th>
                     <th style={thStyle}>Veri / Vergi No</th>
+                    <th style={thStyle}>Adres</th>
                     <th style={thStyle}>Güvenilirlik</th>
                     <th style={thStyle}>Değerlendirme</th>
                     <th style={thStyle}>Durum</th>
+                    <th style={thStyle}>İşlemler</th>
                   </tr>
                 </thead>
                 <tbody>
-                    {filteredTedarikciler.length > 0 ? (
-                      filteredTedarikciler.map((t) => (
-                        <tr key={t.tedarikci_id || t.id} style={trStyle}>
-                          <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>
-                            {t.firma_adi || t.ad}
-                            <div style={{ fontSize: "11px", color: "#95a5a6", fontWeight: "normal" }}>Kayıt: {t.kayit_tarihi ? new Date(t.kayit_tarihi).toLocaleDateString("tr-TR") : "-"}</div>
-                          </td>
-                          <td style={tdStyle}>{t.yetkili_kisi || "-"}</td>
-                          <td style={tdStyle}>
-                            <div style={{ fontSize: "13px" }}>📞 {t.telefon}</div>
-                            <div style={{ fontSize: "12px", color: "#7f8c8d" }}>✉️ {t.email}</div>
-                          </td>
-                          <td style={tdStyle}>
-                            <code style={{ background: "#f8f9fa", padding: "2px 6px", borderRadius: "4px", fontSize: "12px" }}>{t.veri_no || "BELİRTİLMEMİŞ"}</code>
-                          </td>
-                          <td style={tdStyle}>
-                            <div style={{
-                              display: "inline-block",
-                              padding: "4px 10px",
-                              borderRadius: "20px",
+                  {filteredTedarikciler.length > 0 ? (
+                    filteredTedarikciler.map((t) => (
+                      <tr key={t.tedarikci_id || t.id} style={trStyle}>
+                        <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>
+                          {t.firma_adi || t.ad}
+                          <div style={{ fontSize: "11px", color: "#95a5a6", fontWeight: "normal" }}>Kayıt: {t.kayit_tarihi ? new Date(t.kayit_tarihi).toLocaleDateString("tr-TR") : "-"}</div>
+                        </td>
+                        <td style={tdStyle}>{t.yetkili_kisi || "-"}</td>
+                        <td style={tdStyle}>
+                          <div style={{ fontSize: "13px" }}>📞 {t.telefon || t.iletisim?.telefon || "-"}</div>
+                          <div style={{ fontSize: "12px", color: "#7f8c8d" }}>✉️ {t.email || t.iletisim?.mail || "-"}</div>
+                        </td>
+                        <td style={tdStyle}>
+                          <code style={{ background: "#f8f9fa", padding: "2px 6px", borderRadius: "4px", fontSize: "12px" }}>{t.vergi_no || t.veri_no || "BELİRTİLMEMİŞ"}</code>
+                        </td>
+                        <td style={tdStyle}>
+                          <div style={{ fontSize: "13px", fontWeight: "bold" }}>{t.iletisim?.il ? `${t.iletisim.il} / ${t.iletisim.ilce}` : "-"}</div>
+                          <div style={{ fontSize: "12px", color: "#7f8c8d", maxWidth: "200px", whiteSpace: "normal" }}>{t.iletisim?.acik_adres || "-"}</div>
+                        </td>
+                        <td style={tdStyle}>
+                          <div style={{
+                            display: "inline-block",
+                            padding: "4px 10px",
+                            borderRadius: "20px",
+                            fontSize: "12px",
+                            fontWeight: "bold",
+                            background: t.guvenilirlik_skoru >= 90 ? "rgba(46, 204, 113, 0.15)" : t.guvenilirlik_skoru >= 70 ? "rgba(241, 196, 15, 0.15)" : "rgba(231, 76, 60, 0.15)",
+                            color: t.guvenilirlik_skoru >= 90 ? "#27ae60" : t.guvenilirlik_skoru >= 70 ? "#f39c12" : "#e74c3c"
+                          }}>
+                            %{t.guvenilirlik_skoru || 0} Güven
+                          </div>
+                        </td>
+                        <td style={tdStyle}>
+                          <div style={{ display: "flex", gap: "2px", alignItems: "center" }}>
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <span key={star} style={{ fontSize: "18px", color: star <= Math.round((t.ortalama_puan || 0) / 2) ? "#f39c12" : "#dfe6e9" }}>
+                                ★
+                              </span>
+                            ))}
+                            {t.ortalama_puan > 0 && <strong style={{ marginLeft: "6px", color: "#0f3460", fontSize: "13px" }}>{t.ortalama_puan}/10</strong>}
+                          </div>
+                          {t.yorum && <div style={{ fontSize: "12px", color: "#7f8c8d", marginTop: "4px", fontStyle: "italic" }}>💬 {t.yorum}</div>}
+                        </td>
+                        <td style={tdStyle}>
+                          <span style={t.aktiflik !== false ? badgeActive : badgeInactive}>
+                            {t.aktiflik !== false ? "Aktif" : "Pasif"}
+                          </span>
+                        </td>
+                        <td style={tdStyle}>
+                          <button
+                            onClick={() => handleDeleteSupplier(t)}
+                            style={{
+                              background: "rgba(231, 76, 60, 0.1)",
+                              color: "#e74c3c",
+                              border: "1px solid rgba(231, 76, 60, 0.3)",
+                              padding: "8px 12px",
+                              borderRadius: "8px",
                               fontSize: "12px",
                               fontWeight: "bold",
-                              background: t.guvenilirlik_skoru >= 90 ? "rgba(46, 204, 113, 0.15)" : t.guvenilirlik_skoru >= 70 ? "rgba(241, 196, 15, 0.15)" : "rgba(231, 76, 60, 0.15)",
-                              color: t.guvenilirlik_skoru >= 90 ? "#27ae60" : t.guvenilirlik_skoru >= 70 ? "#f39c12" : "#e74c3c"
-                            }}>
-                              %{t.guvenilirlik_skoru || 0} Güven
-                            </div>
-                          </td>
-                          <td style={tdStyle}>
-                            <div style={{ display: "flex", gap: "2px", alignItems: "center" }}>
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <span key={star} style={{ fontSize: "18px", color: star <= Math.round((t.ortalama_puan || 0) / 2) ? "#f39c12" : "#dfe6e9" }}>
-                                  ★
-                                </span>
-                              ))}
-                              {t.ortalama_puan > 0 && <strong style={{ marginLeft: "6px", color: "#0f3460", fontSize: "13px" }}>{t.ortalama_puan}/10</strong>}
-                            </div>
-                            {t.yorum && <div style={{ fontSize: "12px", color: "#7f8c8d", marginTop: "4px", fontStyle: "italic" }}>💬 {t.yorum}</div>}
-                          </td>
-                          <td style={tdStyle}>
-                            <span style={t.aktiflik !== false ? badgeActive : badgeInactive}>
-                              {t.aktiflik !== false ? "Aktif" : "Pasif"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
+                              cursor: "pointer",
+                              transition: "0.2s"
+                            }}
+                            onMouseOver={(e) => { e.target.style.background = "#e74c3c"; e.target.style.color = "white"; }}
+                            onMouseOut={(e) => { e.target.style.background = "rgba(231, 76, 60, 0.1)"; e.target.style.color = "#e74c3c"; }}
+                          >
+                            Sözleşmeyi İptal Et
+                          </button>
+                        </td>
+                      </tr>
+                    ))
                   ) : (
                     <tr>
-                      <td colSpan="7" style={{ padding: "40px", textAlign: "center", color: "#95a5a6" }}>
+                      <td colSpan="9" style={{ padding: "40px", textAlign: "center", color: "#95a5a6" }}>
                         Arama kriterlerine uygun tedarikçi bulunamadı.
                       </td>
                     </tr>
@@ -327,6 +373,37 @@ export default function TedarikciListesi() {
                       onChange={(e) => handleInputChange("parca_adi", e.target.value)}
                       style={inputStyle}
                     />
+                  </div>
+
+                  {/* TAHMİNİ ÖMÜR */}
+                  <div style={formGroupStyle}>
+                    <label style={labelStyle}>Tahmini Ömür (Saat)</label>
+                    <input
+                      id="omur-input"
+                      type="number"
+                      min="0"
+                      placeholder="Örn: 5000"
+                      value={formData.tahmini_omur}
+                      onChange={(e) => handleInputChange("tahmini_omur", e.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  {/* MAKİNE TÜRÜ */}
+                  <div style={formGroupStyle}>
+                    <label style={labelStyle}>İlgili Makine Türü</label>
+                    <select
+                      value={formData.makine_tur_id}
+                      onChange={(e) => handleInputChange("makine_tur_id", e.target.value)}
+                      style={selectStyle}
+                    >
+                      <option value="">— Opsiyonel: Makine türü seçin —</option>
+                      {machineTypes.map(type => (
+                        <option key={type.makine_tur_id} value={type.makine_tur_id}>
+                          {type.makine_tur_adi}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* ADET, BİRİM FİYAT ve TEDARİK SÜRESİ yan yana */}
@@ -483,6 +560,7 @@ export default function TedarikciListesi() {
                       <th style={thStyle}>#</th>
                       <th style={thStyle}>Parça Adı</th>
                       <th style={thStyle}>Güncel Miktar</th>
+                      <th style={thStyle}>Tahmini Ömür</th>
                       <th style={thStyle}>Stok Seviyesi</th>
                       <th style={thStyle}>Son Güncelleme</th>
                       <th style={thStyle}>Durum</th>
@@ -507,6 +585,20 @@ export default function TedarikciListesi() {
                               {s.miktar}
                             </span>
                             <span style={{ color: "#bdc3c7", fontSize: "12px", marginLeft: "4px" }}>adet</span>
+                          </td>
+                          <td style={tdStyle}>
+                             {s.tahmini_omur_saati ? (
+                               <span style={{ 
+                                 background: "rgba(52,152,219,0.1)", 
+                                 color: "#3498db", 
+                                 padding: "4px 10px", 
+                                 borderRadius: "12px", 
+                                 fontSize: "12px",
+                                 fontWeight: "bold"
+                               }}>
+                                 ⏳ {s.tahmini_omur_saati} Saat
+                               </span>
+                             ) : "-"}
                           </td>
                           <td style={tdStyle}>
                             <div style={stokKapsayiciStyle}>
@@ -571,11 +663,13 @@ export default function TedarikciListesi() {
                     <tr>
                       <th style={thStyle}>Tarih</th>
                       <th style={thStyle}>Tedarikçi</th>
+                      <th style={thStyle}>Makine Türü</th>
                       <th style={thStyle}>Parça</th>
                       <th style={thStyle}>Adet</th>
                       <th style={thStyle}>Birim Fiyat</th>
                       <th style={thStyle}>Süre</th>
                       <th style={thStyle}>Toplam</th>
+                      <th style={thStyle}>Tahmini Ömür</th>
                       <th style={thStyle}>Puan</th>
                     </tr>
                   </thead>
@@ -588,12 +682,37 @@ export default function TedarikciListesi() {
                         <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>
                           {sa.tedarikci?.firma_adi || "-"}
                         </td>
+                        <td style={tdStyle}>
+                          <span style={{
+                            padding: "4px 10px",
+                            background: sa.makine_turu ? "#f1f2f6" : "transparent",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            color: "#0f3460"
+                          }}>
+                            {sa.makine_turu?.makine_tur_adi || "-"}
+                          </span>
+                        </td>
                         <td style={tdStyle}>{sa.parca_adi}</td>
                         <td style={{ ...tdStyle, fontWeight: "bold" }}>{sa.adet}</td>
                         <td style={tdStyle}>{Number(sa.birim_fiyat).toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ₺</td>
                         <td style={tdStyle}>{(sa.tedarik_suresi !== null && sa.tedarik_suresi !== undefined) ? `${sa.tedarik_suresi} Gün` : "-"}</td>
                         <td style={{ ...tdStyle, fontWeight: "bold", color: "#27ae60" }}>
                           {(sa.adet * Number(sa.birim_fiyat)).toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ₺
+                        </td>
+                        <td style={tdStyle}>
+                          {sa.tahmini_omur_saati ? (
+                            <span style={{ 
+                              background: "rgba(52,152,219,0.1)", 
+                              color: "#3498db", 
+                              padding: "4px 10px", 
+                              borderRadius: "12px", 
+                              fontSize: "12px",
+                              fontWeight: "bold"
+                            }}>
+                              ⏳ {sa.tahmini_omur_saati} Saat
+                            </span>
+                          ) : "-"}
                         </td>
                         <td style={tdStyle}>
                           <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>

@@ -20,38 +20,49 @@ export default function Makineler() {
   const [filterLokasyon, setFilterLokasyon] = useState(""); // Lokasyon filtresi
 
   const [machines, setMachines] = useState([]); // API'den gelen makineler
+  const [machineTypes, setMachineTypes] = useState([]); // Veri tabanından çekilen makine türleri
 
   // --- VERİ ÇEKME SÜRECİ ---
   // Uygulama yüklendiğinde makineleri API'den çeker ve UI için formatlar
   useEffect(() => {
-    const fetchMachines = async () => {
+    const fetchData = async () => {
       try {
-        const data = await api.getMachines();
+        const [machinesData, typesData] = await Promise.all([
+          api.getMachines(),
+          api.getSystemMachineTypes()
+        ]);
+
         // API'den gelen veriyi yerel state'e uygun hale getir (ID ve durum eşleştirmesi)
+        const formattedData = machinesData.map(m => ({
+          ...m,
+          id: m.makine_id,
+          makineid: "MKN-" + m.makine_id,
+          aktiflik_durumu: typeof m.aktiflik_durumu === "string" ? m.aktiflik_durumu : (m.aktiflik_durumu ? "Aktif" : "Pasif")
+        }));
         const formattedData = data.map((m) => ({
-  ...m,
-  id: m.makine_id,
-  makineid: "MKN-" + m.makine_id,
-  makine_ad: m.makine_adi || m.makine_ad,
-  aktiflik_durumu:
-    typeof m.aktiflik_durumu === "string"
-      ? m.aktiflik_durumu
-      : (m.aktiflik_durumu ? "Aktif" : "Pasif")
-}));
+          ...m,
+          id: m.makine_id,
+          makineid: "MKN-" + m.makine_id,
+          makine_ad: m.makine_adi || m.makine_ad,
+          aktiflik_durumu:
+            typeof m.aktiflik_durumu === "string"
+              ? m.aktiflik_durumu
+              : (m.aktiflik_durumu ? "Aktif" : "Pasif")
+        }));
 
         setMachines(formattedData);
+        setMachineTypes(typesData);
       } catch (err) {
-        console.error("Makineler yüklenirken hata oluştu", err);
+        console.error("Veriler yüklenirken hata oluştu", err);
       }
     };
-    fetchMachines();
+    fetchData();
   }, []);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [form, setForm] = useState({
     makine_ad: "",
-    firma_id: "",
     m_tur_id: "",
     seri_no: "",
     satin_alma_tarihi: "",
@@ -71,8 +82,8 @@ export default function Makineler() {
 
   // --- YENİ MAKİNE EKLEME FONKSİYONU ---
   const addMachine = async () => {
-    if (!form.makine_ad || !form.firma_id || !form.m_tur_id) {
-      alert("Makine adı, firma id ve makine tür id zorunludur!");
+    if (!form.makine_ad || !form.m_tur_id) {
+      alert("Makine adı ve makine türü seçimi zorunludur!");
       return;
     }
 
@@ -82,10 +93,14 @@ export default function Makineler() {
         ? form.seri_no.split(",").map(s => s.trim()).filter(s => s !== "")
         : Array.isArray(form.seri_no) ? form.seri_no : [form.seri_no];
 
+      // Mevcut kullanıcının firma bilgisini al
+      const userPayload = JSON.parse(localStorage.getItem("user_payload") || "{}");
+      const currentFirmaId = userPayload.firma_id || 1;
+
       // API'ye gönderilecek veri modelini oluştur
       const payload = {
         ...form,
-        firma_id: Number(form.firma_id),
+        firma_id: Number(currentFirmaId),
         m_tur_id: Number(form.m_tur_id),
         seri_no: seriNoArray,
         satin_alma_tarihi: form.satin_alma_tarihi ? new Date(form.satin_alma_tarihi).toISOString() : new Date().toISOString(),
@@ -116,13 +131,36 @@ export default function Makineler() {
 
       // Formu temizle ve modali kapat
       setForm({
-        makine_ad: "", firma_id: "", m_tur_id: "", seri_no: "",
+        makine_ad: "", m_tur_id: "", seri_no: "",
         satin_alma_tarihi: "", satin_alma_maliyeti: "", garanti_suresi: "", aktiflik_durumu: "Aktif",
         lo_id: "", servis_firma_adi: "", servis_telefon: "", servis_il_ilce: "", servis_adres: ""
       });
       setIsModalOpen(false);
     } catch (err) {
       console.error("Makine eklenirken hata:", err);
+    }
+  };
+
+  // --- DURUM GÜNCELLEME (AKTİF/PASİF) ---
+  const handleToggleStatus = async (machine) => {
+    const isCurrentlyActive = machine.aktiflik_durumu === "Aktif" || machine.aktiflik_durumu === true;
+    const newStatus = !isCurrentlyActive;
+
+    const confirmMsg = `Makineyi ${newStatus ? "AKTİF" : "PASİF"} duruma getirmek istiyor musunuz?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await api.updateMachineStatus(machine.id, newStatus);
+
+      // Local state'i güncelle
+      setMachines(machines.map(m => {
+        if (m.id === machine.id) {
+          return { ...m, aktiflik_durumu: newStatus ? "Aktif" : "Pasif" };
+        }
+        return m;
+      }));
+    } catch (err) {
+      alert("Durum güncellenirken bir hata oluştu: " + err.message);
     }
   };
 
@@ -312,32 +350,45 @@ export default function Makineler() {
                     display: "flex",
                     flexDirection: "column",
                     justifyContent: "space-between",
-                    minHeight: "380px"
+                    minHeight: "380px",
+                    opacity: (m.aktiflik_durumu === "Pasif" || m.aktiflik_durumu === false) ? 0.7 : 1, // Pasif makineleri hafif şeffaf yap
+                    transition: "all 0.3s ease"
                   }}
                   onClick={() => setExpandedMachineId(expandedMachineId === m.id ? null : m.id)}
                 >
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid #eee", paddingBottom: "10px", marginBottom: "15px", height: "50px" }}>
-                      <h3 style={{ margin: 0, color: "#2c3e50", fontSize: "16px", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{m.makine_ad}</h3>
+                      <h3 style={{ margin: 0, color: "#2c3e50", fontSize: "16px", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{m.makine_adi || m.makine_ad}</h3>
                       <div style={{ display: "flex", flexDirection: "column", gap: "5px", alignItems: "flex-end" }}>
                         {m.garanti_suresi > 0 && (
                           <span style={garantiRozetStyle} title={`${m.garanti_suresi} Ay Garanti`}>
                             🛡️ Garantili
                           </span>
                         )}
-                        <span style={{
-                          padding: "4px 8px",
-                          borderRadius: "20px",
-                          fontSize: "12px",
-                          fontWeight: "bold",
-                          color: "white",
-                          minWidth: "95px", // Genişlik eşitlendi
-                          textAlign: "center",
-                          background: m.aktiflik_durumu?.toLowerCase() === "aktif" ? "#2ecc71" :
-                            m.aktiflik_durumu?.toLowerCase() === "bakımda" ? "#f39c12" : "#e74c3c"
-                        }}>
-                          {m.aktiflik_durumu || "Bilinmiyor"}
-                        </span>
+                        <div
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleStatus(m);
+                          }}
+                          style={{
+                            padding: "6px 12px",
+                            borderRadius: "20px",
+                            fontSize: "12px",
+                            fontWeight: "800",
+                            color: "white",
+                            minWidth: "100px",
+                            textAlign: "center",
+                            cursor: "pointer",
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                            background: m.aktiflik_durumu === "Aktif" ? "#2ecc71" :
+                              (m.aktiflik_durumu === "Pasif" || m.aktiflik_durumu === false) ? "#e74c3c" : "#f39c12",
+                            border: "none"
+                          }}
+                          title="Durumu Değiştirmek İçin Tıklayın"
+                        >
+                          {m.aktiflik_durumu === "Aktif" ? "AKTİF" :
+                            (m.aktiflik_durumu === "Pasif" || m.aktiflik_durumu === false) ? "PASİF" : m.aktiflik_durumu}
+                        </div>
                       </div>
                     </div>
 
@@ -355,7 +406,7 @@ export default function Makineler() {
                           <div><strong>Maliyet:</strong> {m.satin_alma_maliyeti || "-"} ₺</div>
                           <div><strong>Çalışma Saatleri:</strong> {m.top_calisma_saati || 0} Saat</div>
                           <div><strong>Lokasyon ID:</strong> {m.lo_id || "-"}</div>
-                          <div><strong>Tür ID:</strong> {m.m_tur_id || "-"}</div>
+                          <div><strong>Makine Türü:</strong> {m.makine_turu?.makine_tur_adi || m.m_tur_id || "-"}</div>
                           <div><strong>Seri No:</strong> {Array.isArray(m.seri_no) ? m.seri_no.join(", ") : m.seri_no || "-"}</div>
                           <div style={{ color: "#e94560", fontWeight: "bold" }}><strong>Servis PIN:</strong> {m.servis_pin || "####"}</div>
                           <div><strong>Garanti Süresi:</strong> {m.garanti_suresi ? m.garanti_suresi + " Ay" : "-"}</div>
@@ -378,25 +429,25 @@ export default function Makineler() {
 
                       {/* QR Çıktı Al: QR kodu yeni pencerede yazdırılabilir formatta açar */}
                       <button
-                         onClick={(e) => {
-                         e.stopPropagation();
+                        onClick={(e) => {
+                          e.stopPropagation();
 
-                       const container = document.querySelector(`.qr-container-${m.id}`);
-                       const canvas = container?.querySelector("canvas");
-                       if (!canvas) {
-                      alert("QR alanı bulunamadı.");
-                      return;
-     }
+                          const container = document.querySelector(`.qr-container-${m.id}`);
+                          const canvas = container?.querySelector("canvas");
+                          if (!canvas) {
+                            alert("QR alanı bulunamadı.");
+                            return;
+                          }
 
-                   const imgData = canvas.toDataURL("image/png");
-                  const printWindow = window.open("", "_blank", "width=700,height=700");
+                          const imgData = canvas.toDataURL("image/png");
+                          const printWindow = window.open("", "_blank", "width=700,height=700");
 
-              if (!printWindow) {
-      alert("Tarayıcı açılır pencereyi engelledi. Lütfen popup izni ver.");
-      return;
-    }
+                          if (!printWindow) {
+                            alert("Tarayıcı açılır pencereyi engelledi. Lütfen popup izni ver.");
+                            return;
+                          }
 
-    printWindow.document.write(`
+                          printWindow.document.write(`
       <html>
         <head>
           <title>QR Kod Çıktısı - ${m.makine_adi || m.makine_ad || "Makine"}</title>
@@ -423,13 +474,13 @@ export default function Makineler() {
       </html>
     `);
 
-    printWindow.document.close();
-    printWindow.focus();
-  }}
-  style={printBtnStyle}
->
-  QR Çıktı Al
-</button>
+                          printWindow.document.close();
+                          printWindow.focus();
+                        }}
+                        style={printBtnStyle}
+                      >
+                        QR Çıktı Al
+                      </button>
 
                       {/* Detay Sayfasına Git Butonu */}
                       <button
@@ -457,9 +508,15 @@ export default function Makineler() {
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", maxHeight: "60vh", overflowY: "auto", paddingRight: "10px" }}>
-                  <input name="makine_ad" placeholder="Makine Adı (Zorunlu)" value={form.makine_ad} onChange={handleChange} style={inputStyle} />
-                  <input name="firma_id" type="number" placeholder="Firma ID" value={form.firma_id} onChange={handleChange} style={inputStyle} />
-                  <input name="m_tur_id" type="number" placeholder="Makine Tür ID" value={form.m_tur_id} onChange={handleChange} style={inputStyle} />
+                  <input name="makine_ad" placeholder="Makine Adı " value={form.makine_ad} onChange={handleChange} style={inputStyle} />
+                  <select name="m_tur_id" value={form.m_tur_id} onChange={handleChange} style={inputStyle}>
+                    <option value="">Makine Türü Seçiniz </option>
+                    {machineTypes.map(type => (
+                      <option key={type.makine_tur_id} value={type.makine_tur_id}>
+                        {type.makine_tur_adi}
+                      </option>
+                    ))}
+                  </select>
                   <input name="seri_no" placeholder="Seri No" value={form.seri_no} onChange={handleChange} style={inputStyle} />
                   <input name="satin_alma_tarihi" type="date" placeholder="Satın Alma Tarihi" value={form.satin_alma_tarihi} onChange={handleChange} style={inputStyle} />
                   <input name="satin_alma_maliyeti" type="number" placeholder="Satın Alma Maliyeti" value={form.satin_alma_maliyeti} onChange={handleChange} style={inputStyle} />
@@ -479,7 +536,7 @@ export default function Makineler() {
                   {/* GARANTİ VARSA GÖRÜNEN EK ALANLAR */}
                   {Number(form.garanti_suresi) > 0 && (
                     <div style={{ gridColumn: "span 2", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", border: "1px dashed #2ecc71", padding: "15px", borderRadius: "10px", marginTop: "10px", marginBottom: "10px" }}>
-                      <div style={{ gridColumn: "span 2", color: "#27ae60", fontWeight: "bold", fontSize: "14px", marginBottom: "5px" }}>🛡️ Garanti & Servis İletişim Bilgileri</div>
+                      <div style={{ gridColumn: "span 2", color: "#27ae60", fontWeight: "bold", fontSize: "14px", marginBottom: "5px" }}>Garanti & Servis İletişim Bilgileri</div>
                       <input name="servis_firma_adi" placeholder="Servis Firma Adı" value={form.servis_firma_adi} onChange={handleChange} style={inputStyle} />
                       <input name="servis_telefon" placeholder="Servis Telefon" value={form.servis_telefon} onChange={handleChange} style={inputStyle} />
                       <input name="servis_il_ilce" placeholder="İl / İlçe" value={form.servis_il_ilce} onChange={handleChange} style={inputStyle} />

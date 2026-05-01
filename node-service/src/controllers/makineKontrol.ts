@@ -102,7 +102,7 @@ export const qrileMakineGetir = async (req: Request, res: Response) => {
         }
         const kullaniciId = req.user!.userId;
         const { qr_uuid } = req.params;
-// ─── AUDIT LOG: QR erişim kaydı ───
+        // ─── AUDIT LOG: QR erişim kaydı ───
         console.log(JSON.stringify({
             event: 'QR_ACCESS',
             userId: kullaniciId,
@@ -128,22 +128,22 @@ export const qrileMakineGetir = async (req: Request, res: Response) => {
 
         if (!makine) {
             if (!makine) {
-            // ─── Başarısız erişim logu ───
-            console.warn(JSON.stringify({
-                event: 'QR_ACCESS_FAILED',
-                userId: kullaniciId,
-                qr_uuid: qr_uuid,
-                ip: req.ip,
-                reason: 'MACHINE_NOT_FOUND',
-                timestamp: new Date().toISOString(),
-            }));
+                // ─── Başarısız erişim logu ───
+                console.warn(JSON.stringify({
+                    event: 'QR_ACCESS_FAILED',
+                    userId: kullaniciId,
+                    qr_uuid: qr_uuid,
+                    ip: req.ip,
+                    reason: 'MACHINE_NOT_FOUND',
+                    timestamp: new Date().toISOString(),
+                }));
 
-            return res.status(404).json({
-                success: false,
-                message: "Bu QR koda ait makine bulunamadı."
-            });
-        }
-            
+                return res.status(404).json({
+                    success: false,
+                    message: "Bu QR koda ait makine bulunamadı."
+                });
+            }
+
         }
 
         // risk_skoru ayrı tabloda — en son kaydı çekiyoruz

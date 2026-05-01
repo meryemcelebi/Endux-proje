@@ -1,7 +1,10 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
+<<<<<<< HEAD
+=======
 import { Decimal } from "@prisma/client/runtime/client";
 import { parse } from "path";
+>>>>>>> 5b8a9a331802ed33037242851251595a72e68397
 
 
 export async function maliyetAnalizi(req: Request, res: Response) {

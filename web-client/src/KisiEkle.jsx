@@ -23,7 +23,7 @@ export default function KisiEkle() {
     rol_id: "", // Yetki seviyesi (Admin, Teknisyen, Operatör)
   });
 
-  // Load mock data on mount
+  // Load users on mount
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -52,9 +52,7 @@ export default function KisiEkle() {
       // rol_id (string sayısal değer örn "3") üzerinden rol stringini bul
       const roleMap = {
         "1": "OPERATOR",
-        "2": "TEKNISYEN",
-        "3": "YONETICI",
-        "4": "SERVIS"
+        "2": "TEKNISYEN"
       };
 
       const rolStr = roleMap[form.rol_id] || "OPERATOR";
@@ -194,8 +192,6 @@ export default function KisiEkle() {
                   <option value="" disabled>Rol seçin</option>
                   <option value="1">Operatör</option>
                   <option value="2">Teknisyen</option>
-                  <option value="3">Yönetici</option>
-                  <option value="4">Dış Servis Sorumlusu</option>
                 </select>
 
                 <button

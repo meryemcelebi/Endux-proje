@@ -16,7 +16,10 @@ export default function SatinAlma() {
     birim_fiyat: "",
     tarih: new Date().toISOString().split("T")[0],
     puan: 0,
+    makine_tur_id: "",
+    tahmini_omur: "",
   });
+  const [machineTypes, setMachineTypes] = useState([]);
   const [hoverPuan, setHoverPuan] = useState(0);
   const [formLoading, setFormLoading] = useState(false);
   const [formSuccess, setFormSuccess] = useState("");
@@ -33,11 +36,15 @@ export default function SatinAlma() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const allFirms = await api.getFirms();
+        const [allFirms, types] = await Promise.all([
+          api.getFirms(),
+          api.getSystemMachineTypes()
+        ]);
         const suppliersOnly = allFirms.filter(f => f.tip === "Tedarikçi");
         setTedarikciler(suppliersOnly);
+        setMachineTypes(types);
       } catch (error) {
-        console.error("Tedarikçi verileri çekilirken hata:", error);
+        console.error("Veriler çekilirken hata:", error);
       }
     };
     fetchData();
@@ -72,7 +79,7 @@ export default function SatinAlma() {
     try {
       await api.addPurchase(formData);
       setFormSuccess("Satın alma kaydı başarıyla oluşturuldu ve stok güncellendi!");
-      setFormData({ tedarikci_id: "", parca_adi: "", adet: "", birim_fiyat: "", tarih: new Date().toISOString().split("T")[0], puan: 0 });
+      setFormData({ tedarikci_id: "", parca_adi: "", adet: "", birim_fiyat: "", tarih: new Date().toISOString().split("T")[0], puan: 0, makine_tur_id: "", tahmini_omur: "" });
       setHoverPuan(0);
       // 3 saniye sonra başarı mesajını kaldır
       setTimeout(() => setFormSuccess(""), 4000);
@@ -178,6 +185,37 @@ export default function SatinAlma() {
                       onChange={(e) => handleInputChange("parca_adi", e.target.value)}
                       style={inputStyle}
                     />
+                  </div>
+
+                  {/* TAHMİNİ ÖMÜR (Yeni yeri - Daha Görünür) */}
+                  <div style={formGroupStyle}>
+                    <label style={labelStyle}>Tahmini Ömür (Saat)</label>
+                    <input
+                      id="omur-input"
+                      type="number"
+                      min="0"
+                      placeholder="Parçanın beklenen çalışma ömrünü girin (Örn: 5000)"
+                      value={formData.tahmini_omur}
+                      onChange={(e) => handleInputChange("tahmini_omur", e.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  {/* MAKİNE TÜRÜ */}
+                  <div style={formGroupStyle}>
+                    <label style={labelStyle}>İlgili Makine Türü</label>
+                    <select
+                      value={formData.makine_tur_id}
+                      onChange={(e) => handleInputChange("makine_tur_id", e.target.value)}
+                      style={selectStyle}
+                    >
+                      <option value="">— Opsiyonel: Makine türü seçin —</option>
+                      {machineTypes.map(type => (
+                        <option key={type.makine_tur_id} value={type.makine_tur_id}>
+                          {type.makine_tur_adi}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* ADET ve BİRİM FİYAT yan yana */}
@@ -322,6 +360,7 @@ export default function SatinAlma() {
                       <th style={thStyle}>#</th>
                       <th style={thStyle}>Parça Adı</th>
                       <th style={thStyle}>Güncel Miktar</th>
+                      <th style={thStyle}>Tahmini Ömür</th>
                       <th style={thStyle}>Stok Seviyesi</th>
                       <th style={thStyle}>Son Güncelleme</th>
                       <th style={thStyle}>Durum</th>
@@ -346,6 +385,20 @@ export default function SatinAlma() {
                               {s.miktar}
                             </span>
                             <span style={{ color: "#bdc3c7", fontSize: "12px", marginLeft: "4px" }}>adet</span>
+                          </td>
+                          <td style={tdStyle}>
+                            {s.tahmini_omur_saati ? (
+                              <span style={{ 
+                                background: "rgba(52,152,219,0.1)", 
+                                color: "#3498db", 
+                                padding: "4px 10px", 
+                                borderRadius: "12px", 
+                                fontSize: "12px",
+                                fontWeight: "bold"
+                              }}>
+                                ⏳ {s.tahmini_omur_saati} Saat
+                              </span>
+                            ) : "-"}
                           </td>
                           <td style={tdStyle}>
                             <div style={stokKapsayiciStyle}>
@@ -412,10 +465,12 @@ export default function SatinAlma() {
                     <tr>
                       <th style={thStyle}>Tarih</th>
                       <th style={thStyle}>Tedarikçi</th>
+                      <th style={thStyle}>Makine Türü</th>
                       <th style={thStyle}>Parça</th>
                       <th style={thStyle}>Adet</th>
                       <th style={thStyle}>Birim Fiyat</th>
                       <th style={thStyle}>Toplam</th>
+                      <th style={thStyle}>Tahmini Ömür</th>
                       <th style={thStyle}>Puan</th>
                     </tr>
                   </thead>
@@ -428,11 +483,36 @@ export default function SatinAlma() {
                         <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>
                           {sa.tedarikci?.firma_adi || "-"}
                         </td>
+                        <td style={tdStyle}>
+                          <span style={{
+                            padding: "4px 10px",
+                            background: sa.makine_turu ? "#f1f2f6" : "transparent",
+                            borderRadius: "6px",
+                            fontSize: "12px",
+                            color: "#0f3460"
+                          }}>
+                            {sa.makine_turu?.makine_tur_adi || "-"}
+                          </span>
+                        </td>
                         <td style={tdStyle}>{sa.parca_adi}</td>
                         <td style={{ ...tdStyle, fontWeight: "bold" }}>{sa.adet}</td>
                         <td style={tdStyle}>{Number(sa.birim_fiyat).toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ₺</td>
                         <td style={{ ...tdStyle, fontWeight: "bold", color: "#27ae60" }}>
                           {(sa.adet * Number(sa.birim_fiyat)).toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ₺
+                        </td>
+                        <td style={tdStyle}>
+                          {sa.tahmini_omur_saati ? (
+                            <span style={{ 
+                              background: "rgba(52,152,219,0.1)", 
+                              color: "#3498db", 
+                              padding: "4px 10px", 
+                              borderRadius: "12px", 
+                              fontSize: "12px",
+                              fontWeight: "bold"
+                            }}>
+                              ⏳ {sa.tahmini_omur_saati} Saat
+                            </span>
+                          ) : "-"}
                         </td>
                         <td style={tdStyle}>
                           <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
