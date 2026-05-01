@@ -14,6 +14,7 @@ export default function SatinAlma() {
     parca_adi: "",
     adet: "",
     birim_fiyat: "",
+    tedarik_suresi: "",
     tarih: new Date().toISOString().split("T")[0],
     puan: 0,
     makine_tur_id: "",
@@ -257,17 +258,32 @@ export default function SatinAlma() {
                     </div>
                   )}
 
-                  {/* TARİH */}
-                  <div style={formGroupStyle}>
-                    <label style={labelStyle}>Alım Tarihi</label>
-                    <input
-                      id="tarih-input"
-                      type="date"
-                      value={formData.tarih}
-                      onChange={(e) => handleInputChange("tarih", e.target.value)}
-                      style={inputStyle}
-                    />
+                  {/* TEDARİK SÜRESİ ve TARİH yan yana */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+                    <div style={formGroupStyle}>
+                      <label style={labelStyle}>Tedarik Süresi (Gün)</label>
+                      <input
+                        id="tedarik-suresi-input"
+                        type="number"
+                        min="0"
+                        placeholder="Örn: 3"
+                        value={formData.tedarik_suresi}
+                        onChange={(e) => handleInputChange("tedarik_suresi", e.target.value)}
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div style={formGroupStyle}>
+                      <label style={labelStyle}>Alım Tarihi</label>
+                      <input
+                        id="tarih-input"
+                        type="date"
+                        value={formData.tarih}
+                        onChange={(e) => handleInputChange("tarih", e.target.value)}
+                        style={inputStyle}
+                      />
+                    </div>
                   </div>
+
 
                   {/* PUAN (1–10 Yıldız) */}
                   <div style={formGroupStyle}>
