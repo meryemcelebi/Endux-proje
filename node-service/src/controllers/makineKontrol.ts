@@ -94,7 +94,7 @@ export const qrileMakineGetir = async (req: Request, res: Response) => {
         const kullaniciRol = req.user!.rol;
 
         // Rol kontrolü (standardize edilmiş BÜYÜK HARF)
-        if (!["TEKNISYEN", "YONETICI", "OPERATOR"].includes(kullaniciRol)) {
+        if (!["TEKNISYEN", "YONETICI", "OPERATOR", "SERVIS"].includes(kullaniciRol)) {
             return res.status(403).json({
                 success: false,
                 message: "Bu işlemi gerçekleştirmek için yeterli yetkiniz yok."
@@ -204,6 +204,27 @@ export const qrileMakineGetir = async (req: Request, res: Response) => {
                         toplam_kontrol: makine.gunluk_kontrol_formu.length,
                     }
                 });
+                case "SERVIS":
+                return res.status(200).json({
+                    success: true,
+                    rol: "SERVIS",
+                    makine: {
+                        ...temelBilgiler,
+                        firma: makine.firma,
+                       // satin_alma_tarihi: makine.satin_alma_tarihi,
+                        //satin_alma_maliyeti: makine.satin_alma_maliyeti,
+                        makine_ozellikleri: makine.makine_ozellikleri,
+                        toplam_calisma_saati: makine.toplam_calisma_saati,
+                    },
+                    ariza_gecmis: makine.ariza_kaydi,
+                    bakim_gecmis: makine.bakim_kaydi,
+                    ariza_sebepleri: makine.ariza_kaydi,
+                    istatistikler: {
+                        toplam_ariza: makine.ariza_kaydi.length,
+                        toplam_bakim: makine.bakim_kaydi.length,
+                    }
+                });
+
 
             case "OPERATOR":
                 return res.status(200).json({
@@ -311,3 +332,44 @@ export async function makineDetayGetir(req: Request, res: Response) {
         });
     }
 };
+
+export async function QRKodYazdir(req: Request, res: Response) {
+    try {
+        const makine_id = Number(req.params.id);
+        if (isNaN(makine_id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Geçersiz makine ID'si."
+            });
+        }
+        const makine = await prisma.makine.findUnique({
+            where: { makine_id },
+            select: { 
+                makine_id: true,
+                 makine_adi: true, 
+                 makine_qr: true,
+                 seri_no: true
+                 }
+        });
+                
+                
+        if (!makine) {
+            return res.status(404).json({
+                success: false,
+                message: "makine bulunamadı."
+            });
+        }
+        return res.status(200).json({
+            success: true,
+            message: "Makine QR kod bilgileri başarıyla getirildi.",
+            data: makine
+        });
+    } catch (error) {
+        console.error("Makine QR kod yazdırma hatası:", error);
+        res.status(500).json({
+            success: false,
+            message: "Makine QR kod yazdırılırken bir hata oluştu."
+        });
+    }
+}
+

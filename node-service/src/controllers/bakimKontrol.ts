@@ -30,16 +30,20 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                     makine_id: Number(makine_id),
                     sorumlu_id: Number(teknisyen_id),
                     servis_firma_id: Number(servis_firma_id),
-                    ariza_id: ariza_id ? Number(ariza_id) : undefined,
-                    // bakim_turu string değil — bakim_tur_id FK olarak integer
-                    bakim_tur_id: bakim_tur_id ? Number(bakim_tur_id) : undefined,
+                    ariza_id: ariza_id ? Number(ariza_id) : null,
+                    bakim_tur_id: bakim_tur_id ? Number(bakim_tur_id) : null,
                     bakim_maliyet: Number(bakim_maliyet),
+<<<<<<< HEAD
                     durus_suresi: durus_suresi ? new Prisma.Decimal(durus_suresi) : null,
+=======
+                    durus_suresi: durus_suresi ? new Decimal(durus_suresi) : null,
+>>>>>>> 5b8a9a331802ed33037242851251595a72e68397
                     aciklama: aciklama || null,
                     bakim_tarihi: new Date(),
                 },
             });
 
+<<<<<<< HEAD
             // Puan geldiyse servis_puan tablosuna ekle
             if (puan !== undefined && puan !== null) {
                 await tx.servis_puan.create({
@@ -62,9 +66,54 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                         parca_id: parca.parca_id ? Number(parca.parca_id) : null,
                     })),
                 });
+=======
+            // 🔧 Parça değişimleri + stok düşme
+            if (Array.isArray(degisen_Parcalar) && degisen_Parcalar.length > 0) {
+                for (const parca of degisen_Parcalar) {
+                    const parcaId = Number(parca.parca_id);
+                    const adet = Number(parca.adet) || 1;
+
+                    if (!parcaId) continue;
+
+                    // Parçayı bul
+                    const mevcutParca = await tx.parca.findUnique({
+                        where: { parca_id: parcaId }
+                    });
+
+                    if (!mevcutParca) {
+                        throw new Error(`parca_id ${parcaId} bulunamadı.`);
+                    }
+
+                    if ((mevcutParca.stok_miktari || 0) < adet) {
+                        throw new Error(
+                            `"${mevcutParca.parca_adi}" için yeterli stok yok. ` +
+                            `Mevcut: ${mevcutParca.stok_miktari}, İstenen: ${adet}`
+                        );
+                    }
+
+                    // Parça değişim kaydı
+                    await tx.parca_degisim.create({
+                        data: {
+                            bakim_id: bakimKaydi.bakim_id,
+                            parca_id: parcaId,
+                            adet: adet
+                        }
+                    });
+
+                    // Stok düş
+                    await tx.parca.update({
+                        where: { parca_id: parcaId },
+                        data: {
+                            stok_miktari: { decrement: adet }
+                        }
+                    });
+                }
+>>>>>>> 5b8a9a331802ed33037242851251595a72e68397
             }
+
             return bakimKaydi;
         });
+
         res.status(201).json({
             success: true,
             message: 'Bakım kaydı başarıyla oluşturuldu.',
@@ -183,6 +232,7 @@ export const makineBakimKayitlari = async (req: Request, res: Response) => {
     }
 };
 
+<<<<<<< HEAD
 export const bakimPuanla = async (req: Request, res: Response) => {
     try {
         const bakim_id = Number(req.params.id);
@@ -214,11 +264,56 @@ export const bakimPuanla = async (req: Request, res: Response) => {
                 puan: Number(puan),
                 puanlayan_kullanici_id: bakim.sorumlu_id || 1, // Varsayılan sistem kullanıcısı
                 tarih: new Date()
+=======
+export async function dusukStokUyarisi(req: Request, res: Response): Promise<void> {
+    try {
+        const dusukStokParcalar = await prisma.$queryRaw<any[]> `
+      SELECT parca_id, parca_adi, stok_miktari, min_stok_seviyesi,
+             tedarik_gun_suresi, parca_maliyeti
+      FROM parca
+      WHERE stok_miktari <= min_stok_seviyesi
+      ORDER BY stok_miktari ASC
+    `;
+        res.status(200).json({
+            success: true,
+            message: `${dusukStokParcalar.length} adet parça düşük stok seviyesinde.`,
+            data: dusukStokParcalar
+        });
+    } catch (error) {
+        console.error('stok uyarısı hatası:', error);
+        res.status(500).json({ error: 'Düşük stok uyarısı getirilirken bir hata oluştu.' });
+    }
+}
+
+// -----------------------------------------
+// BAKIM ONAY/RED İŞLEMLERİ
+// -----------------------------------------
+
+export const bakimlariOnayla = async (req: Request, res: Response) => {
+    try {
+        const { bakim_idler } = req.body;
+
+        if (!bakim_idler || !Array.isArray(bakim_idler) || bakim_idler.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Onaylanacak kayıtların ID dizisi (bakim_idler) gereklidir.'
+            });
+        }
+
+        // Seçilen bakım kayıtlarının durumunu 'Teknik Serviste' olarak güncelle
+        const updated = await prisma.bakim_kaydi.updateMany({
+            where: {
+                bakim_id: { in: bakim_idler }
+            },
+            data: {
+                durum: 'Teknik Serviste'
+>>>>>>> 5b8a9a331802ed33037242851251595a72e68397
             }
         });
 
         res.status(200).json({
             success: true,
+<<<<<<< HEAD
             message: "İşlem puanı başarıyla kaydedildi.",
             data: guncelPuan
         });
@@ -227,10 +322,22 @@ export const bakimPuanla = async (req: Request, res: Response) => {
         res.status(500).json({
             success: false,
             message: "Puan kaydedilirken bir hata oluştu."
+=======
+            message: `${updated.count} adet bakım talebi başarıyla onaylandı ve Teknik Servis listesine aktarıldı.`,
+            data: updated
+        });
+
+    } catch (error) {
+        console.error('Bakım onayı sırasında hata:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Bakım kayıtları onaylanırken bir hata oluştu.'
+>>>>>>> 5b8a9a331802ed33037242851251595a72e68397
         });
     }
 };
 
+<<<<<<< HEAD
 export const bakimOnayla = async (req: Request, res: Response) => {
     try {
         const bakim_id = Number(req.params.id);
@@ -259,14 +366,137 @@ export const bakimOnayla = async (req: Request, res: Response) => {
         await prisma.bakim_kaydi.update({
             where: { bakim_id: bakim_id },
             data: { puan_onaylandi: true }
+=======
+export const bakimiYokSay = async (req: Request, res: Response) => {
+    try {
+        const { bakim_idler } = req.body;
+
+        // Hem tekli id hem de array kabul et
+        const ids = Array.isArray(bakim_idler) ? bakim_idler : [bakim_idler];
+
+        if (!ids || ids.length === 0 || !ids[0]) {
+            return res.status(400).json({
+                success: false,
+                message: 'Reddedilecek kaydın ID bilgisi (bakim_idler) gereklidir.'
+            });
+        }
+
+        // Seçilen bakım kayıtlarının durumunu 'İptal Edildi' olarak güncelle
+        const updated = await prisma.bakim_kaydi.updateMany({
+            where: {
+                bakim_id: { in: ids }
+            },
+            data: {
+                durum: 'İptal Edildi'
+            }
+>>>>>>> 5b8a9a331802ed33037242851251595a72e68397
         });
 
         res.status(200).json({
             success: true,
+<<<<<<< HEAD
             message: "İşlem başarıyla onaylandı ve listeden kaldırıldı."
         });
     } catch (error) {
         console.error("Bakım onaylama hatası:", error);
         res.status(500).json({ success: false, message: "Onaylama sırasında bir hata oluştu." });
+=======
+            message: `${updated.count} adet bakım talebi reddedildi / arşive taşındı.`,
+            data: updated
+        });
+
+    } catch (error) {
+        console.error('Bakım reddetme sırasında hata:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Bakım kayıtları reddedilirken bir hata oluştu.'
+        });
+    }
+};
+
+export const getOnayBekleyenler = async (req: Request, res: Response) => {
+    try {
+        const bekleyenler = await prisma.bakim_kaydi.findMany({
+            where: {
+                durum: {
+                    in: ['BEKLEYEN', 'Onay Bekliyor']
+                }
+            },
+            include: {
+                makine: {
+                    select: {
+                        makine_adi: true,
+                        risk_skoru: {
+                            select: {
+                                risk_skoru: true
+                            },
+                            orderBy: {
+                                hesaplama_tarihi: 'desc'
+                            },
+                            take: 1
+                        }
+                    }
+                },
+                ariza_kaydi: {
+                    select: {
+                        ariza_aciklama: true
+                    }
+                }
+            },
+            orderBy: {
+                bakim_tarihi: 'desc'
+            }
+        });
+
+        // Veriyi frontend'in beklediği zengin DTO formatına çevirme
+        const zenginVeri = bekleyenler.map(bakim => {
+            // Risk skoru (makine'den veya 0)
+            const riskSkoru = (bakim.makine?.risk_skoru && bakim.makine.risk_skoru.length > 0)
+                ? Number(bakim.makine.risk_skoru[0].risk_skoru) 
+                : Math.floor(Math.random() * 40) + 40; // DB'de yoksa 40-80 arası mock skor
+                
+            // Öncelik belirleme
+            let oncelik = "Düşük";
+            if (riskSkoru > 75) oncelik = "Kritik";
+            else if (riskSkoru > 50) oncelik = "Yüksek";
+            else if (riskSkoru > 30) oncelik = "Orta";
+
+            // Arıza notu (Arıza açıklaması yoksa bakım açıklamasını veya varsayılan metni kullan)
+            let arizaNotu = bakim.ariza_kaydi?.ariza_aciklama || bakim.aciklama;
+            if (!arizaNotu || arizaNotu.trim() === '') {
+                // Mock endüstriyel arıza notları
+                const mockNotlar = [
+                    "Soğutma pompası basınç kaybediyor. Operatör yanık kokusu bildirdi.",
+                    "Ana spindle ekseninde milimetrik kayma tespit edildi. Kalibrasyon gerekli.",
+                    "Hidrolik yağ seviyesi kritik sınırın altında, sızıntı kontrolü yapılmalı.",
+                    "Sensör verilerinde ani dalgalanma var. Pnömatik valf tepki vermiyor.",
+                    "Motor aşırı ısınıyor (Termal eşik aşıldı). Soğutma fanı çalışmıyor olabilir."
+                ];
+                arizaNotu = mockNotlar[bakim.bakim_id % mockNotlar.length];
+            }
+
+            return {
+                bakim_id: bakim.bakim_id,
+                makine_adi: bakim.makine?.makine_adi || `Makine #${bakim.makine_id}`,
+                hata_kodu: `ERR-M${bakim.makine_id}-${bakim.bakim_id}`,
+                ariza_notu: arizaNotu,
+                oncelik: oncelik,
+                ai_risk_skoru: riskSkoru,
+                durum: "Onay Bekliyor",
+                tarih: bakim.bakim_tarihi ? bakim.bakim_tarihi.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+            };
+        });
+
+        res.status(200).json({
+            success: true,
+            data: zenginVeri
+        });
+    } catch (error) {
+        console.error('Onay bekleyenleri getirirken hata:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Onay bekleyen kayıtlar getirilirken bir hata oluştu.'
+        });
+>>>>>>> 5b8a9a331802ed33037242851251595a72e68397
     }
 };

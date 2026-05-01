@@ -29,7 +29,7 @@ async function main() {
     if (!admin) {
         // "admin" şifresinin bcrypt hash'i
         const hashedSifre = "$2b$10$cC4GHQEzL0f7CQvnBqmVY.dVP5rIRZCo6QEocGfSW9fo4Tb6nEKzi";
-        await prisma.kullanici.create({
+        admin = await prisma.kullanici.create({
             data: {
                 firma_id: firma.firma_id,
                 rol_id: 1, // YONETICI
@@ -241,15 +241,15 @@ async function main() {
             data: {
                 firma_id: firma.firma_id,
                 makine_tur_id: secilenTur.makine_tur_id,
-                makine_adi: `${secilenTur.makine_tur_adi} - Gövde ${i}${isSifir ? " (Sıfır)" : " (2.El)"}`,
+                makine_adi: `${secilenTur.makine_tur_adi} - Ünite ${i}${isSifir ? " (Sıfır)" : " (2.El)"}`,
                 satin_alma_tarihi: isSifir ? new Date() : satinAlmaGecmisTarih,
                 satin_alma_maliyeti: Math.floor(Math.random() * 500000) + 100000,
                 aktiflik_durumu: isArizali ? false : true,
                 seri_no: seri,
-                garanti_suresi: isSifir ? 24 : 0, 
+                garanti_suresi: isSifir ? 24 : 0,
                 garanti_firma_id: garantiFirma.garanti_firma_id,
-                servis_pin: Math.floor(1000 + Math.random() * 9000), 
-                toplam_calisma_saati: isSifir ? 0 : Math.floor(Math.random() * 15000) 
+                servis_pin: Math.floor(1000 + Math.random() * 9000),
+                toplam_calisma_saati: isSifir ? 0 : Math.floor(Math.random() * 15000)
             }
         });
 
@@ -330,7 +330,7 @@ async function main() {
                             ai_on_risk_durumu: (isArizali && c === 0) ? 0.95 : Math.random() * 0.2,
                         }
                     });
-                    
+
                     if (maddeler.length > 0) {
                         await prisma.form_madde_cevap.createMany({
                             data: maddeler.map(madde => ({
@@ -345,7 +345,174 @@ async function main() {
         }
     }
 
-    console.log("✅ Seed işlemi %100 tamamlandı! 100 sahte makine, geçmiş veriler, parçalar ve şablonlar eklendi.");
+    console.log("✅ 100 Adet makine üretimi tamamlandı. Şimdi senaryo bazlı mock veriler ekleniyor...");
+
+    // --- SENARYO BAZLI EKLEMELER ---
+    const allMachines = await prisma.makine.findMany();
+    const arizaTuru = await prisma.ariza_turu.findFirst() || await prisma.ariza_turu.create({ data: { ariza_tur: "Donanım Arızası" } });
+
+    // 1. DIŞ SERVİS FİRMALARI VE PUANLAMALAR
+    const serviceFirmsData = [
+        { name: "ProMekanik Genel Bakım", expertise: "Genel Mekanik", targetAvg: 4.8 },
+        { name: "FixIt Elektronik & PCB", expertise: "Elektronik & PCB", targetAvg: 2.1 },
+        { name: "Robotix Otomasyon", expertise: "Robotik", targetAvg: 4.2 },
+        { name: "SpindleMaster Revizyon", expertise: "Motor & Spindle", targetAvg: 3.8 }
+    ];
+
+    for (const item of serviceFirmsData) {
+        let sFirma = await prisma.servis_firma.findFirst({ where: { firma_adi: item.name } });
+        if (!sFirma) {
+            sFirma = await prisma.servis_firma.create({
+                data: {
+                    firma_adi: item.name,
+                    aktiflik: true,
+                    servis_firma_uzmanlik: { create: { uzmanlik_adi: item.expertise } }
+                }
+            });
+        }
+        for (let i = 0; i < 10; i++) {
+            let score = item.targetAvg > 4 ? (Math.random() > 0.1 ? 5 : 4) : (item.targetAvg < 2.5 ? (Math.random() > 0.2 ? 2 : 1) : Math.floor(Math.random() * 3) + 2);
+            await prisma.servis_puan.create({
+                data: {
+                    servis_firma_id: sFirma.servis_firma_id,
+                    puanlayan_kullanici_id: admin.kullanici_id,
+                    puan: score,
+                    yorum: score >= 4 ? "Zamanında ve kaliteli hizmet." : "Teknik destek zayıf.",
+                    tarih: new Date(Date.now() - Math.floor(Math.random() * 30 * 24 * 60 * 60 * 1000))
+                }
+            });
+        }
+    }
+
+    // 2. TEDARİKÇİ VE KRİTİK PARÇA SENARYOSU
+    let kaanSup = await prisma.tedarikci.findFirst({ where: { firma_adi: "Kaan Sensör Teknolojileri" } });
+    if (!kaanSup) {
+        kaanSup = await prisma.tedarikci.create({
+            data: { firma_adi: "Kaan Sensör Teknolojileri", aktiflik: true, guvenilirlik_skoru: 45, vergi_no: "VN123456" }
+        });
+    }
+
+    let badPart = await prisma.parca.findFirst({ where: { parca_adi: "Pto Sensör X-V2" } });
+    if (!badPart) {
+        badPart = await prisma.parca.create({
+            data: {
+                parca_adi: "Pto Sensör X-V2",
+                tahmini_omur_saati: 1500,
+                parca_maliyeti: 2450,
+                tedarik_gun_suresi: 12,
+                stok_miktari: 5,
+                min_stok_seviyesi: 15,
+                tedarikci_id: kaanSup.tedarikci_id
+            }
+        });
+    }
+
+    for (let i = 0; i < 4; i++) {
+        const bk = await prisma.bakim_kaydi.create({
+            data: {
+                makine_id: allMachines[0].makine_id,
+                servis_firma_id: (await prisma.servis_firma.findFirst())!.servis_firma_id,
+                bakim_maliyet: 3500,
+                bakim_tarihi: new Date(Date.now() - (i * 15 * 24 * 60 * 60 * 1000)),
+                aciklama: `Hatalı okuma nedeniyle ${badPart.parca_adi} değişimi.`
+            }
+        });
+        await prisma.parca_degisim.create({ data: { bakim_id: bk.bakim_id, parca_id: badPart.parca_id, adet: 1 } });
+    }
+
+    // 3. BAKIM DASHBOARD DURUMLARI (Açık, Devam Eden, Planlı ve Maliyet)
+    for (let i = 1; i <= 4; i++) { // Açık Arızalar
+        await prisma.ariza_kaydi.create({
+            data: { makine_id: allMachines[i].makine_id, ariza_tespit_kaynagi: "AI Tahmin", ariza_aciklama: "Vibrasyon hatası.", baslangic_zamani: new Date(), ariza_tur_id: arizaTuru.ariza_tur_id }
+        });
+        await prisma.makine.update({ where: { makine_id: allMachines[i].makine_id }, data: { aktiflik_durumu: false } });
+    }
+    const currentServis = (await prisma.servis_firma.findFirst())!.servis_firma_id;
+    for (let i = 5; i <= 6; i++) { // Devam Eden
+        await prisma.bakim_kaydi.create({ data: { makine_id: allMachines[i].makine_id, servis_firma_id: currentServis, bakim_maliyet: 0, bakim_tarihi: new Date(), aciklama: "Bakım devam ediyor." } });
+    }
+    for (let i = 7; i <= 10; i++) { // Planlı
+        await prisma.bakim_kaydi.create({ data: { makine_id: allMachines[i].makine_id, servis_firma_id: currentServis, bakim_maliyet: 0, bakim_tarihi: new Date(Date.now() + (10 * 24 * 60 * 60 * 1000)), aciklama: "Planlı Bakım" } });
+    }
+    const costM = [18500, 12400, 14100]; // Bu Ay Maliyeti
+    for (let i = 0; i < costM.length; i++) {
+        await prisma.bakim_kaydi.create({ data: { makine_id: allMachines[15 + i].makine_id, servis_firma_id: currentServis, bakim_maliyet: costM[i], bakim_tarihi: new Date(new Date().getFullYear(), new Date().getMonth(), 5 + i), aciklama: "Ağır bakım maliyeti." } });
+    }
+
+    console.log("OEE, Üretim ve Duruş verileri üretiliyor...");
+    await prisma.uretim_kaydi.deleteMany({});
+    await prisma.durus_kaydi.deleteMany({});
+    await prisma.oee_raporlari.deleteMany({});
+
+    for (const makine of allMachines) {
+        for (let j = 0; j < 30; j++) {
+            const date = new Date();
+            date.setDate(date.getDate() - j);
+            date.setHours(0, 0, 0, 0);
+
+            const planlanan_sure_dk = 480;
+            const durus_sure_dk = Math.floor(Math.random() * 61); // 0-60 dk arası
+            const fiili_sure_dk = planlanan_sure_dk - durus_sure_dk;
+            const teorik_uretim = 1000;
+            
+            // %80 ile %98 arası
+            const percentGercek = 0.8 + Math.random() * 0.18;
+            const gercek_uretim = Math.floor(teorik_uretim * percentGercek);
+            
+            // %1 ile %5 arası
+            const percentHatali = 0.01 + Math.random() * 0.04;
+            const hatali_uretim = Math.floor(gercek_uretim * percentHatali);
+
+            await prisma.uretim_kaydi.create({
+                data: {
+                    makine_id: makine.makine_id,
+                    vardiya_tarihi: date,
+                    vardiya_turu: "Gündüz",
+                    planlanan_sure_dk,
+                    fiili_sure_dk,
+                    durus_sure_dk,
+                    teorik_uretim,
+                    gercek_uretim,
+                    hatali_uretim
+                }
+            });
+
+            if (durus_sure_dk > 0) {
+                const nedenler = ["Mekanik Arıza", "Ayar", "Parça Bekleme"];
+                const neden = nedenler[Math.floor(Math.random() * nedenler.length)];
+                
+                await prisma.durus_kaydi.create({
+                    data: {
+                        makine_id: makine.makine_id,
+                        vardiya_tarihi: date,
+                        baslangic_saati: new Date(date.getTime() + 8 * 60 * 60 * 1000), // Gündüz 08:00
+                        bitis_saati: new Date(date.getTime() + 8 * 60 * 60 * 1000 + durus_sure_dk * 60 * 1000),
+                        durus_sure_dk,
+                        durus_nedeni: neden
+                    }
+                });
+            }
+
+            const kullanilabilirlik_orani = (fiili_sure_dk / planlanan_sure_dk) * 100;
+            const performans_orani = (gercek_uretim / teorik_uretim) * 100;
+            const saglam_uretim = gercek_uretim - hatali_uretim;
+            const kalite_orani = (saglam_uretim / gercek_uretim) * 100;
+            const oee_skoru = (kullanilabilirlik_orani / 100) * (performans_orani / 100) * (kalite_orani / 100) * 100;
+
+            await prisma.oee_raporlari.create({
+                data: {
+                    makine_id: makine.makine_id,
+                    tarih: date,
+                    kullanilabilirlik_orani: parseFloat(kullanilabilirlik_orani.toFixed(2)),
+                    performans_orani: parseFloat(performans_orani.toFixed(2)),
+                    kalite_orani: parseFloat(kalite_orani.toFixed(2)),
+                    oee_skoru: parseFloat(oee_skoru.toFixed(2))
+                }
+            });
+        }
+    }
+
+    console.log("✅ Seed işlemi %100 tamamlandı! Tüm senaryo verileri eklendi.");
 }
 
 main()
