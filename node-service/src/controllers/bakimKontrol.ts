@@ -34,7 +34,6 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                     bakim_tur_id: bakim_tur_id ? Number(bakim_tur_id) : null,
                     bakim_maliyet: Number(bakim_maliyet),
                     durus_suresi: durus_suresi ? new Prisma.Decimal(durus_suresi) : null,
-                    durus_suresi: durus_suresi ? new Decimal(durus_suresi) : null,
                     aciklama: aciklama || null,
                     bakim_tarihi: new Date(),
                 },
@@ -104,9 +103,10 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                         });
                     }
                 }
-
+            }
                 return bakimKaydi;
             });
+    
 
         res.status(201).json({
             success: true,
@@ -226,39 +226,8 @@ export const makineBakimKayitlari = async (req: Request, res: Response) => {
     }
 };
 
-<<<<<<< HEAD
-export const bakimPuanla = async (req: Request, res: Response) => {
-    try {
-        const bakim_id = Number(req.params.id);
-        const { puan } = req.body;
 
-        if (isNaN(bakim_id) || puan === undefined) {
-            return res.status(400).json({
-                success: false,
-                message: "Bakım ID ve puan zorunludur."
-            });
-        }
 
-        // Önce bakım kaydını bul (firma_id ve sorumlu_id lazım)
-        const bakim = await prisma.bakim_kaydi.findUnique({
-            where: { bakim_id: bakim_id }
-        });
-
-        if (!bakim) {
-            return res.status(404).json({ success: false, message: "Bakım kaydı bulunamadı." });
-        }
-
-        // servis_puan tablosuna upsert yap (bakim_id unique olduğu için)
-        const guncelPuan = await prisma.servis_puan.upsert({
-            where: { bakim_id: bakim_id },
-            update: { puan: Number(puan) },
-            create: {
-                bakim_id: bakim_id,
-                servis_firma_id: bakim.servis_firma_id,
-                puan: Number(puan),
-                puanlayan_kullanici_id: bakim.sorumlu_id || 1, // Varsayılan sistem kullanıcısı
-                tarih: new Date()
-=======
 export async function dusukStokUyarisi(req: Request, res: Response): Promise<void> {
     try {
         const dusukStokParcalar = await prisma.$queryRaw<any[]> `
@@ -301,66 +270,21 @@ export const bakimlariOnayla = async (req: Request, res: Response) => {
             },
             data: {
                 durum: 'Teknik Serviste'
->>>>>>> 5b8a9a331802ed33037242851251595a72e68397
+
             }
         });
 
-        res.status(200).json({
-            success: true,
-<<<<<<< HEAD
-            message: "İşlem puanı başarıyla kaydedildi.",
-            data: guncelPuan
-        });
-    } catch (error) {
-        console.error("Bakım puanlama hatası:", error);
-        res.status(500).json({
-            success: false,
-            message: "Puan kaydedilirken bir hata oluştu."
-=======
-            message: `${updated.count} adet bakım talebi başarıyla onaylandı ve Teknik Servis listesine aktarıldı.`,
-            data: updated
-        });
-
+ 
     } catch (error) {
         console.error('Bakım onayı sırasında hata:', error);
         res.status(500).json({
             success: false,
             message: 'Bakım kayıtları onaylanırken bir hata oluştu.'
->>>>>>> 5b8a9a331802ed33037242851251595a72e68397
+
         });
     }
 };
 
-<<<<<<< HEAD
-export const bakimOnayla = async (req: Request, res: Response) => {
-    try {
-        const bakim_id = Number(req.params.id);
-
-        if (isNaN(bakim_id)) {
-            return res.status(400).json({ success: false, message: "Geçerli bir Bakım ID gereklidir." });
-        }
-
-        // Önce puanlanmış mı kontrol et
-        const bakim = await prisma.bakim_kaydi.findUnique({
-            where: { bakim_id: bakim_id },
-            include: { servis_puan: true }
-        });
-
-        if (!bakim) {
-            return res.status(404).json({ success: false, message: "Bakım kaydı bulunamadı." });
-        }
-
-        if (!bakim.servis_puan) {
-            return res.status(400).json({
-                success: false,
-                message: "Bu işlem henüz puanlanmamış. Listeden kaldırmadan önce puanlamanız gerekmektedir."
-            });
-        }
-
-        await prisma.bakim_kaydi.update({
-            where: { bakim_id: bakim_id },
-            data: { puan_onaylandi: true }
-=======
 export const bakimiYokSay = async (req: Request, res: Response) => {
     try {
         const { bakim_idler } = req.body;
@@ -383,30 +307,22 @@ export const bakimiYokSay = async (req: Request, res: Response) => {
             data: {
                 durum: 'İptal Edildi'
             }
->>>>>>> 5b8a9a331802ed33037242851251595a72e68397
+
         });
 
         res.status(200).json({
             success: true,
-<<<<<<< HEAD
+
             message: "İşlem başarıyla onaylandı ve listeden kaldırıldı."
         });
     } catch (error) {
         console.error("Bakım onaylama hatası:", error);
         res.status(500).json({ success: false, message: "Onaylama sırasında bir hata oluştu." });
-=======
-            message: `${updated.count} adet bakım talebi reddedildi / arşive taşındı.`,
-            data: updated
-        });
 
-    } catch (error) {
-        console.error('Bakım reddetme sırasında hata:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Bakım kayıtları reddedilirken bir hata oluştu.'
-        });
     }
-};
+        
+
+    } 
 
 export const getOnayBekleyenler = async (req: Request, res: Response) => {
     try {
@@ -491,6 +407,52 @@ export const getOnayBekleyenler = async (req: Request, res: Response) => {
             success: false,
             message: 'Onay bekleyen kayıtlar getirilirken bir hata oluştu.'
         });
->>>>>>> 5b8a9a331802ed33037242851251595a72e68397
+    }
+};
+
+export const getTeknikServisIsleri = async (req: Request, res: Response) => {
+    try {
+        const isler = await prisma.bakim_kaydi.findMany({
+            where: {
+                durum: 'Teknik Serviste' // Sadece onaylanan işleri getir
+            },
+            include: {
+                makine: {
+                    select: {
+                        makine_adi: true
+                    }
+                },
+                ariza_kaydi: {
+                    select: {
+                        ariza_aciklama: true
+                    }
+                }
+            },
+            orderBy: {
+                bakim_tarihi: 'desc'
+            }
+        });
+
+        // 3. Görseldeki tabloya uygun formatta DTO hazırlıyoruz
+        const tabloVerisi = isler.map(is => ({
+            bakim_id: is.bakim_id,
+            makine_adi: is.makine?.makine_adi || `Makine #${is.makine_id}`,
+            durum: is.durum,
+            ariza_notu: is.ariza_kaydi?.ariza_aciklama || is.aciklama || "Belirtilmemiş",
+            kayit_tarihi: is.bakim_tarihi ? is.bakim_tarihi.toISOString().split('T')[0] : "Bilinmiyor"
+        }));
+
+        res.status(200).json({
+            success: true,
+            message: "Teknik servis iş listesi getirildi.",
+            data: tabloVerisi
+        });
+
+    } catch (error) {
+        console.error('Teknik servis işleri getirilirken hata:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Teknik servis iş listesi getirilirken bir hata oluştu.'
+        });
     }
 };

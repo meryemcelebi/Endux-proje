@@ -504,21 +504,7 @@ model tedarikci_puan {
   @@index([tedarikci_id], map: "idx_tpuan_tedarikci")
 }
 
-<<<<<<< HEAD
-model satin_alma {
-  satin_alma_id      Int          @id @default(autoincrement())
-  tedarikci_id       Int
-  parca_adi          String       @db.VarChar(150)
-  adet               Int
-  birim_fiyat        Decimal      @db.Decimal(12, 2)
-  tarih              DateTime     @default(now()) @db.Timestamptz(6)
-  puan               Int?
-  tedarik_suresi     Int?
-  makine_tur_id      Int?
-  tahmini_omur_saati Decimal?     @db.Decimal(10, 2)
-  tedarikci          tedarikci    @relation(fields: [tedarikci_id], references: [tedarikci_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_satin_alma_tedarikci")
-  makine_turu        makine_turu? @relation(fields: [makine_tur_id], references: [makine_tur_id], onDelete: NoAction, onUpdate: NoAction)
-=======
+
 model durus_kaydi {
   durus_id         Int        @id @default(autoincrement())
   makine_id        Int
@@ -531,20 +517,14 @@ model durus_kaydi {
   kullanici_id     Int?
   kullanici        kullanici? @relation(fields: [kullanici_id], references: [kullanici_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_durus_kullanici")
   makine           makine     @relation(fields: [makine_id], references: [makine_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_durus_makine")
->>>>>>> 5b8a9a331802ed33037242851251595a72e68397
+
 
   @@index([makine_id], map: "idx_durus_makine")
   @@index([makine_id, vardiya_tarihi], map: "idx_durus_makine_tarih")
   @@index([vardiya_tarihi], map: "idx_durus_tarih")
 }
 
-<<<<<<< HEAD
-model stok {
-  stok_id        Int      @id @default(autoincrement())
-  parca_adi      String   @unique @db.VarChar(150)
-  miktar         Int      @default(0)
-  son_guncelleme DateTime @default(now()) @db.Timestamptz(6)
-=======
+
 model oee_raporlari {
   rapor_id                Int       @id @default(autoincrement())
   makine_id               Int?

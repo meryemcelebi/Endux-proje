@@ -10,6 +10,7 @@ import gorevRoutes from "./gorevRoutes";
 import { ServisPuanRouter, TedarikciPuanRouter } from "./puanRoute";
 import aiRoutes from "./aiRoutes";
 import oeeRoutes from "./oeeRoutes";
+import satinAlmaRoutes from "./satinAlmaRoutes";
 
 
 
@@ -44,5 +45,7 @@ router.use("/tedarikci-puan", TedarikciPuanRouter);
 router.use("/ai", aiRoutes); // /api/ai/*
 
 router.use("/oee", oeeRoutes); // /api/oee/*
+
+router.use("/satin-alma", satinAlmaRoutes); // /api/satin-alma/*
 
 export default router;
