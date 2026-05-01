@@ -648,8 +648,7 @@ export default function Dashboard() {
               onMouseOver={(e) => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 8px 16px rgba(0, 0, 0, 0.1)"; }}
               onMouseOut={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 15px rgba(0,0,0,0.05)"; }}
             >
-              <div style={{ fontSize: "13px", color: "#7f8c8d", fontWeight: "700", textTransform: "uppercase", letterSpacing: "1px" }}>Fabrika OEE</div>
-              <div style={{ fontSize: "42px", fontWeight: "900", color: "#27ae60", marginTop: "5px", textShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>%{factoryOee}</div>
+              
               <div style={{ fontSize: "11px", color: "#2ecc71", fontWeight: "bold", background: "rgba(46, 204, 113, 0.1)", padding: "4px 8px", borderRadius: "15px", marginTop: "8px" }}>Canlı Verimlilik Analizi</div>
               <div style={{ fontSize: "42px", fontWeight: "900", color: "#27ae60", marginTop: "5px", textShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>%{fabrikaOee}</div>
               <div style={{ fontSize: "12px", color: "#2ecc71", fontWeight: "bold", background: "rgba(46, 204, 113, 0.1)", padding: "4px 8px", borderRadius: "15px", marginTop: "8px" }}></div>
@@ -1133,17 +1132,17 @@ export default function Dashboard() {
                     <div style={{ display: "flex", gap: "20px" }}>
                       <div style={{ flex: 1, padding: "15px", background: "#f8f9fa", borderRadius: "10px", textAlign: "center", border: "1px solid #e1e5eb" }}>
                         <div style={{ fontSize: "12px", color: "#7f8c8d", fontWeight: "bold", textTransform: "uppercase" }}>Kullanılabilirlik</div>
-                        <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%{factoryOee}</div>
+                        <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%{fabrikaOee}</div>
                         <div style={{ fontSize: "11px", color: "#95a5a6", marginTop: "4px" }}>Aktif Makine Oranı</div>
                       </div>
                       <div style={{ flex: 1, padding: "15px", background: "#f8f9fa", borderRadius: "10px", textAlign: "center", border: "1px solid #e1e5eb" }}>
                         <div style={{ fontSize: "12px", color: "#7f8c8d", fontWeight: "bold", textTransform: "uppercase" }}>Performans</div>
-                        <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%100</div>
+                        <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%{fabrikaOee}</div>
                         <div style={{ fontSize: "11px", color: "#95a5a6", marginTop: "4px" }}>Nominal hıza oranı</div>
                       </div>
                       <div style={{ flex: 1, padding: "15px", background: "#f8f9fa", borderRadius: "10px", textAlign: "center", border: "1px solid #e1e5eb" }}>
                         <div style={{ fontSize: "12px", color: "#7f8c8d", fontWeight: "bold", textTransform: "uppercase" }}>Kalite</div>
-                        <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%100</div>
+                        <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%{fabrikaOee}</div>
                         <div style={{ fontSize: "11px", color: "#95a5a6", marginTop: "4px" }}>Sağlam ürün oranı</div>
                       </div>
                     </div>

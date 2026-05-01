@@ -7,10 +7,7 @@ import {
     tedarikciSil,
     servisFirmasiSil
 } from "../controllers/firmaKontrol";
-servisFirmasiEkle,
-    tedarikciSil,
-    servisFirmasiSil
-} from "../controllers/firmaKontrol";
+   
 import { oturumKontrol, rolKontrol } from "../middlewares/yetki";
 
 const TedarikciRouter = Router();
@@ -33,13 +30,9 @@ ServisFirmasiRouter.get('/', oturumKontrol, tumServisFirmalariniGetir);
 // POST /api/firma/servis-firmalari  — Yeni servis firması ekler
 ServisFirmasiRouter.post('/', oturumKontrol, rolKontrol('YONETICI'), servisFirmasiEkle);
 
-<<<<<<< HEAD
-// DELETE /api/servis-firmalari/:id — Servis firması siler
-ServisFirmasiRouter.delete('/:id', oturumKontrol, rolKontrol('YONETICI'), servisFirmasiSil);
-=======
 // DELETE /api/firma/servis-firmalari/:id — Servis firması siler
 ServisFirmasiRouter.delete('/:id', oturumKontrol, rolKontrol('YONETICI'), servisFirmasiSil);
 
->>>>>>> 5b8a9a331802ed33037242851251595a72e68397
+
 
 export { TedarikciRouter, ServisFirmasiRouter };
