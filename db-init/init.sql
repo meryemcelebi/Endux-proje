@@ -2,12 +2,12 @@
 -- PostgreSQL database dump
 --
 
-\restrict 95Q7seZddgXjUnEphSaDEljTYym7FqErcoS9os4wAAc4xSpXknX37YxJCnAdrvr
+\restrict 3rfxFhoq54uWBgDDt7clOoOJ7oeGhHPpSALy8xp5F9qrhJYpEliX3bOePp2PdEe
 
 -- Dumped from database version 16.13
 -- Dumped by pg_dump version 16.13
 
--- Started on 2026-05-01 15:15:48
+-- Started on 2026-05-02 18:00:33
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -140,7 +140,7 @@ $$;
 
 
 --
--- TOC entry 320 (class 1255 OID 90169)
+-- TOC entry 321 (class 1255 OID 90169)
 -- Name: pr_ariza_kayit(character varying, character varying, character varying, text, date); Type: PROCEDURE; Schema: public; Owner: -
 --
 
@@ -184,7 +184,7 @@ $$;
 
 
 --
--- TOC entry 321 (class 1255 OID 90170)
+-- TOC entry 322 (class 1255 OID 90170)
 -- Name: pr_kontrol_kaydet(integer, integer, integer, text, jsonb); Type: PROCEDURE; Schema: public; Owner: -
 --
 
@@ -241,7 +241,7 @@ $$;
 
 
 --
--- TOC entry 325 (class 1255 OID 97760)
+-- TOC entry 320 (class 1255 OID 122362)
 -- Name: sp_bakim_ekle(character varying, character varying, character varying, numeric, text, character varying, numeric, character varying, jsonb); Type: PROCEDURE; Schema: public; Owner: -
 --
 
@@ -250,8 +250,8 @@ CREATE PROCEDURE public.sp_bakim_ekle(IN p_makine_adi character varying, IN p_ba
     AS $$
 DECLARE
     v_makine_id integer;
-    v_ic_personel_id integer;   -- Kullanıcı Tablosu İçin
-    v_dis_servis_id integer;    -- Servis Sorumlusu Tablosu İçin
+    v_ic_personel_id integer;   
+    v_dis_servis_id integer;    
     v_servis_firma_id integer;  
     v_ariza_id integer;         
     v_bakim_tur_id integer;     
@@ -263,74 +263,87 @@ BEGIN
     SELECT makine_id INTO v_makine_id FROM public.makine WHERE UPPER(TRIM(makine_adi)) = UPPER(TRIM(p_makine_adi));
     IF v_makine_id IS NULL THEN RAISE EXCEPTION 'Makine bulunamadı!'; END IF;
 
-	--arıza bul
-	  SELECT ariza_id INTO v_ariza_id FROM public.ariza_kaydi WHERE makine_id=v_makine_id;
-    IF v_ariza_id IS NULL THEN RAISE EXCEPTION 'Arıza bulunamadı!'; END IF;
+    -- 2. Arıza Bul
+    SELECT ariza_id INTO v_ariza_id FROM public.ariza_kaydi WHERE makine_id = v_makine_id ORDER BY ariza_id DESC LIMIT 1;
+    IF v_ariza_id IS NULL THEN RAISE EXCEPTION 'Bu makineye ait bir arıza kaydı bulunamadı!'; END IF;
 	
-   -- firma bul
-	SELECT firma_id INTO  v_servis_firma_id FROM public.firma WHERE UPPER(TRIM(firma_adi)) = UPPER(TRIM( p_servis_firma_adi));
-    IF  v_servis_firma_id IS NULL THEN RAISE EXCEPTION 'Firma bulunamadı!'; END IF;
+    -- 3. Firma Bul
+    SELECT servis_firma_id INTO v_servis_firma_id FROM public.servis_firma WHERE UPPER(TRIM(firma_adi)) = UPPER(TRIM(p_servis_firma_adi));
+    IF v_servis_firma_id IS NULL THEN RAISE EXCEPTION 'Servis Firma bulunamadı!'; END IF;
 
-    -- 2. Personel Tespit Et (Hibrit Kontrol)
-    -- Önce kullanıcı tablosuna bak
+    -- 4. Personel Tespit Et
     SELECT kullanici_id INTO v_ic_personel_id FROM public.kullanici WHERE TRIM(telefon) = TRIM(p_bakim_yapan_telefon);
 
     IF v_ic_personel_id IS NULL THEN
-        -- Kullanıcı değilse servis sorumlusu tablosuna bak
         SELECT sorumlu_id INTO v_dis_servis_id FROM public.servis_sorumlusu WHERE TRIM(telefon) = TRIM(p_bakim_yapan_telefon);
-        
         IF v_dis_servis_id IS NULL THEN
-            RAISE EXCEPTION 'Bu telefona ait personel bulunamadı!';
+            RAISE EXCEPTION 'Bu telefona ait personel (iç/dış) bulunamadı!';
         END IF;
     END IF;
 
-    -- 3. Bakım Türü
+    -- 5. Bakım Türü Kontrolü
     SELECT bakim_tur_id INTO v_bakim_tur_id FROM public.bakim_turu WHERE UPPER(TRIM(bakim_tur_adi)) = UPPER(TRIM(p_bakim_turu_adi));
+
     IF v_bakim_tur_id IS NULL THEN
-        INSERT INTO public.bakim_turu (bakim_tur_adi) VALUES (UPPER(TRIM(p_bakim_turu_adi))) RETURNING bakim_tur_id INTO v_bakim_tur_id;
+        INSERT INTO public.bakim_turu (bakim_tur_adi) 
+        VALUES (INITCAP(TRIM(p_bakim_turu_adi)))
+        RETURNING bakim_tur_id INTO v_bakim_tur_id;
     END IF;
 
-    -- 4. KRİTİK INSERT (Yeni Sütun Yapısı)
+    -- 6. Bakım Kaydı Insert
     INSERT INTO public.bakim_kaydi (
-        makine_id, 
-        kullanici_id,     -- Yeni sütun (Kullanıcıysa burası dolar)
-        sorumlu_id,       -- Eski sütun (Servisçiyse burası dolar)
-        servis_firma_id, 
-        bakim_tarihi,
-        bakim_maliyet, 
-        aciklama,
-		ariza_id,
-        bakim_tur_id, 
-        durus_suresi
+        makine_id, kullanici_id, sorumlu_id, servis_firma_id, 
+        bakim_tarihi, bakim_maliyet, aciklama, ariza_id, 
+        bakim_tur_id, durus_suresi
     ) VALUES (
-        v_makine_id, 
-        v_ic_personel_id, -- Kullanıcı ID (4 numara buraya gelecek)
-        v_dis_servis_id,  -- Dış servis ID (Kullanıcıysa NULL gidecek)
-        v_servis_firma_id,             -- Firma ID (İç bakımda NULL olabilir)
-        CURRENT_TIMESTAMP, 
-        p_bakim_maliyet, 
-        p_aciklama, 
-        v_bakim_tur_id, 
-        p_durus_suresi
+        v_makine_id, v_ic_personel_id, v_dis_servis_id, v_servis_firma_id,             
+        CURRENT_TIMESTAMP, p_bakim_maliyet, p_aciklama, v_ariza_id, 
+        v_bakim_tur_id, p_durus_suresi
     ) RETURNING bakim_id INTO v_yeni_bakim_id;
 
-    -- 5. Parça Değişimi
+  -- 7. Parça Değişimi (Parça Kontrolü ve Zorunlu Kayıt)
     IF p_parca_verisi IS NOT NULL AND jsonb_array_length(p_parca_verisi) > 0 THEN
         FOR v_kayit IN SELECT * FROM jsonb_to_recordset(p_parca_verisi) AS x(parca text, adet integer)
         LOOP
-            SELECT parca_id INTO v_parca_id FROM public.parca WHERE UPPER(TRIM(parca_adi)) = UPPER(TRIM(v_kayit.parca)) LIMIT 1;
-            IF v_parca_id IS NOT NULL THEN
-                INSERT INTO public.parca_degisim (bakim_id, parca_id, adet, bakim_kaydi_id)
-                VALUES (v_yeni_bakim_id, v_parca_id, COALESCE(v_kayit.adet, 1), v_yeni_bakim_id);
+            -- 7.1. Parçayı isme göre ara
+            SELECT parca_id INTO v_parca_id 
+            FROM public.parca 
+            WHERE UPPER(TRIM(parca_adi)) = UPPER(TRIM(v_kayit.parca)) 
+            LIMIT 1;
+
+            -- 7.2. Parça bulunamazsa hata fırlat ve işlemi durdur
+            IF v_parca_id IS NULL THEN
+                RAISE EXCEPTION 'Hata: "%" isimli parça sistemde tanımlı değil! Lütfen önce parçayı sisteme ekleyin.', v_kayit.parca;
             END IF;
+
+            -- 7.3. Parça varsa değişimi kaydet
+            INSERT INTO public.parca_degisim (
+                bakim_id, 
+                parca_id, 
+                adet
+            ) VALUES (
+                v_yeni_bakim_id, 
+                v_parca_id, 
+                COALESCE(v_kayit.adet, 1)
+            );
+			UPDATE public.parca 
+            SET stok_miktari = stok_miktari - COALESCE(v_kayit.adet, 1)
+            WHERE parca_id = v_parca_id;
         END LOOP;
     END IF;
+
+    RAISE NOTICE 'Bakım ve parça değişimleri başarıyla kaydedildi.';
+
+-- Hataları yakalamak için doğru blok: EXCEPTION
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE EXCEPTION 'İşlem sırasında hata oluştu: %', SQLERRM;
 END;
 $$;
 
 
 --
--- TOC entry 322 (class 1255 OID 90173)
+-- TOC entry 323 (class 1255 OID 90173)
 -- Name: sp_garanti_firmasi_kaydet(character varying, character varying, character varying, character varying, character varying, character varying, integer); Type: PROCEDURE; Schema: public; Owner: -
 --
 
@@ -367,7 +380,7 @@ $$;
 
 
 --
--- TOC entry 323 (class 1255 OID 90174)
+-- TOC entry 324 (class 1255 OID 90174)
 -- Name: sp_makine_temel_kaydet(character varying, character varying, character varying, character varying, character varying, date, numeric, integer, integer, numeric, integer, jsonb, character varying, character varying, character varying, character varying, character varying); Type: PROCEDURE; Schema: public; Owner: -
 --
 
@@ -485,7 +498,7 @@ $$;
 
 
 --
--- TOC entry 324 (class 1255 OID 90176)
+-- TOC entry 325 (class 1255 OID 90176)
 -- Name: sp_tedarikci_ekle(character varying, character varying, character varying, character varying, character varying, text, character varying, character varying); Type: PROCEDURE; Schema: public; Owner: -
 --
 
@@ -783,8 +796,8 @@ CREATE TABLE public.bakim_kaydi (
     ariza_id integer,
     bakim_tur_id integer,
     durus_suresi numeric(15,2),
-    kullanici_id integer,
-    durum character varying(50) DEFAULT 'BEKLEYEN'::character varying
+    durum character varying(50) DEFAULT 'BEKLEYEN'::character varying,
+    kullanici_id integer
 );
 
 
@@ -1489,8 +1502,7 @@ CREATE TABLE public.parca_degisim (
     parca_degisim_id integer NOT NULL,
     bakim_id integer NOT NULL,
     parca_id integer,
-    adet integer,
-    bakim_kaydi_id integer
+    adet integer
 );
 
 
@@ -2632,6 +2644,7 @@ COPY public.ai_model_log (log_id, makine_id, model_versiyon, kullanilan_veri_say
 --
 
 COPY public.ariza_kaydi (ariza_id, makine_id, ariza_tespit_kaynagi, ariza_aciklama, baslangic_zamani, bitis_zamani, olusturma_tarihi, ariza_tur_id, makine_adi) FROM stdin;
+6	6	Operatör Bildirimi	Fener mili bölgesinden aşırı ses geliyor ve titreşim var.	2026-05-02 00:00:00+00	2026-05-02 13:30:41.149678+00	2026-05-02 13:15:25.661205+00	2	Plastik Enjeksiyon Makinesi - Ünite 1 (2.El)
 \.
 
 
@@ -2643,6 +2656,7 @@ COPY public.ariza_kaydi (ariza_id, makine_id, ariza_tespit_kaynagi, ariza_acikla
 
 COPY public.ariza_turu (ariza_tur_id, ariza_tur) FROM stdin;
 1	MEKANİK ARIZA
+2	Mekanik Arıza
 \.
 
 
@@ -2662,7 +2676,12 @@ COPY public.arizayi_tetikleyen_form (tetik_id, ariza_id, form_id, madde_id, teti
 -- Data for Name: bakim_kaydi; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.bakim_kaydi (bakim_id, makine_id, sorumlu_id, servis_firma_id, bakim_tarihi, bakim_maliyet, aciklama, ariza_id, bakim_tur_id, durus_suresi, kullanici_id, durum) FROM stdin;
+COPY public.bakim_kaydi (bakim_id, makine_id, sorumlu_id, servis_firma_id, bakim_tarihi, bakim_maliyet, aciklama, ariza_id, bakim_tur_id, durus_suresi, durum, kullanici_id) FROM stdin;
+133	6	3	8	2026-05-02 14:25:18.299071+00	4500.50	Yıllık periyodik bakım kapsamında hidrolik yağ değişimi ve filtre temizliği yapıldı.	6	1	180.00	BEKLEYEN	\N
+134	6	3	8	2026-05-02 14:46:59.975797+00	4500.50	Yıllık periyodik bakım. Filtreler kontrol edildi ve yağ değişimi tamamlandı.	6	1	180.00	BEKLEYEN	\N
+136	6	3	8	2026-05-02 14:55:42.848642+00	4500.50	Yıllık periyodik bakım kapsamında hidrolik yağ değişimi ve filtre temizliği yapıldı.	6	1	180.00	BEKLEYEN	\N
+137	6	3	8	2026-05-02 14:56:32.170237+00	4500.50	Yıllık periyodik bakım kapsamında hidrolik yağ değişimi ve filtre temizliği yapıldı.	6	1	180.00	BEKLEYEN	\N
+138	6	3	8	2026-05-02 14:59:36.75573+00	4500.50	Yıllık periyodik bakım kapsamında hidrolik yağ değişimi ve filtre temizliği yapıldı.	6	1	180.00	BEKLEYEN	\N
 \.
 
 
@@ -2673,7 +2692,17 @@ COPY public.bakim_kaydi (bakim_id, makine_id, sorumlu_id, servis_firma_id, bakim
 --
 
 COPY public.bakim_turu (bakim_tur_id, bakim_tur_adi) FROM stdin;
-11	GENEL BAKIM
+1	Periyodik Bakım
+2	Arıza Onarım
+3	Kestirimci Bakım
+4	Önleyici Bakım
+5	Yıllık Genel Bakım
+6	Yağlama ve Filtre Değişimi
+7	Düzeltici Bakım
+8	Revizyon (Overhaul)
+9	Kalibrasyon
+10	Otonom Bakım
+11	Fırsatçı Bakım
 \.
 
 
@@ -8939,9 +8968,7 @@ COPY public.oee_raporlari (rapor_id, makine_id, tarih, kullanilabilirlik_orani, 
 --
 
 COPY public.parca (parca_id, parca_adi, tahmini_omur_saati, parca_maliyeti, tedarik_gun_suresi, kategori_id, tedarikci_id, stok_miktari, min_stok_seviyesi) FROM stdin;
-1	HAVA FILTRESI X10	2500.50	450	3	2	1	100	10
 2	Kesici Takım / İş Mili (Spindle) Rulmanları	8000.00	5000	7	\N	1	\N	\N
-3	X-Y-Z Eksen Motorları ve Sürücüleri	15000.00	5000	7	\N	1	\N	\N
 4	Pnömatik Mengene Valfi	12000.00	5000	7	\N	1	\N	\N
 5	Bor Yağı Pompası	10000.00	5000	7	\N	1	\N	\N
 6	Ana Hidrolik Pompa	15000.00	5000	7	\N	1	\N	\N
@@ -8952,6 +8979,8 @@ COPY public.parca (parca_id, parca_adi, tahmini_omur_saati, parca_maliyeti, teda
 11	Kalıp Soğutma Valfleri (Eşanjör)	12000.00	5000	7	\N	1	\N	\N
 12	Pto Sensör X-V2	1500.00	2450	12	\N	2	5	15
 13	RULMAN 6204-2RS	15000.00	120	3	4	1	65	10
+1	HAVA FILTRESI X10	2500.50	450	3	2	1	98	10
+3	X-Y-Z Eksen Motorları ve Sürücüleri	15000.00	5000	7	\N	1	\N	\N
 \.
 
 
@@ -8961,7 +8990,13 @@ COPY public.parca (parca_id, parca_adi, tahmini_omur_saati, parca_maliyeti, teda
 -- Data for Name: parca_degisim; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-COPY public.parca_degisim (parca_degisim_id, bakim_id, parca_id, adet, bakim_kaydi_id) FROM stdin;
+COPY public.parca_degisim (parca_degisim_id, bakim_id, parca_id, adet) FROM stdin;
+5	136	1	2
+6	136	3	1
+7	137	1	2
+8	137	3	1
+9	138	1	2
+10	138	3	1
 \.
 
 
@@ -8986,6 +9021,7 @@ COPY public.parca_kategori (kategori_id, kategori_adi) FROM stdin;
 COPY public.parca_stok_hareketleri (hareket_id, parca_id, eklenen_miktar, islem_tarihi) FROM stdin;
 1	13	50	2026-05-01 12:13:17.723262
 2	13	15	2026-05-01 12:14:53.603711
+3	1	-2	2026-05-02 14:59:36.75573
 \.
 
 
@@ -9111,6 +9147,7 @@ COPY public.servis_puan (puan_id, servis_firma_id, puanlayan_kullanici_id, puan,
 --
 
 COPY public.servis_sorumlusu (sorumlu_id, servis_firma_id, ad, soyad, telefon, aktiflik, unvan, sorumlu_adi) FROM stdin;
+3	8	Mehmet	Kaya	0505 999 88 77	f	Bakım Sorumlusu	Mehmet Kaya
 \.
 
 
@@ -12189,7 +12226,7 @@ SELECT pg_catalog.setval('public.ai_model_log_log_id_seq', 1, false);
 -- Name: ariza_kaydi_ariza_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.ariza_kaydi_ariza_id_seq', 5, true);
+SELECT pg_catalog.setval('public.ariza_kaydi_ariza_id_seq', 6, true);
 
 
 --
@@ -12198,7 +12235,7 @@ SELECT pg_catalog.setval('public.ariza_kaydi_ariza_id_seq', 5, true);
 -- Name: ariza_turu_ariza_tur_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.ariza_turu_ariza_tur_id_seq', 1, true);
+SELECT pg_catalog.setval('public.ariza_turu_ariza_tur_id_seq', 2, true);
 
 
 --
@@ -12216,7 +12253,7 @@ SELECT pg_catalog.setval('public.arizayi_tetikleyen_form_tetik_id_seq', 1, false
 -- Name: bakim_kaydi_bakim_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.bakim_kaydi_bakim_id_seq', 130, true);
+SELECT pg_catalog.setval('public.bakim_kaydi_bakim_id_seq', 138, true);
 
 
 --
@@ -12225,7 +12262,7 @@ SELECT pg_catalog.setval('public.bakim_kaydi_bakim_id_seq', 130, true);
 -- Name: bakim_turu_bakim_tur_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.bakim_turu_bakim_tur_id_seq', 13, true);
+SELECT pg_catalog.setval('public.bakim_turu_bakim_tur_id_seq', 16, true);
 
 
 --
@@ -12288,7 +12325,7 @@ SELECT pg_catalog.setval('public.gunluk_kontrol_formu_form_id_seq', 177, true);
 -- Name: iletisim_iletisim_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.iletisim_iletisim_id_seq', 4, true);
+SELECT pg_catalog.setval('public.iletisim_iletisim_id_seq', 5, true);
 
 
 --
@@ -12378,7 +12415,7 @@ SELECT pg_catalog.setval('public.oee_raporlari_rapor_id_seq', 3000, true);
 -- Name: parca_degisim_parca_degisim_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.parca_degisim_parca_degisim_id_seq', 4, true);
+SELECT pg_catalog.setval('public.parca_degisim_parca_degisim_id_seq', 10, true);
 
 
 --
@@ -12405,7 +12442,7 @@ SELECT pg_catalog.setval('public.parca_parca_id_seq', 13, true);
 -- Name: parca_stok_hareketleri_hareket_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.parca_stok_hareketleri_hareket_id_seq', 2, true);
+SELECT pg_catalog.setval('public.parca_stok_hareketleri_hareket_id_seq', 3, true);
 
 
 --
@@ -12508,7 +12545,7 @@ ALTER TABLE ONLY public._prisma_migrations
 
 
 --
--- TOC entry 3667 (class 2606 OID 89768)
+-- TOC entry 3668 (class 2606 OID 89768)
 -- Name: abonelik_tipi abonelik_tipi_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12544,7 +12581,7 @@ ALTER TABLE ONLY public.ariza_kaydi
 
 
 --
--- TOC entry 3652 (class 2606 OID 89719)
+-- TOC entry 3653 (class 2606 OID 89719)
 -- Name: ariza_turu ariza_turu_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12571,7 +12608,7 @@ ALTER TABLE ONLY public.bakim_kaydi
 
 
 --
--- TOC entry 3669 (class 2606 OID 89775)
+-- TOC entry 3670 (class 2606 OID 89775)
 -- Name: bakim_turu bakim_turu_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12580,7 +12617,7 @@ ALTER TABLE ONLY public.bakim_turu
 
 
 --
--- TOC entry 3695 (class 2606 OID 105998)
+-- TOC entry 3696 (class 2606 OID 105998)
 -- Name: durus_kaydi durus_kaydi_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12607,7 +12644,7 @@ ALTER TABLE ONLY public.form_madde_cevap
 
 
 --
--- TOC entry 3654 (class 2606 OID 89726)
+-- TOC entry 3655 (class 2606 OID 89726)
 -- Name: garanti_firma garanti_firma_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12616,7 +12653,7 @@ ALTER TABLE ONLY public.garanti_firma
 
 
 --
--- TOC entry 3656 (class 2606 OID 89733)
+-- TOC entry 3657 (class 2606 OID 89733)
 -- Name: genel_sorular genel_sorular_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12634,7 +12671,7 @@ ALTER TABLE ONLY public.gunluk_kontrol_formu
 
 
 --
--- TOC entry 3671 (class 2606 OID 89784)
+-- TOC entry 3672 (class 2606 OID 89784)
 -- Name: iletisim iletisim_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12643,7 +12680,7 @@ ALTER TABLE ONLY public.iletisim
 
 
 --
--- TOC entry 3615 (class 2606 OID 89627)
+-- TOC entry 3616 (class 2606 OID 89627)
 -- Name: kontrol_maddesi kontrol_maddesi_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12652,7 +12689,7 @@ ALTER TABLE ONLY public.kontrol_maddesi
 
 
 --
--- TOC entry 3618 (class 2606 OID 89636)
+-- TOC entry 3619 (class 2606 OID 89636)
 -- Name: kontrol_sablonu kontrol_sablonu_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12679,7 +12716,7 @@ ALTER TABLE ONLY public.kullanici
 
 
 --
--- TOC entry 3620 (class 2606 OID 89645)
+-- TOC entry 3621 (class 2606 OID 89645)
 -- Name: lokasyon lokasyon_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12688,7 +12725,7 @@ ALTER TABLE ONLY public.lokasyon
 
 
 --
--- TOC entry 3659 (class 2606 OID 89743)
+-- TOC entry 3660 (class 2606 OID 89743)
 -- Name: makine_ozellikleri makine_ozellikleri_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12697,7 +12734,7 @@ ALTER TABLE ONLY public.makine_ozellikleri
 
 
 --
--- TOC entry 3625 (class 2606 OID 89653)
+-- TOC entry 3626 (class 2606 OID 89653)
 -- Name: makine makine_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12706,7 +12743,7 @@ ALTER TABLE ONLY public.makine
 
 
 --
--- TOC entry 3634 (class 2606 OID 89668)
+-- TOC entry 3635 (class 2606 OID 89668)
 -- Name: makine_turu makine_turu_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12715,7 +12752,7 @@ ALTER TABLE ONLY public.makine_turu
 
 
 --
--- TOC entry 3686 (class 2606 OID 105962)
+-- TOC entry 3687 (class 2606 OID 105962)
 -- Name: oee_raporlari oee_raporlari_makine_id_tarih_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12724,7 +12761,7 @@ ALTER TABLE ONLY public.oee_raporlari
 
 
 --
--- TOC entry 3688 (class 2606 OID 105960)
+-- TOC entry 3689 (class 2606 OID 105960)
 -- Name: oee_raporlari oee_raporlari_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12733,7 +12770,7 @@ ALTER TABLE ONLY public.oee_raporlari
 
 
 --
--- TOC entry 3632 (class 2606 OID 89661)
+-- TOC entry 3633 (class 2606 OID 89661)
 -- Name: makine_kullanim operator_makine_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12742,7 +12779,7 @@ ALTER TABLE ONLY public.makine_kullanim
 
 
 --
--- TOC entry 3640 (class 2606 OID 89682)
+-- TOC entry 3641 (class 2606 OID 89682)
 -- Name: parca_degisim parca_degisim_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12751,7 +12788,7 @@ ALTER TABLE ONLY public.parca_degisim
 
 
 --
--- TOC entry 3674 (class 2606 OID 89791)
+-- TOC entry 3675 (class 2606 OID 89791)
 -- Name: parca_kategori parca_kategori_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12760,7 +12797,7 @@ ALTER TABLE ONLY public.parca_kategori
 
 
 --
--- TOC entry 3637 (class 2606 OID 89675)
+-- TOC entry 3638 (class 2606 OID 89675)
 -- Name: parca parca_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12769,7 +12806,7 @@ ALTER TABLE ONLY public.parca
 
 
 --
--- TOC entry 3700 (class 2606 OID 114155)
+-- TOC entry 3701 (class 2606 OID 114155)
 -- Name: parca_stok_hareketleri parca_stok_hareketleri_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12778,7 +12815,7 @@ ALTER TABLE ONLY public.parca_stok_hareketleri
 
 
 --
--- TOC entry 3644 (class 2606 OID 89689)
+-- TOC entry 3645 (class 2606 OID 89689)
 -- Name: risk_skoru risk_skoru_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12787,7 +12824,7 @@ ALTER TABLE ONLY public.risk_skoru
 
 
 --
--- TOC entry 3646 (class 2606 OID 89698)
+-- TOC entry 3647 (class 2606 OID 89698)
 -- Name: rol rol_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12796,7 +12833,7 @@ ALTER TABLE ONLY public.rol
 
 
 --
--- TOC entry 3677 (class 2606 OID 89798)
+-- TOC entry 3678 (class 2606 OID 89798)
 -- Name: sektor sektor_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12805,7 +12842,7 @@ ALTER TABLE ONLY public.sektor
 
 
 --
--- TOC entry 3648 (class 2606 OID 89705)
+-- TOC entry 3649 (class 2606 OID 89705)
 -- Name: servis_firma servis_firma_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12814,7 +12851,7 @@ ALTER TABLE ONLY public.servis_firma
 
 
 --
--- TOC entry 3679 (class 2606 OID 89805)
+-- TOC entry 3680 (class 2606 OID 89805)
 -- Name: servis_firma_uzmanlik servis_firma_uzmanlik_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12823,7 +12860,7 @@ ALTER TABLE ONLY public.servis_firma_uzmanlik
 
 
 --
--- TOC entry 3663 (class 2606 OID 89752)
+-- TOC entry 3664 (class 2606 OID 89752)
 -- Name: servis_puan servis_puan_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12832,7 +12869,7 @@ ALTER TABLE ONLY public.servis_puan
 
 
 --
--- TOC entry 3665 (class 2606 OID 89761)
+-- TOC entry 3666 (class 2606 OID 89761)
 -- Name: servis_sorumlusu servis_sorumlusu_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12841,7 +12878,7 @@ ALTER TABLE ONLY public.servis_sorumlusu
 
 
 --
--- TOC entry 3684 (class 2606 OID 89821)
+-- TOC entry 3685 (class 2606 OID 89821)
 -- Name: tedarikci_puan tedarakci_puan_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12850,7 +12887,7 @@ ALTER TABLE ONLY public.tedarikci_puan
 
 
 --
--- TOC entry 3681 (class 2606 OID 89812)
+-- TOC entry 3682 (class 2606 OID 89812)
 -- Name: tedarikci_parca tedarikci_parca_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12859,7 +12896,7 @@ ALTER TABLE ONLY public.tedarikci_parca
 
 
 --
--- TOC entry 3650 (class 2606 OID 89712)
+-- TOC entry 3651 (class 2606 OID 89712)
 -- Name: tedarikci tedarikci_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12868,7 +12905,7 @@ ALTER TABLE ONLY public.tedarikci
 
 
 --
--- TOC entry 3693 (class 2606 OID 105977)
+-- TOC entry 3694 (class 2606 OID 105977)
 -- Name: uretim_kaydi uretim_kaydi_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12925,7 +12962,7 @@ CREATE INDEX idx_cevap_madde ON public.form_madde_cevap USING btree (soru_refera
 
 
 --
--- TOC entry 3638 (class 1259 OID 89857)
+-- TOC entry 3639 (class 1259 OID 89857)
 -- Name: idx_degisim_bakim; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -12933,7 +12970,7 @@ CREATE INDEX idx_degisim_bakim ON public.parca_degisim USING btree (bakim_id);
 
 
 --
--- TOC entry 3696 (class 1259 OID 106009)
+-- TOC entry 3697 (class 1259 OID 106009)
 -- Name: idx_durus_makine; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -12941,7 +12978,7 @@ CREATE INDEX idx_durus_makine ON public.durus_kaydi USING btree (makine_id);
 
 
 --
--- TOC entry 3697 (class 1259 OID 106011)
+-- TOC entry 3698 (class 1259 OID 106011)
 -- Name: idx_durus_makine_tarih; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -12949,7 +12986,7 @@ CREATE INDEX idx_durus_makine_tarih ON public.durus_kaydi USING btree (makine_id
 
 
 --
--- TOC entry 3698 (class 1259 OID 106010)
+-- TOC entry 3699 (class 1259 OID 106010)
 -- Name: idx_durus_tarih; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -12970,6 +13007,14 @@ CREATE INDEX idx_kontrol_madde ON public.kontrol_maddesi USING btree (madde_id);
 --
 
 CREATE INDEX idx_kontrol_sablon ON public.kontrol_maddesi USING btree (sablon_id);
+
+
+--
+-- TOC entry 3614 (class 1259 OID 122340)
+-- Name: idx_kritiklik; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_kritiklik ON public.kontrol_maddesi USING btree (teknik_parametre);
 
 
 --
@@ -13013,7 +13058,7 @@ CREATE INDEX idx_m_ariza ON public.ariza_kaydi USING btree (makine_id);
 
 
 --
--- TOC entry 3621 (class 1259 OID 89852)
+-- TOC entry 3622 (class 1259 OID 89852)
 -- Name: idx_m_qr; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13021,7 +13066,7 @@ CREATE INDEX idx_m_qr ON public.makine USING btree (makine_qr);
 
 
 --
--- TOC entry 3622 (class 1259 OID 89850)
+-- TOC entry 3623 (class 1259 OID 89850)
 -- Name: idx_makine_firma; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13037,7 +13082,7 @@ CREATE INDEX idx_makine_id ON public.gunluk_kontrol_formu USING btree (makine_id
 
 
 --
--- TOC entry 3628 (class 1259 OID 89854)
+-- TOC entry 3629 (class 1259 OID 89854)
 -- Name: idx_makine_kullanim_baslangic; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13045,7 +13090,7 @@ CREATE INDEX idx_makine_kullanim_baslangic ON public.makine_kullanim USING btree
 
 
 --
--- TOC entry 3629 (class 1259 OID 89853)
+-- TOC entry 3630 (class 1259 OID 89853)
 -- Name: idx_makine_kullanim_kullanici_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13053,7 +13098,7 @@ CREATE INDEX idx_makine_kullanim_kullanici_id ON public.makine_kullanim USING bt
 
 
 --
--- TOC entry 3623 (class 1259 OID 89851)
+-- TOC entry 3624 (class 1259 OID 89851)
 -- Name: idx_makine_turu; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13061,7 +13106,7 @@ CREATE INDEX idx_makine_turu ON public.makine USING btree (makine_tur_id);
 
 
 --
--- TOC entry 3630 (class 1259 OID 89855)
+-- TOC entry 3631 (class 1259 OID 89855)
 -- Name: idx_mkullanim_makine; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13077,7 +13122,7 @@ CREATE INDEX idx_operator_id ON public.gunluk_kontrol_formu USING btree (kullani
 
 
 --
--- TOC entry 3641 (class 1259 OID 89858)
+-- TOC entry 3642 (class 1259 OID 89858)
 -- Name: idx_risk_makine; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13085,7 +13130,7 @@ CREATE INDEX idx_risk_makine ON public.risk_skoru USING btree (makine_id);
 
 
 --
--- TOC entry 3642 (class 1259 OID 89859)
+-- TOC entry 3643 (class 1259 OID 89859)
 -- Name: idx_risk_tarih; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13101,7 +13146,7 @@ CREATE INDEX idx_sablon_id ON public.gunluk_kontrol_formu USING btree (sablon_id
 
 
 --
--- TOC entry 3616 (class 1259 OID 89847)
+-- TOC entry 3617 (class 1259 OID 89847)
 -- Name: idx_sablon_m_turu; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13109,7 +13154,7 @@ CREATE INDEX idx_sablon_m_turu ON public.kontrol_sablonu USING btree (makine_tur
 
 
 --
--- TOC entry 3660 (class 1259 OID 89861)
+-- TOC entry 3661 (class 1259 OID 89861)
 -- Name: idx_spuan_firma; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13117,7 +13162,7 @@ CREATE INDEX idx_spuan_firma ON public.servis_puan USING btree (servis_firma_id)
 
 
 --
--- TOC entry 3661 (class 1259 OID 89862)
+-- TOC entry 3662 (class 1259 OID 89862)
 -- Name: idx_spuan_kullanici; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13181,7 +13226,7 @@ CREATE INDEX idx_tetik_tarih ON public.arizayi_tetikleyen_form USING btree (tesp
 
 
 --
--- TOC entry 3682 (class 1259 OID 89865)
+-- TOC entry 3683 (class 1259 OID 89865)
 -- Name: idx_tpuan_tedarikci; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13189,7 +13234,7 @@ CREATE INDEX idx_tpuan_tedarikci ON public.tedarikci_puan USING btree (tedarikci
 
 
 --
--- TOC entry 3689 (class 1259 OID 105988)
+-- TOC entry 3690 (class 1259 OID 105988)
 -- Name: idx_uretim_makine; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13197,7 +13242,7 @@ CREATE INDEX idx_uretim_makine ON public.uretim_kaydi USING btree (makine_id);
 
 
 --
--- TOC entry 3690 (class 1259 OID 105990)
+-- TOC entry 3691 (class 1259 OID 105990)
 -- Name: idx_uretim_makine_tarih; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13205,7 +13250,7 @@ CREATE INDEX idx_uretim_makine_tarih ON public.uretim_kaydi USING btree (makine_
 
 
 --
--- TOC entry 3691 (class 1259 OID 105989)
+-- TOC entry 3692 (class 1259 OID 105989)
 -- Name: idx_uretim_tarih; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13213,7 +13258,7 @@ CREATE INDEX idx_uretim_tarih ON public.uretim_kaydi USING btree (vardiya_tarihi
 
 
 --
--- TOC entry 3657 (class 1259 OID 89860)
+-- TOC entry 3658 (class 1259 OID 89860)
 -- Name: makine_ozellikleri_makine_id_key; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13221,7 +13266,7 @@ CREATE UNIQUE INDEX makine_ozellikleri_makine_id_key ON public.makine_ozellikler
 
 
 --
--- TOC entry 3635 (class 1259 OID 89856)
+-- TOC entry 3636 (class 1259 OID 89856)
 -- Name: parca_adi; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13229,7 +13274,7 @@ CREATE UNIQUE INDEX parca_adi ON public.parca USING btree (parca_adi);
 
 
 --
--- TOC entry 3675 (class 1259 OID 89864)
+-- TOC entry 3676 (class 1259 OID 89864)
 -- Name: unique_kategori_adi; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13245,7 +13290,7 @@ CREATE UNIQUE INDEX unique_kullanici ON public.kullanici USING btree (kullanici_
 
 
 --
--- TOC entry 3672 (class 1259 OID 89863)
+-- TOC entry 3673 (class 1259 OID 89863)
 -- Name: unique_telefon; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13253,7 +13298,7 @@ CREATE UNIQUE INDEX unique_telefon ON public.iletisim USING btree (telefon);
 
 
 --
--- TOC entry 3626 (class 1259 OID 89848)
+-- TOC entry 3627 (class 1259 OID 89848)
 -- Name: uq_makine_qr; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13261,7 +13306,7 @@ CREATE UNIQUE INDEX uq_makine_qr ON public.makine USING btree (makine_qr);
 
 
 --
--- TOC entry 3627 (class 1259 OID 89849)
+-- TOC entry 3628 (class 1259 OID 89849)
 -- Name: uq_seri_no; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -13302,7 +13347,7 @@ ALTER TABLE ONLY public.servis_puan
 
 
 --
--- TOC entry 3720 (class 2606 OID 89951)
+-- TOC entry 3721 (class 2606 OID 89951)
 -- Name: firma fk_abonelik; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13311,7 +13356,7 @@ ALTER TABLE ONLY public.firma
 
 
 --
--- TOC entry 3706 (class 2606 OID 89891)
+-- TOC entry 3707 (class 2606 OID 89891)
 -- Name: ai_model_log fk_ai_log; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13320,7 +13365,7 @@ ALTER TABLE ONLY public.ai_model_log
 
 
 --
--- TOC entry 3711 (class 2606 OID 89916)
+-- TOC entry 3712 (class 2606 OID 89916)
 -- Name: arizayi_tetikleyen_form fk_ariza; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13329,7 +13374,7 @@ ALTER TABLE ONLY public.arizayi_tetikleyen_form
 
 
 --
--- TOC entry 3714 (class 2606 OID 89931)
+-- TOC entry 3715 (class 2606 OID 89931)
 -- Name: bakim_kaydi fk_ariza; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13338,7 +13383,7 @@ ALTER TABLE ONLY public.bakim_kaydi
 
 
 --
--- TOC entry 3709 (class 2606 OID 89906)
+-- TOC entry 3710 (class 2606 OID 89906)
 -- Name: ariza_kaydi fk_ariza_tur; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13347,7 +13392,7 @@ ALTER TABLE ONLY public.ariza_kaydi
 
 
 --
--- TOC entry 3715 (class 2606 OID 89936)
+-- TOC entry 3716 (class 2606 OID 89936)
 -- Name: bakim_kaydi fk_bakim; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13356,21 +13401,12 @@ ALTER TABLE ONLY public.bakim_kaydi
 
 
 --
--- TOC entry 3738 (class 2606 OID 90041)
+-- TOC entry 3739 (class 2606 OID 90041)
 -- Name: parca_degisim fk_bakim; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.parca_degisim
     ADD CONSTRAINT fk_bakim FOREIGN KEY (bakim_id) REFERENCES public.bakim_kaydi(bakim_id);
-
-
---
--- TOC entry 3739 (class 2606 OID 97719)
--- Name: parca_degisim fk_bakim_id; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.parca_degisim
-    ADD CONSTRAINT fk_bakim_id FOREIGN KEY (bakim_kaydi_id) REFERENCES public.bakim_kaydi(bakim_id) NOT VALID;
 
 
 --
@@ -13392,7 +13428,7 @@ ALTER TABLE ONLY public.durus_kaydi
 
 
 --
--- TOC entry 3701 (class 2606 OID 89866)
+-- TOC entry 3702 (class 2606 OID 89866)
 -- Name: kullanici fk_firma; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13401,7 +13437,7 @@ ALTER TABLE ONLY public.kullanici
 
 
 --
--- TOC entry 3731 (class 2606 OID 90006)
+-- TOC entry 3732 (class 2606 OID 90006)
 -- Name: makine fk_firma; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13410,7 +13446,7 @@ ALTER TABLE ONLY public.makine
 
 
 --
--- TOC entry 3703 (class 2606 OID 89876)
+-- TOC entry 3704 (class 2606 OID 89876)
 -- Name: ai_ariza_tespit fk_form; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13419,7 +13455,7 @@ ALTER TABLE ONLY public.ai_ariza_tespit
 
 
 --
--- TOC entry 3707 (class 2606 OID 89896)
+-- TOC entry 3708 (class 2606 OID 89896)
 -- Name: ai_model_log fk_form; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13428,7 +13464,7 @@ ALTER TABLE ONLY public.ai_model_log
 
 
 --
--- TOC entry 3712 (class 2606 OID 89921)
+-- TOC entry 3713 (class 2606 OID 89921)
 -- Name: arizayi_tetikleyen_form fk_form; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13437,7 +13473,7 @@ ALTER TABLE ONLY public.arizayi_tetikleyen_form
 
 
 --
--- TOC entry 3723 (class 2606 OID 89966)
+-- TOC entry 3724 (class 2606 OID 89966)
 -- Name: form_madde_cevap fk_form; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13446,7 +13482,7 @@ ALTER TABLE ONLY public.form_madde_cevap
 
 
 --
--- TOC entry 3732 (class 2606 OID 90011)
+-- TOC entry 3733 (class 2606 OID 90011)
 -- Name: makine fk_garanti_id; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13455,7 +13491,7 @@ ALTER TABLE ONLY public.makine
 
 
 --
--- TOC entry 3721 (class 2606 OID 89956)
+-- TOC entry 3722 (class 2606 OID 89956)
 -- Name: firma fk_iletisim; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13491,7 +13527,7 @@ ALTER TABLE ONLY public.tedarikci
 
 
 --
--- TOC entry 3736 (class 2606 OID 90031)
+-- TOC entry 3737 (class 2606 OID 90031)
 -- Name: parca fk_kategori; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13500,7 +13536,7 @@ ALTER TABLE ONLY public.parca
 
 
 --
--- TOC entry 3708 (class 2606 OID 89901)
+-- TOC entry 3709 (class 2606 OID 89901)
 -- Name: ai_model_log fk_kullanici; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13509,7 +13545,7 @@ ALTER TABLE ONLY public.ai_model_log
 
 
 --
--- TOC entry 3716 (class 2606 OID 97747)
+-- TOC entry 3717 (class 2606 OID 122354)
 -- Name: bakim_kaydi fk_kullanici; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13518,7 +13554,7 @@ ALTER TABLE ONLY public.bakim_kaydi
 
 
 --
--- TOC entry 3725 (class 2606 OID 89976)
+-- TOC entry 3726 (class 2606 OID 89976)
 -- Name: gunluk_kontrol_formu fk_kullanici; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13527,7 +13563,7 @@ ALTER TABLE ONLY public.gunluk_kontrol_formu
 
 
 --
--- TOC entry 3734 (class 2606 OID 90021)
+-- TOC entry 3735 (class 2606 OID 90021)
 -- Name: makine_kullanim fk_kullanici; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13545,7 +13581,7 @@ ALTER TABLE ONLY public.tedarikci_puan
 
 
 --
--- TOC entry 3704 (class 2606 OID 89881)
+-- TOC entry 3705 (class 2606 OID 89881)
 -- Name: ai_ariza_tespit fk_madde; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13554,7 +13590,7 @@ ALTER TABLE ONLY public.ai_ariza_tespit
 
 
 --
--- TOC entry 3713 (class 2606 OID 89926)
+-- TOC entry 3714 (class 2606 OID 89926)
 -- Name: arizayi_tetikleyen_form fk_madde; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13563,7 +13599,7 @@ ALTER TABLE ONLY public.arizayi_tetikleyen_form
 
 
 --
--- TOC entry 3724 (class 2606 OID 89971)
+-- TOC entry 3725 (class 2606 OID 89971)
 -- Name: form_madde_cevap fk_madde; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13572,7 +13608,7 @@ ALTER TABLE ONLY public.form_madde_cevap
 
 
 --
--- TOC entry 3705 (class 2606 OID 89886)
+-- TOC entry 3706 (class 2606 OID 89886)
 -- Name: ai_ariza_tespit fk_makine; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13581,7 +13617,7 @@ ALTER TABLE ONLY public.ai_ariza_tespit
 
 
 --
--- TOC entry 3710 (class 2606 OID 89911)
+-- TOC entry 3711 (class 2606 OID 89911)
 -- Name: ariza_kaydi fk_makine; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13590,7 +13626,7 @@ ALTER TABLE ONLY public.ariza_kaydi
 
 
 --
--- TOC entry 3717 (class 2606 OID 89941)
+-- TOC entry 3718 (class 2606 OID 89941)
 -- Name: bakim_kaydi fk_makine; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13599,7 +13635,7 @@ ALTER TABLE ONLY public.bakim_kaydi
 
 
 --
--- TOC entry 3726 (class 2606 OID 89981)
+-- TOC entry 3727 (class 2606 OID 89981)
 -- Name: gunluk_kontrol_formu fk_makine; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13608,7 +13644,7 @@ ALTER TABLE ONLY public.gunluk_kontrol_formu
 
 
 --
--- TOC entry 3729 (class 2606 OID 89996)
+-- TOC entry 3730 (class 2606 OID 89996)
 -- Name: lokasyon fk_makine; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13617,7 +13653,7 @@ ALTER TABLE ONLY public.lokasyon
 
 
 --
--- TOC entry 3735 (class 2606 OID 90026)
+-- TOC entry 3736 (class 2606 OID 90026)
 -- Name: makine_kullanim fk_makine; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13644,7 +13680,7 @@ ALTER TABLE ONLY public.risk_skoru
 
 
 --
--- TOC entry 3733 (class 2606 OID 90016)
+-- TOC entry 3734 (class 2606 OID 90016)
 -- Name: makine fk_makine_turu; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13671,7 +13707,7 @@ ALTER TABLE ONLY public.tedarikci_parca
 
 
 --
--- TOC entry 3702 (class 2606 OID 89871)
+-- TOC entry 3703 (class 2606 OID 89871)
 -- Name: kullanici fk_rol; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13680,7 +13716,7 @@ ALTER TABLE ONLY public.kullanici
 
 
 --
--- TOC entry 3727 (class 2606 OID 89986)
+-- TOC entry 3728 (class 2606 OID 89986)
 -- Name: gunluk_kontrol_formu fk_sablon; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13689,7 +13725,7 @@ ALTER TABLE ONLY public.gunluk_kontrol_formu
 
 
 --
--- TOC entry 3728 (class 2606 OID 89991)
+-- TOC entry 3729 (class 2606 OID 89991)
 -- Name: kontrol_sablonu fk_sablon_kontrol; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13698,7 +13734,7 @@ ALTER TABLE ONLY public.kontrol_sablonu
 
 
 --
--- TOC entry 3722 (class 2606 OID 89961)
+-- TOC entry 3723 (class 2606 OID 89961)
 -- Name: firma fk_sektor; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13707,7 +13743,7 @@ ALTER TABLE ONLY public.firma
 
 
 --
--- TOC entry 3718 (class 2606 OID 89946)
+-- TOC entry 3719 (class 2606 OID 89946)
 -- Name: bakim_kaydi fk_servis; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13716,7 +13752,7 @@ ALTER TABLE ONLY public.bakim_kaydi
 
 
 --
--- TOC entry 3719 (class 2606 OID 90179)
+-- TOC entry 3720 (class 2606 OID 90179)
 -- Name: bakim_kaydi fk_servis_sorumlu; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13734,7 +13770,7 @@ ALTER TABLE ONLY public.servis_sorumlusu
 
 
 --
--- TOC entry 3737 (class 2606 OID 90036)
+-- TOC entry 3738 (class 2606 OID 90036)
 -- Name: parca fk_tedarikci; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13779,7 +13815,7 @@ ALTER TABLE ONLY public.servis_puan
 
 
 --
--- TOC entry 3730 (class 2606 OID 90001)
+-- TOC entry 3731 (class 2606 OID 90001)
 -- Name: lokasyon lokasyon_firma_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -13823,11 +13859,11 @@ ALTER TABLE ONLY public.tedarikci_puan
 REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 
 
--- Completed on 2026-05-01 15:15:50
+-- Completed on 2026-05-02 18:00:34
 
 --
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 95Q7seZddgXjUnEphSaDEljTYym7FqErcoS9os4wAAc4xSpXknX37YxJCnAdrvr
+\unrestrict 3rfxFhoq54uWBgDDt7clOoOJ7oeGhHPpSALy8xp5F9qrhJYpEliX3bOePp2PdEe
 
