@@ -209,21 +209,16 @@ export const api = {
   },
 
   // ═══════════════ 9. TÜM BAKIM GEÇMİŞİ (DASHBOARD) ═══════════════
-  getAllServiceHistory: async () => {
+getAllServiceHistory: async () => {
     try {
-      const makineler = await api.getMachines();
-      const tumBakimlar = [];
-      for (const m of makineler) {
-        try {
-          const bakimlar = await api.getServiceHistory(m.makine_id);
-          bakimlar.forEach((b) => {
-            tumBakimlar.push({ ...b, makine_ad: m.makine_adi || m.makine_ad });
-          });
-        } catch { /* Tek bir makinenin bakımı yoksa devam et */ }
-      }
-      return tumBakimlar;
-    } catch { return []; }
-  },
+        // Artık 104 istek yok! Sadece 1 istek var.
+        const res = await fetch(`${API_BASE}/bakimlar/tum-bakimlar`, { headers: getHeaders() });
+        const json = await handleResponse(res);
+        return json.data || [];
+    } catch { 
+        return []; 
+    }
+},
 
   // ═══════════════ 10. PERSONEL EKLE ═══════════════
   addUser: async (userData) => {
@@ -626,4 +621,15 @@ export const api = {
     const json = await handleResponse(res);
     return json.data;
   },
+
+
+  getDashboardOzet: async () => {
+    const res = await fetch(`${API_BASE}/dashboard/ozet`, {
+      headers: getHeaders(),
+    });
+    const json = await handleResponse(res);
+    return json.data;
+  },
+
+  
 };

@@ -13,14 +13,13 @@ export default function KisiEkle() {
 
   // --- FORM STATE (Yeni Personel Bilgileri) ---
   const [form, setForm] = useState({
-    kullanici_adi: "", // Giriş için kullanılacak kimlik
     sifre: "", // Kullanıcı parolası
     eposta: "", // İletişim e-postası
     telefon: "", // İletişim numarası
     ad: "", // Personel adı
     soyad: "", // Personel soyadı
     baslama_tarihi: "", // İşe giriş / sistem kayıt tarihi
-    rol_id: "", // Yetki seviyesi (Admin, Teknisyen, Operatör)
+    rol: "", // Yetki seviyesi (Admin, Teknisyen, Operatör)
   });
 
   // Load users on mount
@@ -49,25 +48,21 @@ export default function KisiEkle() {
     }
 
     try {
-      // rol_id (string sayısal değer örn "3") üzerinden rol stringini bul
-      const roleMap = {
-        "1": "OPERATOR",
-        "2": "TEKNISYEN"
-      };
-
-      const rolStr = roleMap[form.rol_id] || "OPERATOR";
-
       // Oturum açan adminin firma_id'sini al
-      const loggedUser = JSON.parse(localStorage.getItem("user") || "{}");
+      const loggedUser = JSON.parse(localStorage.getItem("user_payload") || "{}");
       const firmaId = loggedUser.firma_id || 1;
 
       // Şifre girilmediyse varsayılan şifre oluştur
       const sifre = form.sifre || "Endux1234";
 
-      // API'ye gönderilecek veriler (backend 'rol' stringi bekliyor)
+      // API'ye gönderilecek veriler
       const payload = {
-        ...form,
-        rol: rolStr,
+        ad: form.ad,
+        soyad: form.soyad,
+        telefon: form.telefon,
+        eposta: form.eposta || null,
+        baslama_tarihi: form.baslama_tarihi || null,
+        rol: form.rol || "OPERATOR",
         sifre: sifre,
         firma_id: firmaId
       };
@@ -79,8 +74,8 @@ export default function KisiEkle() {
 
       // Formu temizle
       setForm({
-        kullanici_adi: "", sifre: "", eposta: "", telefon: "",
-        ad: "", soyad: "", baslama_tarihi: "", rol_id: "",
+        sifre: "", eposta: "", telefon: "",
+        ad: "", soyad: "", baslama_tarihi: "", rol: "",
       });
       alert("Kişi başarıyla eklendi!");
     } catch (err) {
@@ -188,10 +183,11 @@ export default function KisiEkle() {
                 <input name="eposta" placeholder="E-Posta" type="email" value={form.eposta} onChange={handleChange} style={inputStyle} />
                 <input name="sifre" placeholder="Şifre" type="password" value={form.sifre} onChange={handleChange} style={inputStyle} />
                 <input name="baslama_tarihi" placeholder="Başlama Tarihi" type="date" value={form.baslama_tarihi} onChange={handleChange} style={inputStyle} className="date-input-dark" />
-                <select name="rol_id" value={form.rol_id} onChange={handleChange} style={inputStyle}>
+                <select name="rol" value={form.rol} onChange={handleChange} style={inputStyle}>
                   <option value="" disabled>Rol seçin</option>
-                  <option value="1">Operatör</option>
-                  <option value="2">Teknisyen</option>
+                  <option value="OPERATOR">Operatör</option>
+                  <option value="TEKNISYEN">Teknisyen</option>
+                  <option value="YONETICI">Yönetici</option>
                 </select>
 
                 <button

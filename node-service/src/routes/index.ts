@@ -11,6 +11,7 @@ import { ServisPuanRouter, TedarikciPuanRouter } from "./puanRoute";
 import aiRoutes from "./aiRoutes";
 import oeeRoutes from "./oeeRoutes";
 import satinAlmaRoutes from "./satinAlmaRoutes";
+import dashboardRoutes from "./dashboardRoutes";
 
 
 
@@ -47,5 +48,7 @@ router.use("/ai", aiRoutes); // /api/ai/*
 router.use("/oee", oeeRoutes); // /api/oee/*
 
 router.use("/satin-alma", satinAlmaRoutes); // /api/satin-alma/*
+
+router.use("/dashboard", dashboardRoutes); // /api/dashboard/*
 
 export default router;

@@ -57,7 +57,7 @@ export default function ServisMerkezi() {
         setAllHistory(historyData);
 
         // Dış servis işlemleri (Backend verileri - Onaylanmamış olanlar)
-        const liveHistory = historyData.filter(h => h.servis_firma_id && !h.puan_onaylandi);
+        const liveHistory = historyData.filter(h => h.servis_firma_id && h.durum !== "TAMAMLANDI");
 
         setDisServisler(liveHistory);
       } catch (err) {
@@ -88,10 +88,12 @@ export default function ServisMerkezi() {
 
       // Listeyi güncelle
       const updatedHistory = allHistory.map(h =>
-        h.bakim_id === bakimId ? { ...h, puan: disRatingValue } : h
+        h.bakim_id === bakimId
+          ? { ...h, servis_puan: { ...(h.servis_puan || {}), puan: disRatingValue } }
+          : h
       );
       setAllHistory(updatedHistory);
-      setDisServisler(updatedHistory.filter(h => h.servis_firma_id && !h.puan_onaylandi));
+      setDisServisler(updatedHistory.filter(h => h.servis_firma_id && h.durum !== "TAMAMLANDI"));
 
       // Firmaları da yeniden çek (Ortalama puanların güncellenmesi için)
       const updatedFirms = await api.getFirms();

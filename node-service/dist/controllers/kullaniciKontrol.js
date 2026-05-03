@@ -1,13 +1,18 @@
-import { Request, Response, NextFunction } from "express";
-import prisma from "../config/prisma";
-import { Prisma } from "@prisma/client";
-import { turkceKarakterTemizle, rol_on_eki_getir } from "../utils/turkceKarakter";
-import { hashSifre } from "../utils/hash";
-
-export async function personelEkle(req: Request, res: Response, next: NextFunction): Promise<void> {
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.personelEkle = personelEkle;
+exports.tumKullanicilariGetir = tumKullanicilariGetir;
+exports.personelSil = personelSil;
+const prisma_1 = __importDefault(require("../config/prisma"));
+const client_1 = require("@prisma/client");
+const turkceKarakter_1 = require("../utils/turkceKarakter");
+const hash_1 = require("../utils/hash");
+async function personelEkle(req, res, next) {
     try {
         const { ad, soyad, rol, sifre, telefon, eposta, firma_id, baslama_tarihi } = req.body;
-
         // Zorunlu alan kontrolü (firma_id opsiyonel, varsayılan 1)
         if (!ad || !soyad || !rol || !sifre || telefon === undefined) {
             res.status(400).json({
@@ -16,7 +21,6 @@ export async function personelEkle(req: Request, res: Response, next: NextFuncti
             });
             return;
         }
-
         // Geçerli rol kontrolü
         const gecerliRoller = ["OPERATOR", "TEKNISYEN", "YONETICI", "SERVIS"];
         if (!gecerliRoller.includes(rol)) {
@@ -26,9 +30,8 @@ export async function personelEkle(req: Request, res: Response, next: NextFuncti
             });
             return;
         }
-
         // Rol tablosundan rol_id'yi bul
-        const rolKaydi = await prisma.rol.findFirst({
+        const rolKaydi = await prisma_1.default.rol.findFirst({
             where: { rol_adi: rol }
         });
         if (!rolKaydi) {
@@ -38,15 +41,13 @@ export async function personelEkle(req: Request, res: Response, next: NextFuncti
             });
             return;
         }
-
         // Kullanıcı adı oluştur (Türkçe karakter temizle + rol ön eki)
-        const temizAd = turkceKarakterTemizle(ad);
-        const temizSoyad = turkceKarakterTemizle(soyad);
-        const on_eki = rol_on_eki_getir(rol);
+        const temizAd = (0, turkceKarakter_1.turkceKarakterTemizle)(ad);
+        const temizSoyad = (0, turkceKarakter_1.turkceKarakterTemizle)(soyad);
+        const on_eki = (0, turkceKarakter_1.rol_on_eki_getir)(rol);
         const kullanici_adi = `${on_eki}${temizAd}${temizSoyad}`;
-
         // Tekrar eden kullanıcı adı kontrolü
-        const mevcutKullanici = await prisma.kullanici.findUnique({
+        const mevcutKullanici = await prisma_1.default.kullanici.findUnique({
             where: { kullanici_adi: kullanici_adi }
         });
         if (mevcutKullanici) {
@@ -56,12 +57,10 @@ export async function personelEkle(req: Request, res: Response, next: NextFuncti
             });
             return;
         }
-
         // Şifreyi hashle
-        const hashlenmisSifre = await hashSifre(sifre);
-
+        const hashlenmisSifre = await (0, hash_1.hashSifre)(sifre);
         // Kullanıcıyı veritabanına kaydet (şemaya uyumlu)
-        const yeniKullanici = await prisma.kullanici.create({
+        const yeniKullanici = await prisma_1.default.kullanici.create({
             data: {
                 kullanici_adi: kullanici_adi,
                 sifre: hashlenmisSifre,
@@ -75,19 +74,17 @@ export async function personelEkle(req: Request, res: Response, next: NextFuncti
                 aktiflik: true
             }
         });
-
         // Şifreyi response'dan çıkar
         const { sifre: _, ...guvenliVeri } = yeniKullanici;
-
         res.status(201).json({
             success: true,
             message: "Personel başarıyla eklendi.",
             kullanici: guvenliVeri
         });
-    } catch (error) {
+    }
+    catch (error) {
         console.error("Personel ekleme hatası:", error);
-
-        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error instanceof client_1.Prisma.PrismaClientKnownRequestError) {
             if (error.code === "P2002") {
                 res.status(400).json({
                     success: false,
@@ -103,22 +100,15 @@ export async function personelEkle(req: Request, res: Response, next: NextFuncti
                 return;
             }
         }
-
         res.status(500).json({
             success: false,
             message: "Personel eklenirken bir hata oluştu."
         });
     }
 }
-
-
-
-
-
-
-export async function tumKullanicilariGetir(req: Request, res: Response): Promise<void> {
+async function tumKullanicilariGetir(req, res) {
     try {
-        const kullanicilar = await prisma.kullanici.findMany({
+        const kullanicilar = await prisma_1.default.kullanici.findMany({
             where: {
                 OR: [
                     { aktiflik: true },
@@ -156,21 +146,18 @@ export async function tumKullanicilariGetir(req: Request, res: Response): Promis
             message: "Kullanıcılar başarıyla getirildi.",
             kullanicilar: kullanicilar
         });
-    } catch (error) {
+    }
+    catch (error) {
         console.error("Kullanıcıları getirme hatası:", error);
         res.status(500).json({
             success: false,
             message: "Kullanıcılar getirilirken bir hata oluştu."
         });
-
     }
-
 }
-
-export async function personelSil(req: Request, res: Response, next: NextFunction): Promise<void> {
+async function personelSil(req, res, next) {
     try {
         const { id } = req.params;
-
         if (!id) {
             res.status(400).json({
                 success: false,
@@ -178,12 +165,10 @@ export async function personelSil(req: Request, res: Response, next: NextFunctio
             });
             return;
         }
-
         // Kullanıcıyı bul
-        const kullanici = await prisma.kullanici.findUnique({
+        const kullanici = await prisma_1.default.kullanici.findUnique({
             where: { kullanici_id: Number(id) }
         });
-
         if (!kullanici) {
             res.status(404).json({
                 success: false,
@@ -191,20 +176,20 @@ export async function personelSil(req: Request, res: Response, next: NextFunctio
             });
             return;
         }
-
         // Önce silmeyi dene (eğer ilişkili kayıt yoksa)
         // Eğer hata alırsa aktifliğini false yap (soft delete)
         try {
-            await prisma.kullanici.delete({
+            await prisma_1.default.kullanici.delete({
                 where: { kullanici_id: Number(id) }
             });
             res.status(200).json({
                 success: true,
                 message: "Personel başarıyla silindi."
             });
-        } catch (error) {
+        }
+        catch (error) {
             // İlişkili kayıtlar varsa silinemez, bu durumda pasife çekiyoruz
-            await prisma.kullanici.update({
+            await prisma_1.default.kullanici.update({
                 where: { kullanici_id: Number(id) },
                 data: { aktiflik: false }
             });
@@ -213,7 +198,8 @@ export async function personelSil(req: Request, res: Response, next: NextFunctio
                 message: "Personel ilişkili kayıtları olduğu için silinemedi ancak erişimi kesildi (pasif yapıldı)."
             });
         }
-    } catch (error) {
+    }
+    catch (error) {
         console.error("Personel silme hatası:", error);
         res.status(500).json({
             success: false,

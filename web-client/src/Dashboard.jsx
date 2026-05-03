@@ -17,15 +17,15 @@ export default function Dashboard() {
 
   // --- STATE TANIMLAMALARI (Uygulamanın Hafızası) ---
   const [machinesList, setMachinesList] = useState([]); // API'den gelen ve zenginleştirilen tüm makinelerin listesi
-  const [isLoading, setIsLoading] = useState(true); // Veriler yüklenirken gösterilen yükleme durumu
-  const [pendingApprovals, setPendingApprovals] = useState([]); // Servis firması tarafından tamamlanmış, kullanıcı puanı bekleyen kayıtlar
+  const [, setIsLoading] = useState(true); // Veriler yüklenirken gösterilen yükleme durumu
+  const [pendingApprovals, setPendingApprovals] = useState(0); // Servis firması tarafından tamamlanmış, kullanıcı puanı bekleyen kayıtlar
   const [pendingTasks, setPendingTasks] = useState([]); // Arıza kaydı açılmış ancak henüz teknisyen ataması bekleyen görevler
-  const [allHistory, setAllHistory] = useState([]); // Grafikler için kullanılan geçmiş servis verileri
+ const  [allHistory] = useState([]); // Grafikler için kullanılan geçmiş servis verileri
   const [isOeeModalOpen, setIsOeeModalOpen] = useState(false); // Verimlilik (OEE) detaylarını gösteren pencerenin durumu
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false); // Bakım/Onay detaylarını yöneten ana modalin durumu
   const [selectedTaskIds, setSelectedTaskIds] = useState([]); // Toplu onaylama işlemi için seçilen görevlerin ID'leri
   const [activeDetailTab, setActiveDetailTab] = useState(null); // Modalde hangi sekmenin (Bakımda, Bekleyen vs.) aktif olduğunu tutar
-  const [firmsMetadata, setFirmsMetadata] = useState([]); // Servis firmalarının değerlendirme ve iletişim bilgileri
+  //const [firmsMetadata, setFirmsMetadata] = useState([]); // Servis firmalarının değerlendirme ve iletişim bilgileri
   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
   const [activeBreakdownId, setActiveBreakdownId] = useState(null);
   const [breakdownDesc, setBreakdownDesc] = useState("");
@@ -34,84 +34,50 @@ export default function Dashboard() {
 
   // --- OEE ANALİZ VERİLERİ (Haftalık Verimlilik Değerleri) ---
   // --- OEE ANALİZ VERİLERİ (Haftalık Verimlilik Değerleri) ---
-  const [oeeWeeklyData, setOeeWeeklyData] = useState([]); // Sabit dizi yerine state
+  //const [oeeWeeklyData, setOeeWeeklyData] = useState([]); // Sabit dizi yerine state
   const [fabrikaOee, setFabrikaOee] = useState(0); // Ana OEE skorunu tutmak için
+
+  const getMachineStatus = (machine) => String(machine?.aktiflik_durumu || "").trim().toLowerCase();
+  const pendingMachines = machinesList.filter((machine) => {
+    const status = getMachineStatus(machine);
+    return status.includes("onay") && status.includes("bek");
+  });
+  const bakimdaMachines = machinesList.filter((machine) => getMachineStatus(machine) === "bakımda");
+  const yaklasanMachines = machinesList.filter((machine) => getMachineStatus(machine) === "bakımı yaklaşan");
+  const activeMachines = machinesList.filter((machine) => {
+    const status = getMachineStatus(machine);
+    return status === "aktif" || status === "normal" || status === "çalışıyor";
+  });
 
 
   // --- VERİ ÇEKME VE ZENGİNLEŞTİRME SÜRECİ ---
   React.useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        // Son 1 aylık veriyi çekmek için tarih aralığı oluştur
-        const bitis = new Date().toISOString().split("T")[0];
-        const baslangicDate = new Date();
-        baslangicDate.setDate(baslangicDate.getDate() - 30);
-        const baslangic = baslangicDate.toISOString().split("T")[0];
+  const fetchDashboardData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // 1. ADIM: Tüm ağır işi backend'de yapan o tek fonksiyonu çağır!
+      const dashboardOzet = await api.getDashboardOzet(); // Backend'deki zengin veri
+      const operasyonelPerformans = dashboardOzet?.operasyonel_performans ?? {};
+      const acilAksiyonlar = dashboardOzet?.acil_aksiyonlar ?? {};
+      
+      // Backend'den gelen hazır özetleri state'lere dağıt
+      setFabrikaOee(Number(operasyonelPerformans.ortalama_oee ?? 0));
+      setPendingApprovals(Number(acilAksiyonlar.onay_bekleyen_is ?? 0));
+      // ... diğer set işlemleri
+      
+      // 2. ADIM: Sadece liste için gereken veriyi çek
+      const machinesData = await api.getMachines();
+      setMachinesList(machinesData);
 
-        // 1. Makineleri ve OEE verilerini paralel olarak API'den al
-        const [machinesData, oeeVerisi] = await Promise.all([
-          api.getMachines(),
-          api.getFactoryOee(baslangic, bitis)
-        ]);
-
-        // Gelen haftalık OEE trendini State'e aktar
-        setOeeWeeklyData(oeeVerisi.fabrika_trend);
-        setFabrikaOee(oeeVerisi.fabrika_ortalama_oee);
-
-        // Ham veriyi analiz ederek Dashboard'a uygun hale getir (Zenginleştirme)
-        const enrichedData = machinesData.map(m => {
-          let kategori = "Aktif";
-          // Risk skoruna veya arıza durumuna göre kategorize et
-          if (m.mevcut_risk_skoru > 0.5 || m.aktiflik_durumu === "Arızalı") kategori = "Yüksek Riskli";
-          else if (m.aktiflik_durumu === "Bakımda" || m.aktiflik_durumu === "Bakımda Olan") kategori = "Bakımda Olan";
-          else if (m.aktiflik_durumu === "Bakımı Yaklaşan") kategori = "Bakımı Yaklaşan";
-
-          // --- Garanti Bitiş Kontrolü Mantığı ---
-          let garantiDurumu = "Normal";
-          if (m.satin_alma_tarihi && m.garanti_suresi) {
-            const purchase = new Date(m.satin_alma_tarihi);
-            // Satın alma tarihine süreyi ekleyerek bitiş tarihini bul
-            const end = new Date(purchase.setMonth(purchase.getMonth() + m.garanti_suresi));
-            // Kalan gün sayısını hesapla
-            const diffDays = Math.ceil((end - new Date()) / (1000 * 60 * 60 * 24));
-
-            if (diffDays <= 0) garantiDurumu = "Bitti";
-            else if (diffDays <= 30) garantiDurumu = "Kritik";
-          }
-
-          // UI'da kullanılacak standart bir veri objesi döndür
-          return { ...m, id: m.makine_id, ad: m.makine_adi || m.makine_ad, kategori, garantiDurumu };
-        });
-
-        setMachinesList(enrichedData);
-
-        // 2. Bakım Onaylarını, Teknik Görevleri ve Firma Bilgilerini Paralel Çek
-        const [serviceHistory, techTasks, firmsData] = await Promise.all([
-          api.getAllServiceHistory(),
-          api.getTechTasks(),
-          api.getFirmsToRate()
-        ]);
-
-        setFirmsMetadata(firmsData);
-        setAllHistory(serviceHistory);
-
-        // Henüz puanlanmamış (tamamlanmış fakat değerlendirme bekleyen) servis kayıtlarını süz
-        const pendingRating = serviceHistory.filter(s => s.puan === 0);
-        setPendingApprovals(pendingRating);
-
-        // Sisteme girilmiş ancak işlem görmemiş (BEKLEYEN) görevleri süz
-        const pendingStart = techTasks.filter(t => t.durum === "BEKLEYEN");
-
-        setPendingTasks(pendingStart);
-
-      } catch (err) {
-        console.error("Dashboard verileri yüklenemedi", err);
-      } finally {
-        setIsLoading(false); // Yükleme ekranını kapat
-      }
-    };
-    fetchDashboardData();
-  }, []);
+    } catch (err) {
+      console.error("Dashboard yükleme hatası:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  fetchDashboardData();
+}, []);
 
   // --- KRİTİK ALARMLARI BELİRLE ---
   // Sadece Yüksek Riskli olanları "Risky Machines" olarak al
@@ -217,11 +183,10 @@ export default function Dashboard() {
 
   // Hiçbir sorunu olmayan, normal çalışan aktif makine sayısını bul
   const totalMachinesCount = machinesList.length || 0;
-  const bakimdaMakineCount = machinesList.filter(m => m.kategori === "Bakımda Olan").length;
-  const activeMachinesCount = machinesList.filter(m => m.kategori === "Aktif").length;
-
-  const onayBekleyenCount = pendingTasks.length + pendingApprovals.length; // Bekleyen tüm bakım onayları + görevler
-  const bakimiYaklasanCount = machinesList.filter(m => m.kategori === "Bakımı Yaklaşan").length; // Takvimi yaklaşanlar
+  const bakimdaMakineCount = bakimdaMachines.length;
+  const activeMachinesCount = activeMachines.length;
+  const onayBekleyenCount = pendingMachines.length; // Makine durumuna göre onay bekleyenler
+  const bakimiYaklasanCount = yaklasanMachines.length; // Takvimi yaklaşanlar
 
   // Grafik paydası: Tüm kalemlerin toplamı (Grafiğin %100 tam daire görünmesi için)
   const chartTotal = (onayBekleyenCount + bakimdaMakineCount + bakimiYaklasanCount + activeMachinesCount) || 1;
@@ -842,13 +807,13 @@ export default function Dashboard() {
                         </div>
                         <div style={{ maxHeight: "250px", overflowY: "auto", padding: "8px" }}>
                           {(activeDetailTab === "active"
-                            ? machinesList.filter(m => m.aktiflik_durumu !== "Bakımda" && m.aktiflik_durumu !== "Bakımı Yaklaşan")
+                            ? activeMachines
                             : activeDetailTab === "upcoming"
-                              ? machinesList.filter(m => m.aktiflik_durumu === "Bakımı Yaklaşan")
+                              ? yaklasanMachines
                               : activeDetailTab === "maintenance"
-                                ? machinesList.filter(m => m.aktiflik_durumu === "Bakımda")
+                                ? bakimdaMachines
                                 : activeDetailTab === "pending"
-                                  ? machinesList.filter(m => pendingTasks.some(t => t.makine_ad === (m.makine_adi || m.makine_ad)))
+                                  ? pendingMachines
                                   : machinesList
                           ).map(m => (
                             <div key={m.id} style={{
@@ -861,8 +826,10 @@ export default function Dashboard() {
                               {m.makine_adi || m.makine_ad}
                             </div>
                           ))}
-                          {((activeDetailTab !== "total" && activeDetailTab !== "active" && activeDetailTab !== "pending") &&
-                            machinesList.filter(m => activeDetailTab === "upcoming" ? m.aktiflik_durumu === "Bakımı Yaklaşan" : m.aktiflik_durumu === "Bakımda").length === 0) && (
+                          {((activeDetailTab === "active" && activeMachines.length === 0) ||
+                            (activeDetailTab === "upcoming" && yaklasanMachines.length === 0) ||
+                            (activeDetailTab === "maintenance" && bakimdaMachines.length === 0) ||
+                            (activeDetailTab === "pending" && pendingMachines.length === 0)) && (
                               <div style={{ textAlign: "center", padding: "20px", color: "#94a3b8", fontSize: "13px" }}>Makine bulunmuyor.</div>
                             )}
                         </div>
@@ -872,8 +839,8 @@ export default function Dashboard() {
                     {/* RIGHT COLUMN: Actionable Approval Box */}
                     <div style={{ flex: 1.2, background: "#fff", borderRadius: "16px", border: "2px solid #e94560", padding: "20px", boxShadow: "0 10px 25px rgba(233,69,96,0.1)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-                        <h4 style={{ margin: 0, color: "#e94560", fontSize: "17px", fontWeight: "800" }}>Onay Bekleyenler</h4>
-                        <span style={{ fontSize: "11px", background: "#e94560", color: "#fff", padding: "2px 8px", borderRadius: "20px", fontWeight: "bold" }}>{onayBekleyenCount} GÖREV</span>
+                        <h4 style={{ margin: 0, color: "#e94560", fontSize: "17px", fontWeight: "800" }}>Onay Bekleyen Görevler</h4>
+                        <span style={{ fontSize: "11px", background: "#e94560", color: "#fff", padding: "2px 8px", borderRadius: "20px", fontWeight: "bold" }}>{pendingApprovals} GÖREV</span>
                       </div>
 
                       <div style={{ maxHeight: "380px", overflowY: "auto", paddingRight: "5px" }}>
