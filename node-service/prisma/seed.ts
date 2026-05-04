@@ -213,6 +213,9 @@ async function main() {
 
     // 7. 100 Adet Makine ve Özellikleri
     console.log("Mevcut sahte test verileri temizleniyor...");
+    await prisma.oee_raporlari.deleteMany({});
+    await prisma.durus_kaydi.deleteMany({});
+    await prisma.uretim_kaydi.deleteMany({});
     await prisma.parca_degisim.deleteMany({});
     await prisma.bakim_kaydi.deleteMany({});
     await prisma.arizayi_tetikleyen_form.deleteMany({});

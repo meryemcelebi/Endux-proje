@@ -92,28 +92,27 @@ model arizayi_tetikleyen_form {
 }
 
 model bakim_kaydi {
-  bakim_id                                                Int               @id @default(autoincrement())
-  makine_id                                               Int
-  sorumlu_id                                              Int?
-  servis_firma_id                                         Int?
-  bakim_tarihi                                            DateTime?         @default(now()) @db.Timestamptz(6)
-  bakim_maliyet                                           Decimal           @db.Decimal
-  aciklama                                                String?
-  ariza_id                                                Int?
-  bakim_tur_id                                            Int?
-  durus_suresi                                            Decimal?          @db.Decimal(15, 2)
-  kullanici_id                                            Int?
-  durum                                                   String?           @default("BEKLEYEN") @db.VarChar(50)
-  ariza_kaydi                                             ariza_kaydi?      @relation(fields: [ariza_id], references: [ariza_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ariza")
-  bakim_turu                                              bakim_turu?       @relation(fields: [bakim_tur_id], references: [bakim_tur_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_bakim")
-  kullanici                                               kullanici?        @relation(fields: [kullanici_id], references: [kullanici_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_kullanici")
-  makine                                                  makine            @relation(fields: [makine_id], references: [makine_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_makine")
-  servis_firma                                            servis_firma?     @relation(fields: [servis_firma_id], references: [servis_firma_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_servis")
-  servis_puan         servis_puan?
-  servis_sorumlusu                                        servis_sorumlusu? @relation(fields: [sorumlu_id], references: [sorumlu_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_servis_sorumlu")
- // Sadece parca_degisim kelimesi kalmalı
-  parca_degisim                  parca_degisim[]           @relation("parca_degisim_bakim_idTobakim_kaydi")
-  diger_parca_degisim parca_degisim[] @relation("parca_degisim_bakim_kaydi_idTobakim_kaydi")
+  bakim_id         Int               @id @default(autoincrement())
+  makine_id        Int
+  sorumlu_id       Int?
+  servis_firma_id  Int?
+  bakim_tarihi     DateTime?         @default(now()) @db.Timestamptz(6)
+  bakim_maliyet    Decimal           @db.Decimal
+  aciklama         String?
+  ariza_id         Int?
+  bakim_tur_id     Int?
+  durus_suresi     Decimal?          @db.Decimal(15, 2)
+  durum            String?           @default("BEKLEYEN") @db.VarChar(50)
+  kullanici_id     Int?
+  servis_puan_id   Int?
+  ariza_kaydi      ariza_kaydi?      @relation(fields: [ariza_id], references: [ariza_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ariza")
+  bakim_turu       bakim_turu?       @relation(fields: [bakim_tur_id], references: [bakim_tur_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_bakim")
+  kullanici        kullanici?        @relation(fields: [kullanici_id], references: [kullanici_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_kullanici")
+  makine           makine            @relation(fields: [makine_id], references: [makine_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_makine")
+  servis_firma     servis_firma?     @relation(fields: [servis_firma_id], references: [servis_firma_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_servis")
+  servis_puan      servis_puan?      @relation(fields: [servis_puan_id], references: [puan_id], onUpdate: NoAction, map: "fk_servis_puan_baglantisi")
+  servis_sorumlusu servis_sorumlusu? @relation(fields: [sorumlu_id], references: [sorumlu_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_servis_sorumlu")
+  parca_degisim    parca_degisim[]   @relation("parca_degisim_bakim_idTobakim_kaydi")
 
   @@index([makine_id], map: "idx_bakim_makine")
   @@index([servis_firma_id], map: "idx_bakim_servis")
@@ -388,14 +387,13 @@ model parca {
 }
 
 model parca_degisim {
-  parca_degisim_id                                      Int          @id @default(autoincrement())
-  bakim_id                                              Int
-  parca_id                                              Int?
-  adet                                                  Int?
-  bakim_kaydi_id                                        Int?
-  bakim_kaydi       bakim_kaydi  @relation("parca_degisim_bakim_idTobakim_kaydi", fields: [bakim_id], references: [bakim_id], onDelete: NoAction, onUpdate: NoAction)
-  diger_bakim_kaydi bakim_kaydi? @relation("parca_degisim_bakim_kaydi_idTobakim_kaydi", fields: [bakim_kaydi_id], references: [bakim_id], onDelete: NoAction, onUpdate: NoAction)
-  parca                                                 parca?       @relation(fields: [parca_id], references: [parca_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_parca")
+  parca_degisim_id Int         @id @default(autoincrement())
+  bakim_id         Int
+  parca_id         Int?
+  adet             Int?
+  bakim_kaydi_id   Int?
+  bakim_kaydi      bakim_kaydi @relation("parca_degisim_bakim_idTobakim_kaydi", fields: [bakim_id], references: [bakim_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_bakim")
+  parca            parca?      @relation(fields: [parca_id], references: [parca_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_parca")
 
   @@index([bakim_id], map: "idx_degisim_bakim")
 }
@@ -449,16 +447,16 @@ model servis_firma_uzmanlik {
 }
 
 model servis_puan {
-  puan_id                Int          @id @default(autoincrement())
-  bakim_id               Int?         @unique
+  puan_id                Int           @id @default(autoincrement())
   servis_firma_id        Int
   puanlayan_kullanici_id Int
   puan                   Int
   yorum                  String?
-  tarih                  DateTime?    @db.Date
-  bakim_kaydi            bakim_kaydi? @relation(fields: [bakim_id], references: [bakim_id])
-  servis_firma           servis_firma @relation(fields: [servis_firma_id], references: [servis_firma_id], onDelete: NoAction, onUpdate: NoAction, map: "firma_fk")
-  kullanici              kullanici    @relation(fields: [puanlayan_kullanici_id], references: [kullanici_id], onDelete: NoAction, onUpdate: NoAction, map: "kullanici_fk")
+  tarih                  DateTime?     @db.Date
+  bakim_id               Int?
+  bakim_kaydi            bakim_kaydi[]
+  servis_firma           servis_firma  @relation(fields: [servis_firma_id], references: [servis_firma_id], onDelete: NoAction, onUpdate: NoAction, map: "firma_fk")
+  kullanici              kullanici     @relation(fields: [puanlayan_kullanici_id], references: [kullanici_id], onDelete: NoAction, onUpdate: NoAction, map: "kullanici_fk")
 
   @@index([servis_firma_id], map: "idx_spuan_firma")
   @@index([puanlayan_kullanici_id], map: "idx_spuan_kullanici")
@@ -533,6 +531,14 @@ model uretim_kaydi {
   @@index([makine_id], map: "idx_uretim_makine")
   @@index([makine_id, vardiya_tarihi], map: "idx_uretim_makine_tarih")
   @@index([vardiya_tarihi], map: "idx_uretim_tarih")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model parca_stok_hareketleri {
+  hareket_id     Int       @id @default(autoincrement())
+  parca_id       Int?
+  eklenen_miktar Int?
+  islem_tarihi   DateTime? @default(now()) @db.Timestamp(6)
 }
 
 enum du_ort_yuk {

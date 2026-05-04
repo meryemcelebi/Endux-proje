@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.TedarikciPuanRouter = exports.ServisPuanRouter = void 0;
+const express_1 = require("express");
+const puanKontrol_1 = require("../controllers/puanKontrol");
+const yetki_1 = require("../middlewares/yetki");
+const ServisPuanRouter = (0, express_1.Router)();
+exports.ServisPuanRouter = ServisPuanRouter;
+const TedarikciPuanRouter = (0, express_1.Router)();
+exports.TedarikciPuanRouter = TedarikciPuanRouter;
+ServisPuanRouter.post('/', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('YONETICI', 'TEKNISYEN'), puanKontrol_1.servisPuanVer);
+TedarikciPuanRouter.post('/', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('YONETICI', 'TEKNISYEN'), puanKontrol_1.tedarikciPuanVer);
