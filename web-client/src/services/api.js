@@ -40,22 +40,27 @@ export const api = {
   getMachines: async () => {
     const res = await fetch(`${API_BASE}/makineler`, { headers: getHeaders() });
     const json = await handleResponse(res);
-    return (json.data || []).map((m) => ({
-      ...m,
-      aktiflik_durumu: typeof m.aktiflik_durumu === "boolean" ? (m.aktiflik_durumu ? "Aktif" : "Pasif") : (m.aktiflik_durumu || "Bilinmiyor"),
-      mevcut_risk_skoru: Number(m.mevcut_risk_skoru || 0),
-      satin_alma_maliyeti: Number(m.satin_alma_maliyeti || 0),
-      top_calisma_saati: Number(m.toplam_calisma_saati || 0),
-      lo_id: m.lokasyon?.[0]?.lokasyon_adi || "-",
-      m_tur_id: m.makine_turu?.makine_tur_adi || "-",
-      pin: m.servis_pin,
-      tedarikci: m.garanti_firma ? {
-        firma_adi: m.garanti_firma.firma_adi,
-        telefon: m.garanti_firma.iletisim?.telefon || "-",
-        email: m.garanti_firma.iletisim?.mail || "-",
-        adres: m.garanti_firma.iletisim?.acik_adres || "Adres bilgisi yok"
-      } : null,
-    }));
+    return (json.data || []).map((m) => {
+      const sonRisk = m.risk_skoru?.[0] || null;
+      return {
+        ...m,
+        id: m.makine_id,
+        ad: m.makine_adi,
+        aktiflik_durumu: typeof m.aktiflik_durumu === "boolean" ? (m.aktiflik_durumu ? "Aktif" : "Pasif") : (m.aktiflik_durumu || "Bilinmiyor"),
+        mevcut_risk_skoru: sonRisk ? Number(sonRisk.risk_skoru) : 0,
+        satin_alma_maliyeti: Number(m.satin_alma_maliyeti || 0),
+        top_calisma_saati: Number(m.toplam_calisma_saati || 0),
+        lo_id: m.lokasyon?.[0]?.lokasyon_adi || "-",
+        m_tur_id: m.makine_turu?.makine_tur_adi || "-",
+        pin: m.servis_pin,
+        tedarikci: m.garanti_firma ? {
+          firma_adi: m.garanti_firma.firma_adi,
+          telefon: m.garanti_firma.iletisim?.telefon || "-",
+          email: m.garanti_firma.iletisim?.mail || "-",
+          adres: m.garanti_firma.iletisim?.acik_adres || "Adres bilgisi yok"
+        } : null,
+      };
+    });
   },
 
   // ═══════════════ 3. MAKİNE DETAY ═══════════════
@@ -209,16 +214,16 @@ export const api = {
   },
 
   // ═══════════════ 9. TÜM BAKIM GEÇMİŞİ (DASHBOARD) ═══════════════
-getAllServiceHistory: async () => {
+  getAllServiceHistory: async () => {
     try {
-        // Artık 104 istek yok! Sadece 1 istek var.
-        const res = await fetch(`${API_BASE}/bakimlar/tum-bakimlar`, { headers: getHeaders() });
-        const json = await handleResponse(res);
-        return json.data || [];
-    } catch { 
-        return []; 
+      // Artık 104 istek yok! Sadece 1 istek var.
+      const res = await fetch(`${API_BASE}/bakimlar/tum-bakimlar`, { headers: getHeaders() });
+      const json = await handleResponse(res);
+      return json.data || [];
+    } catch {
+      return [];
     }
-},
+  },
 
   // ═══════════════ 10. PERSONEL EKLE ═══════════════
   addUser: async (userData) => {
@@ -430,9 +435,9 @@ getAllServiceHistory: async () => {
   },
 
   // ═══════════════ 22. TEKNİSYEN GÖREVLERİ ═══════════════
-  // GET /api/gorevler
+  // GET /api/bakimlar/onay-bekleyenler
   getTechTasks: async () => {
-    const res = await fetch(`${API_BASE}/gorevler`, { headers: getHeaders() });
+    const res = await fetch(`${API_BASE}/bakimlar/onay-bekleyenler`, { headers: getHeaders() });
     const json = await handleResponse(res);
     return json.data || [];
   },
@@ -631,5 +636,5 @@ getAllServiceHistory: async () => {
     return json.data;
   },
 
-  
+
 };

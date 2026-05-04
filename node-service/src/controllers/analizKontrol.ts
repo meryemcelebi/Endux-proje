@@ -53,12 +53,12 @@ export async function maliyetAnalizi(req: Request, res: Response) {
             }
         }
 
-        //toplam onarım maliyeti
+        // Toplam onarım maliyeti
         const toplamOnarimMaliyeti = toplamBakimMaliyeti + toplamParcaMaliyeti;
 
-        //maliyet oranı yüzdesi
+        // Maliyet oranı yüzdesi
         const maliyetOraniYuzdesi = satinAlmaMaliyeti > 0
-            //bölme hatası almamak için satinAlmaMaliyeti sıfırdan büyükse hesaplama yapıyoruz
+            // Bölme hatası almamak için satinAlmaMaliyeti sıfırdan büyükse hesaplama yapıyoruz
             ? parseFloat(((toplamOnarimMaliyeti / satinAlmaMaliyeti) * 100).toFixed(2))
             : 0;
 
@@ -157,7 +157,7 @@ export async function lokasyonHaritasi(req: Request, res: Response): Promise<voi
             }
 
         });
-        // harita verileri
+        // Harita verileri
 
         // harita verileri
         const haritaVerisi = makineler
@@ -177,7 +177,7 @@ export async function lokasyonHaritasi(req: Request, res: Response): Promise<voi
                         toplamParcaMaliyeti += Number(degisim.parca?.parca_maliyeti ?? 0);
                     }
                 }
-                
+
                 const toplamOnarim = toplamBakimMaliyeti + toplamParcaMaliyeti;
                 const maliyetOrani = satinAlma > 0 ? (toplamOnarim / satinAlma) * 100 : 0;
 
@@ -209,7 +209,7 @@ export async function lokasyonHaritasi(req: Request, res: Response): Promise<voi
                     risk_seviyesi: sonRisk?.risk_seviyesi ?? null,
                 };
             });
-        
+
         //katlara göre gruplama
         const katMap: Record<string, typeof haritaVerisi> = {};
         for (const item of haritaVerisi) {

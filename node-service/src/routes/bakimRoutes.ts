@@ -1,13 +1,13 @@
 import { Router } from "express";
 
-import { 
-    bakimKaydiGir, 
-    makineBakimKayitlari, 
-    dusukStokUyarisi, 
-    bakimlariOnayla, 
-    bakimiYokSay, 
-    getOnayBekleyenler, 
-    getTeknikServisIsleri, 
+import {
+    bakimKaydiGir,
+    makineBakimKayitlari,
+    dusukStokUyarisi,
+    bakimlariOnayla,
+    bakimiYokSay,
+    getOnayBekleyenler,
+    getTeknikServisIsleri,
     TumBakimlarToplu,
     bakimPuaniKaydet,
     bakimIsleminiOnayla

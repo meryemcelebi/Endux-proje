@@ -1,27 +1,20 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
 
+// --- Tedarikçi İşlemleri ---
+
 export async function tumTedarikcileriGetir(req: Request, res: Response) {
     try {
         const tedarikciler = await prisma.tedarikci.findMany({
             include: {
                 iletisim: true,
                 tedarikci_puan: {
-                    select: {
-                        puan: true,
-                        yorum: true,
-                        tarih: true
-                    },
-                    orderBy: {
-                        tarih: "desc"
-                    }
+                    select: { puan: true, yorum: true, tarih: true },
+                    orderBy: { tarih: "desc" }
                 }
             },
-            orderBy: {
-                tedarikci_id: "asc"
-            }
+            orderBy: { tedarikci_id: "asc" }
         });
-
 
         res.status(200).json({
             success: true,
@@ -30,10 +23,7 @@ export async function tumTedarikcileriGetir(req: Request, res: Response) {
         });
     } catch (error) {
         console.error("Tedarikçileri getirme hatası:", error);
-        res.status(500).json({
-            success: false,
-            message: 'Tedarikçiler getirilirken bir hata oluştu.'
-        });
+        res.status(500).json({ success: false, message: 'Tedarikçiler getirilirken bir hata oluştu.' });
     }
 }
 
@@ -42,10 +32,7 @@ export async function tedarikciEkle(req: Request, res: Response) {
         const { firma_adi, telefon, email, adres, il, ilce, aktiflik, yetkili_kisi, vergi_no } = req.body;
 
         if (!firma_adi || aktiflik === undefined) {
-            return res.status(400).json({
-                success: false,
-                message: "Firma adı ve aktiflik alanları zorunludur."
-            });
+            return res.status(400).json({ success: false, message: "Firma adı ve aktiflik alanları zorunludur." });
         }
 
         // iletişim bilgileri ayrı tabloda — önce iletisim kaydı oluştur
@@ -65,71 +52,65 @@ export async function tedarikciEkle(req: Request, res: Response) {
 
         const yeniTedarikci = await prisma.tedarikci.create({
             data: {
-                firma_adi: firma_adi,
+                firma_adi,
                 aktiflik: Boolean(aktiflik),
                 yetkili_kisi: yetkili_kisi ? String(yetkili_kisi) : null,
                 vergi_no: vergi_no ? String(vergi_no) : null,
-                iletisim_id: iletisim_id,
+                iletisim_id,
                 kayit_tarihi: new Date(),
             }
         });
-        res.status(201).json({
-            success: true,
-            message: 'Tedarikçi başarıyla eklendi.',
-            data: yeniTedarikci
-        });
+
+        res.status(201).json({ success: true, message: 'Tedarikçi başarıyla eklendi.', data: yeniTedarikci });
     } catch (error) {
         console.error("Tedarikçi ekleme hatası:", error);
-        res.status(500).json({
-            success: false,
-            message: 'Tedarikçi eklenirken bir hata oluştu.'
-        });
+        res.status(500).json({ success: false, message: 'Tedarikçi eklenirken bir hata oluştu.' });
     }
 }
 
 
+export async function tedarikciSil(req: Request, res: Response) {
+    try {
+        const id = Number(req.params.id);
+        if (isNaN(id)) return res.status(400).json({ success: false, message: "Geçerli bir ID gereklidir." });
+
+        // Hard delete yerine Soft Delete (aktiflik = false) yapıyoruz
+        // Bu sayede geçmiş satın alma ve puanlama verileri korunur
+        await prisma.tedarikci.update({
+            where: { tedarikci_id: id },
+            data: { aktiflik: false }
+        });
+
+        res.status(200).json({ success: true, message: "Tedarikçi pasif duruma getirildi." });
+    } catch (error) {
+        console.error("Tedarikçi silme hatası:", error);
+        res.status(500).json({ success: false, message: "Tedarikçi silinirken bir hata oluştu." });
+    }
+}
 
 
-//servis firmaları işlemleri
+// --- Servis Firmaları İşlemleri ---
 
 export async function tumServisFirmalariniGetir(req: Request, res: Response) {
     try {
         const servisFirmalari = await prisma.servis_firma.findMany({
             include: {
-                servis_sorumlusu: {
-                    select: {
-                        sorumlu_id: true,
-                        ad: true,
-                        soyad: true,
-                        telefon: true,
-                        unvan: true,
-                        aktiflik: true,
-                    }
-                },
+                servis_sorumlusu: true,
                 iletisim: true,
                 servis_firma_uzmanlik: true,
-                servis_puan: {
-                    select: {
-                        puan: true
-                    }
-                }
+                servis_puan: { select: { puan: true } }
             },
-            orderBy: {
-                servis_firma_id: "asc"
-            }
+            orderBy: { servis_firma_id: "asc" }
         });
 
         const dataWithAvg = servisFirmalari.map(f => {
             const puanlar = f.servis_puan.map(sp => Number(sp.puan));
-            const ortalama = puanlar.length > 0
-                ? Number((puanlar.reduce((a, b) => a + b, 0) / puanlar.length).toFixed(1))
-                : 0;
-
+            const ortalama = puanlar.length > 0 ? Number((puanlar.reduce((a, b) => a + b, 0) / puanlar.length).toFixed(1)) : 0;
             return {
                 ...f,
                 ortalama_puan: ortalama,
                 toplam_islem: puanlar.length,
-                servis_puan: undefined // Veriyi şişirmemek için
+                servis_puan: undefined
             };
         });
 
@@ -140,23 +121,14 @@ export async function tumServisFirmalariniGetir(req: Request, res: Response) {
         });
     } catch (error) {
         console.error("Servis firmalarını getirme hatası:", error);
-        res.status(500).json({
-            success: false,
-            message: 'Servis firmaları getirilirken bir hata oluştu.'
-        });
+        res.status(500).json({ success: false, message: 'Servis firmaları getirilirken bir hata oluştu.' });
     }
 }
 
-export async function servisFirmasiEkle(req: Request, res: Response): Promise<void> {
+export async function servisFirmasiEkle(req: Request, res: Response) {
     try {
         const { firma_adi, telefon, email, adres, il, ilce, uzmanlik_alani } = req.body;
-        if (!firma_adi) {
-            res.status(400).json({
-                success: false,
-                message: "Firma adı zorunludur."
-            });
-            return;
-        }
+        if (!firma_adi) return res.status(400).json({ success: false, message: "Firma adı zorunludur." });
 
         // iletişim bilgileri ayrı tabloda
         let iletisim_id: number | undefined;
@@ -174,75 +146,36 @@ export async function servisFirmasiEkle(req: Request, res: Response): Promise<vo
         }
 
         const yeniServisFirmasi = await prisma.servis_firma.create({
-            data: {
-                firma_adi: String(firma_adi),
-                aktiflik: true,
-                iletisim_id: iletisim_id,
-            }
+            data: { firma_adi: String(firma_adi), aktiflik: true, iletisim_id }
         });
 
         // uzmanlık alanı ayrı tabloda (servis_firma_uzmanlik)
         if (uzmanlik_alani) {
             await prisma.servis_firma_uzmanlik.create({
-                data: {
-                    servis_firma_id: yeniServisFirmasi.servis_firma_id,
-                    uzmanlik_adi: String(uzmanlik_alani),
-                }
+                data: { servis_firma_id: yeniServisFirmasi.servis_firma_id, uzmanlik_adi: String(uzmanlik_alani) }
             });
         }
 
-        res.status(201).json({
-            success: true,
-            message: 'Servis firması başarıyla eklendi.',
-            data: yeniServisFirmasi
-        });
+        res.status(201).json({ success: true, message: 'Servis firması başarıyla eklendi.', data: yeniServisFirmasi });
     } catch (error) {
         console.error("Servis firması ekleme hatası:", error);
-        res.status(500).json({
-            success: false,
-            message: 'Servis firması eklenirken bir hata oluştu.'
-        });
-    }
-}
-export async function tedarikciSil(req: Request, res: Response): Promise<void> {
-    try {
-        const id = Number(req.params.id);
-
-        // Hard delete yerine Soft Delete (aktiflik = false) yapıyoruz
-        // Bu sayede geçmiş satın alma ve puanlama verileri korunur
-        await prisma.tedarikci.update({
-            where: { tedarikci_id: id },
-            data: { aktiflik: false }
-        });
-
-        res.status(200).json({
-            success: true,
-            message: 'Tedarikçi sözleşmesi iptal edildi (Pasif duruma getirildi).'
-        });
-    } catch (error) {
-        console.error("Tedarikçi iptal hatası:", error);
-        res.status(500).json({
-            success: false,
-            message: 'Tedarikçi iptal edilirken bir hata oluştu.'
-        });
+        res.status(500).json({ success: false, message: 'Servis firması eklenirken bir hata oluştu.' });
     }
 }
 
-export async function servisFirmasiSil(req: Request, res: Response): Promise<void> {
+export async function servisFirmasiSil(req: Request, res: Response) {
     try {
         const id = Number(req.params.id);
+        if (isNaN(id)) return res.status(400).json({ success: false, message: "Geçerli bir ID gereklidir." });
 
-      
+
         // Bu sayede geçmiş bakım kayıtları ve teknisyen bilgileri korunur
         await prisma.servis_firma.update({
             where: { servis_firma_id: id },
             data: { aktiflik: false }
         });
 
-        res.status(200).json({
-            success: true,
-            message: 'Servis firması sözleşmesi iptal edildi (Pasif duruma getirildi).'
-        });
+        res.status(200).json({ success: true, message: "Servis firması pasif duruma getirildi." });
     } catch (error) {
         console.error("Servis firması iptal hatası:", error);
         res.status(500).json({

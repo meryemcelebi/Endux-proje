@@ -6,8 +6,7 @@ import {
     servisFirmasiEkle,
     tedarikciSil,
     servisFirmasiSil
-} from "../controllers/firmaKontrol";
-   
+} from "../controllers/firmaKontrol"
 import { oturumKontrol, rolKontrol } from "../middlewares/yetki";
 
 const TedarikciRouter = Router();
