@@ -27,13 +27,11 @@ services:
     container_name: endux_backend
     ports:
       - "3000:3000"
-    environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}?schema=public
-      - PORT=${PORT}
-      - JWT_SECRET=${JWT_SECRET}
-    depends_on:
-      postgres_db:
-        condition: service_healthy
+    env_file:
+      - ./node-service/.env
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     networks:
       - endux_network
     volumes:

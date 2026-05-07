@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { Prisma } from '@prisma/client';
-import { supabase } from '../config/supabase'; 
+import { supabase } from '../config/supabase';
 
 
 
@@ -105,9 +105,9 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                     }
                 }
             }
-                return bakimKaydi;
-            });
-    
+            return bakimKaydi;
+        });
+
 
         res.status(201).json({
             success: true,
@@ -275,7 +275,7 @@ export const bakimlariOnayla = async (req: Request, res: Response) => {
             }
         });
 
- 
+
     } catch (error) {
         console.error('Bakım onayı sırasında hata:', error);
         res.status(500).json({
@@ -321,9 +321,9 @@ export const bakimiYokSay = async (req: Request, res: Response) => {
         res.status(500).json({ success: false, message: "Onaylama sırasında bir hata oluştu." });
 
     }
-        
 
-    } 
+
+}
 
 export const getOnayBekleyenler = async (req: Request, res: Response) => {
     try {
@@ -583,8 +583,8 @@ export async function bakimOnaylaProseduru(req: Request, res: Response): Promise
         const bakimId = req.body.bakim_id;
 
         // Canan'ın yazdığı prosedürü Supabase istemcisi ile tetikliyoruz
-        const { data, error } = await supabase.rpc('bakim_onayla_fonksiyonu', { 
-            p_bakim_id: bakimId 
+        const { data, error } = await supabase.rpc('bakim_onayla_fonksiyonu', {
+            p_bakim_id: bakimId
         });
 
         if (error) {

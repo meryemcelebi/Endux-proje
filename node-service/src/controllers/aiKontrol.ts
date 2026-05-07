@@ -4,52 +4,78 @@ import prisma from "../config/prisma";
 import { config } from "../config";
 
 const AI_SERVICE_URL = config.aiServiceUrl;
-const AI_TIMEOUT_MS  = 10_000; // 10 saniye timeout
+const AI_TIMEOUT_MS = 10_000; // 10 saniye timeout
 
 //python api'ye gönderilecek payload
 
 interface AITahminPayload {
-    makine_id: number;
-    form_id: number;
-    makine_turu :string;
-    tahmini_omur_saati: number;
-    toplam_calisma_saati:number;
-    sicaklik:number;
-    titresim:number;
-    makine_degeri:number;
+    makine_turu: string;
+    form_doldurma_suresi_sn: number;
+    toplam_calisma_saati: number;
+    [key: string]: number | string;  // dinamik form cevapları (sicaklik, titresim, vb.)
 }
+
 //python APİ'den dönen yanıt 
 interface IAiTahminYanit {
-    makine_id: number;
-    form_id: number;
-    makine: string;
-    ariza_riski: boolean;
-    tahmini_durus_suresi_saat: number;
-    tahmini_onarim_maliyeti_tl: number;
-    mesaj: string;
+    sistem_mesaji: string;
+    makine_turu: string;
+    guvenilirlik_notu: string;
+    tahmin_edilen_ariza: string;
+    risk_skoru: number;           // 0.00-1.00 arası
+    rul_tahmini_saat: number;     // Tahmini Kalan Faydalı Ömür
+    bakim_tavsiyesi: string;
+    uyari_durumu: string;
+    detaylar: {
+        tahmini_maliyet: number;
+        tahmini_durus_suresi: number;
+        ekip: string;
+        parca: string;
+    };
 }
 
 //veri tabanı sorgusu
-async function makineOZetVeriCek(makineID : number){
-    const makine=await prisma.makine.findUnique({
-        where: {makine_id: makineID},
+async function makineOZetVeriCek(makineID: number) {
+    const makine = await prisma.makine.findUnique({
+        where: { makine_id: makineID },
         include: {
             makine_turu: true,
             makine_ozellikleri: true
         },
     });
-    if(!makine){
-        throw new Error (`Makine Bulunamadı: ID ${makineID}`);
+    if (!makine) {
+        throw new Error(`Makine Bulunamadı: ID ${makineID}`);
     }
     return makine;
 }
+
+// Form cevaplarını AI payload formatına çevir
+// form_madde_cevap → kontrol_maddesi JOIN ile {teknik_parametre: girilen_deger} çiftleri oluşturur
+async function formCevaplariToAIPayload(formId: number): Promise<Record<string, number>> {
+    const cevaplar = await prisma.form_madde_cevap.findMany({
+        where: { form_id: formId },
+        include: {
+            kontrol_maddesi: true, // soru_referans_id → kontrol_maddesi.madde_id
+        },
+    });
+
+    const payload: Record<string, number> = {};
+    for (const cevap of cevaplar) {
+        const parametre = cevap.kontrol_maddesi?.teknik_parametre;
+        if (parametre) {
+            // girilen_deger "0", "1", "2" şeklinde geliyor → sayıya çevir
+            payload[parametre] = Number(cevap.girilen_deger) || 0;
+        }
+    }
+    return payload;
+}
+
 async function aiTahminIstegiGonder(payload: AITahminPayload): Promise<IAiTahminYanit> {
     try {
         const response = await axios.post<IAiTahminYanit>(
-            `${AI_SERVICE_URL}/predict`,
-             payload, 
-             { timeout: AI_TIMEOUT_MS }
-            );
+            `${AI_SERVICE_URL}/tahmin-et`,
+            payload,
+            { timeout: AI_TIMEOUT_MS }
+        );
         return response.data;
     } catch (error) {
         const axiosError = error as AxiosError;
@@ -61,7 +87,7 @@ async function aiTahminIstegiGonder(payload: AITahminPayload): Promise<IAiTahmin
             console.error('AI servisi zaman aşımına uğradı.');
             throw new Error('AI servisi zaman aşımına uğradı. Lütfen daha sonra tekrar deneyin.');
         }
-        
+
         if (axiosError.response) {
             const status = axiosError.response.status;
             console.error(`AI servisi hata yanıtı: ${status}`);
@@ -78,164 +104,151 @@ async function riskSkoruKaydet(
     makineId: number,
     formId: number,
     kullaniciId: number,
-    tahmin: IAiTahminYanit
+    tahmin: IAiTahminYanit,
+    maddeId: number
 ) {
     //risk skoru tablosuna kaydet
-    const riskSeviyesi = tahmin.ariza_riski ? 'YUKSEK' : 'DUSUK';
+    const riskSeviyesi = tahmin.risk_skoru >= 0.50 ? 'YUKSEK' : 'DUSUK';
 
     const riskKaydi = await prisma.risk_skoru.create({
         data: {
             makine_id: makineId,
-            risk_skoru: tahmin.ariza_riski ? 0.85 : 0.15, //örnek skor
+            risk_skoru: tahmin.risk_skoru,
             risk_seviyesi: riskSeviyesi,
             hesaplama_tarihi: new Date(),
         },
-    
     });
+
+    //ai_ariza_tespit tablosuna kaydet
+    await prisma.ai_ariza_tespit.create({
+        data: {
+            makine_id: makineId,
+            form_id: formId,
+            madde_id: maddeId,
+            tahmin_edilen_ariza: tahmin.tahmin_edilen_ariza,
+            risk_skoru: tahmin.risk_skoru,
+            tespit_tarihi: new Date(),
+            model_versiyon: "xgboost-v4.0",
+            tahmini_durus_suresi: tahmin.detaylar.tahmini_durus_suresi,
+            tahmini_maliyet: tahmin.detaylar.tahmini_maliyet,
+        },
+    });
+
     //ai_model_log tablosuna kaydet
     await prisma.ai_model_log.create({
         data: {
             makine_id: makineId,
-            model_versiyon: "xgboost-v1.0",
+            model_versiyon: "xgboost-v4.0",
             kullanilan_veri_sayisi: 1,
-            tahmin_risk: tahmin.ariza_riski ? 0.85 : 0.15,
+            tahmin_risk: tahmin.risk_skoru,
             tahmin_tarihi: new Date(),
             kullanici_id: kullaniciId,
             form_id: formId,
         },
     });
+
+    // gunluk_kontrol_formu.ai_on_risk_durumu güncelle
+    await prisma.gunluk_kontrol_formu.update({
+        where: { form_id: formId },
+        data: { ai_on_risk_durumu: tahmin.risk_skoru },
+    });
+
     return riskKaydi;
 }
 
-export async function tekMakineTahmin(req: Request, res: Response) {
+export async function tekMakineTahmin(makineId: number, formId: number, kullaniciId: number) {
     try {
-        const { makine_id, form_id, sicaklik, titresim } = req.body;
+        // 1. Makine özet bilgilerini getir
+        const makine = await makineOZetVeriCek(makineId);
 
-        const kullaniciId = Number(req.user?.userId);
-        if (!makine_id || !form_id || sicaklik === undefined || titresim === undefined) {
-            return res.status(400).json({
-                success: false,
-                message: ' makine_id, form_id, sicaklik ve titresim alanları gereklidir.'
+        // 2. Form verilerini DB'den çek ve sayısal değerlere dönüştür
+        const formCevaplari = await formCevaplariToAIPayload(formId);
 
-            });
-        }
-        const makine = await makineOZetVeriCek(Number(makine_id));
-
-        //teknik özelliklerden tahmini omür saatini çıkar
-        const teknikOzellikler = makine.makine_ozellikleri?.teknik_ozellikler as any;
-        const tahminiOmurSaati = teknikOzellikler?.omur_saati || 10000; //örnek değer
-        const makineDegeri = Number(makine.satin_alma_maliyeti) || 100000;  //örnek değer
-
-
-        //python API'ye gönderilecek payload:
+        // 3. AI Service için payload hazırla
+        const formSuresi = 60; // TODO: İleride form_doldurma_suresi_sn tablodan alınabilir
         const payload: AITahminPayload = {
-            makine_id: makine.makine_id,
-            form_id: Number(form_id),
             makine_turu: makine.makine_turu.makine_tur_adi,
-            tahmini_omur_saati: tahminiOmurSaati,
+            form_doldurma_suresi_sn: formSuresi,
             toplam_calisma_saati: Number(makine.toplam_calisma_saati) || 0,
-            sicaklik: Number(sicaklik),
-            titresim: Number(titresim),
-            makine_degeri: makineDegeri,
+            ...formCevaplari // sicaklik, titresim, yag_kacak vb. dinamik veriler eklendi
         };
 
-        console.log('AI tahmin isteği gönderiliyor:', JSON.stringify(payload));
+        console.log(`[AI-TAHMİN] Makine ${makineId} için istek gönderiliyor... Payload:`, payload);
 
+        // 4. AI Service'e istek at
         const tahminSonucu = await aiTahminIstegiGonder(payload);
 
-        console.log('AI tahmin sonucu alındı:',JSON.stringify(tahminSonucu));
+        console.log(`[AI-TAHMİN] Sonuç alındı. Risk Skoru: ${tahminSonucu.risk_skoru}`);
 
-        //risk skorunu veritabanına kaydedilme işlemi
-        const riskKaydi = await riskSkoruKaydet(
+        // 5. DB'ye risk skorunu ve tahmin detaylarını kaydet
+        // MaddeId olarak formun ana referans maddesini verebiliriz (şimdilik 1)
+        const maddeId = 1;
+
+        await riskSkoruKaydet(
             makine.makine_id,
-            Number(form_id),
+            formId,
             kullaniciId,
-            tahminSonucu
+            tahminSonucu,
+            maddeId
         );
 
-        return res.status(200).json({
+        return {
             success: true,
-            message: tahminSonucu.mesaj,
+            message: tahminSonucu.sistem_mesaji,
             data: {
                 makine_id: makine.makine_id,
                 makine_adi: makine.makine_adi,
-                ariza_riski: tahminSonucu.ariza_riski,
-                tahmini_durus_suresi_saat: tahminSonucu.tahmini_durus_suresi_saat,
-                tahmini_onarim_maliyeti_tl: tahminSonucu.tahmini_onarim_maliyeti_tl,
-                risk_kaydi_id: riskKaydi.risk_id,
-            },
-        });
-    } catch (error) {
-        console.error('AI tahmin işlemi sırasında hata:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'AI tahmin işlemi sırasında bir hata oluştu.' ,
-        });
+                risk_skoru: tahminSonucu.risk_skoru,
+                tahmin_edilen_ariza: tahminSonucu.tahmin_edilen_ariza,
+                uyari_durumu: tahminSonucu.uyari_durumu
+            }
+        };
+
+    } catch (error: any) {
+        console.error('[AI-TAHMİN HATA]', error.message);
+        // Backend içi çağrım olduğu için throw atıyoruz, express'e json dönmüyoruz
+        throw error;
     }
 }
 
 
 export async function topluMakineTahmin(req: Request, res: Response) {
     try {
-        const { form_id, varsayilan_sicaklik, varsayilan_titresim } = req.body;
         const kullaniciId = Number(req.user?.userId);
 
-        if (!form_id) {
-            return res.status(400).json({
-                success: false,
-                message: 'form_id alanı gereklidir.'
-            });
-        }
         //tüm aktif makineleri çekmem için kullanılan prisma sorgusu
         const makineler = await prisma.makine.findMany({
             where: { aktiflik_durumu: true },
-            include: {
-                makine_turu: true,
-                makine_ozellikleri: true,
-            },
         });
-        if(makineler.length === 0){
+
+        if (makineler.length === 0) {
             return res.status(404).json({
                 success: false,
                 message: 'Aktif makine bulunamadı.'
             });
         }
-        const snuclar: any[] = [];
+
+        const sonuclar: any[] = [];
         const hatalar: any[] = [];
-        
+
         for (const makine of makineler) {
             try {
-                const teknikOzellikler = makine.makine_ozellikleri?.teknik_ozellikler as any;
-                const tahminiOmurSaati = teknikOzellikler?.omur_saati || 10000;
-
-                const payload: AITahminPayload = {
-                    makine_id: makine.makine_id,
-                    form_id: Number(form_id),
-                    makine_turu: makine.makine_turu.makine_tur_adi,
-                    tahmini_omur_saati: tahminiOmurSaati,
-                    toplam_calisma_saati: Number(makine.toplam_calisma_saati) || 0,
-                    sicaklik: Number(varsayilan_sicaklik) ||45 , //varsayılan değer
-                    titresim: Number(varsayilan_titresim) || 3, //varsayılan değer
-                    makine_degeri: Number(makine.satin_alma_maliyeti) || 100000,
-                };
-
-                const tahmin = await aiTahminIstegiGonder(payload);
-
-                await riskSkoruKaydet(
-                    makine.makine_id,
-                    Number(form_id),
-                    kullaniciId,
-                    tahmin
-                );
-
-                snuclar.push({
-                    makine_id: makine.makine_id,
-                    makine_adi: makine.makine_adi,
-                    ariza_riski: tahmin.ariza_riski,
-                    mesaj: tahmin.mesaj,
+                // Her makine için EN SON doldurulan formu bul
+                const enSonForm = await prisma.gunluk_kontrol_formu.findFirst({
+                    where: { makine_id: makine.makine_id },
+                    orderBy: { form_id: 'desc' }
                 });
+
+                if (!enSonForm) {
+                    throw new Error("Bu makine için daha önce doldurulmuş form bulunamadı.");
+                }
+
+                // Az önce yazdığımız iç fonksiyonu çağırıyoruz (Otonom)
+                const tahmin = await tekMakineTahmin(makine.makine_id, enSonForm.form_id, kullaniciId);
+
+                sonuclar.push(tahmin.data);
+
             } catch (err: any) {
-                // Tek makine hatası tüm döngüyü durdurmaz
                 console.warn(`Makine ${makine.makine_id} için tahmin başarısız:`, err.message);
                 hatalar.push({
                     makine_id: makine.makine_id,
@@ -247,8 +260,8 @@ export async function topluMakineTahmin(req: Request, res: Response) {
 
         return res.status(200).json({
             success: true,
-            message: `${snuclar.length} makine başarılı, ${hatalar.length} makine hatalı.`,
-            data: { basarili: snuclar, hatali: hatalar },
+            message: `${sonuclar.length} makine başarılı, ${hatalar.length} makine hatalı.`,
+            data: { basarili: sonuclar, hatali: hatalar },
         });
     } catch (error) {
         console.error('Toplu makine tahmin işlemi sırasında hata:', error);

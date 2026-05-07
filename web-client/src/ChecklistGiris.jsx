@@ -41,6 +41,13 @@ export default function ChecklistGiris() {
     fetchFirms();
   }, []);
 
+  // --- OTURUM KAYDET ---
+  const saveLogin = (result) => {
+    localStorage.setItem("auth_token", result.token);
+    localStorage.setItem("user_payload", JSON.stringify(result.user));
+    localStorage.setItem("girisYapildi", "true");
+  };
+
   // --- PERSONEL GİRİŞİ (Yönetici / Operatör) ---
   const handleStaffLogin = async () => {
     if (!username || !password) {
@@ -109,12 +116,6 @@ export default function ChecklistGiris() {
     } catch (err) {
       alert(err.message || "Giriş başarısız.");
     }
-  };
-
-  const saveLogin = (result) => {
-    localStorage.setItem("auth_token", result.token);
-    localStorage.setItem("user_payload", JSON.stringify(result.user));
-    localStorage.setItem("girisYapildi", "true");
   };
 
   return (

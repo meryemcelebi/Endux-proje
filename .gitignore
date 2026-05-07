@@ -5,6 +5,6 @@ node_modules
 /generated/prisma
 __pycache__/
 *.pyc
-
+.venv/
 
 postgres_data/

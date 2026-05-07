@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import prisma from "../config/prisma";
 
+import { tekMakineTahmin } from "./aiKontrol";
+
 //operatorlerden gelen form verilerini database'e ekler:
 
 export async function formKaydet(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -51,10 +53,23 @@ export async function formKaydet(req: Request, res: Response, next: NextFunction
             )
         `;
 
+        // SEÇENEK B: Arka Planda AI Risk Analizini Başlat!
+        // Prosedür ID dönmediği için, yeni oluşan formu son eklenen olarak buluyoruz
+        const yeniForm = await prisma.gunluk_kontrol_formu.findFirst({
+            where: { makine_id: Number(makine_id), kullanici_id: operator_id },
+            orderBy: { form_id: 'desc' }
+        });
+
+        if (yeniForm) {
+            console.log(`[AI-TETIKLEYICI] Makine ${makine_id} Form ${yeniForm.form_id} için AI başlatılıyor...`);
+            tekMakineTahmin(Number(makine_id), yeniForm.form_id, operator_id).catch(err => {
+                console.error("[AI-ARKA-PLAN-HATA] AI tahmin işlemi tamamlanamadı:", err);
+            });
+        }
+
         res.status(201).json({
             success: true,
             message: "Form başarıyla kaydedildi."
-
         });
 
 
