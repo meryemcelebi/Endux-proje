@@ -11,6 +11,26 @@ const handleResponse = async (res) => {
   return json;
 };
 
+const hasActiveMaintenance = (machine) => {
+  const activeMaintenanceStatuses = ["Teknik Serviste", "Bakımda", "ONAYLANDI"];
+  return (machine.bakim_kaydi || []).some((record) =>
+    activeMaintenanceStatuses.includes(record?.durum)
+  );
+};
+
+const getMachineDisplayStatus = (machine) => {
+  if (hasActiveMaintenance(machine)) return "Bakımda";
+  if (typeof machine.aktiflik_durumu === "boolean") {
+    return machine.aktiflik_durumu ? "Aktif" : "Pasif";
+  }
+  return machine.aktiflik_durumu || "Bilinmiyor";
+};
+
+const parseLocaleNumber = (value) => {
+  if (typeof value === "number") return value;
+  return Number(String(value ?? "").trim().replace(/\./g, "").replace(",", "."));
+};
+
 export const api = {
 
   // ═══════════════ 1. LOGIN ═══════════════
@@ -46,7 +66,7 @@ export const api = {
         ...m,
         id: m.makine_id,
         ad: m.makine_adi,
-        aktiflik_durumu: typeof m.aktiflik_durumu === "boolean" ? (m.aktiflik_durumu ? "Aktif" : "Pasif") : (m.aktiflik_durumu || "Bilinmiyor"),
+        aktiflik_durumu: getMachineDisplayStatus(m),
         mevcut_risk_skoru: sonRisk ? Number(sonRisk.risk_skoru) : 0,
         satin_alma_maliyeti: Number(m.satin_alma_maliyeti || 0),
         top_calisma_saati: Number(m.toplam_calisma_saati || 0),
@@ -62,6 +82,15 @@ export const api = {
       };
     });
   },
+  // PATCH /api/makineler/:id/durum
+  updateMachineStatus: async (makine_id, yeniDurum) => {
+    const res = await fetch(`${API_BASE}/makineler/${makine_id}/durum`, {
+      method: "PATCH",
+      headers: getHeaders(),
+      body: JSON.stringify({ aktiflik_durumu: yeniDurum }),
+    });
+    return handleResponse(res);
+  },
 
   // ═══════════════ 3. MAKİNE DETAY ═══════════════
   // GET /api/makineler/:id
@@ -71,7 +100,7 @@ export const api = {
     const m = json.data;
     return {
       ...m,
-      aktiflik_durumu: m.aktiflik_durumu === true ? "Aktif" : "Pasif",
+      aktiflik_durumu: getMachineDisplayStatus(m),
       mevcut_risk_skoru: Number(m.mevcut_risk_skoru || 0),
       satin_alma_maliyeti: Number(m.satin_alma_maliyeti || 0),
       top_calisma_saati: Number(m.toplam_calisma_saati || 0),
@@ -182,7 +211,7 @@ export const api = {
         servis_firma_id: Number(recordData.servis_firma_id),
         ariza_id: recordData.ariza_id ? Number(recordData.ariza_id) : undefined,
         bakim_maliyet: Number(recordData.bakim_maliyet),
-        teknisyen_id: Number(recordData.teknisyen_id),
+        teknisyen_id: recordData.teknisyen_id ? Number(recordData.teknisyen_id) : null,
         degisen_Parcalar: recordData.degisen_Parcalar || [],
         puan: recordData.puan ? Number(recordData.puan) : null,
       }),
@@ -316,6 +345,8 @@ export const api = {
         il: firmData.il || null,
         ilce: firmData.ilce || null,
         uzmanlik_alani: firmData.uzmanlik_alani || null,
+        sorumlu_ad: firmData.sorumlu_ad || null,
+        sorumlu_telefon: firmData.sorumlu_telefon || firmData.telefon || null,
       }),
     });
     return handleResponse(res);
@@ -334,8 +365,10 @@ export const api = {
           id: sf.servis_firma_id, ad: sf.firma_adi, tip: "Servis",
           telefon: sf.iletisim?.telefon || null,
           email: sf.iletisim?.email || null,
-          adres: sf.iletisim?.acik_adres || null,
-          uzmanlik_alani: sf.servis_firma_uzmanlik?.[0]?.uzmanlik_adi || null,
+        adres: sf.iletisim?.acik_adres || null,
+          uzmanlik_alani: Array.isArray(sf.servis_firma_uzmanlik)
+            ? sf.servis_firma_uzmanlik?.[0]?.uzmanlik_adi || null
+            : sf.servis_firma_uzmanlik?.uzmanlik_adi || null,
           sorumlu_ad: sf.servis_sorumlusu?.[0]?.ad || null,
           sorumlu_soyad: sf.servis_sorumlusu?.[0]?.soyad || null,
           aktiflik: sf.aktiflik,
@@ -448,6 +481,14 @@ export const api = {
     });
     return handleResponse(res);
   },
+  sendTasksToTechnicalService: async (bakimIdler) => {
+    const res = await fetch(`${API_BASE}/bakimlar/onayla`, {
+      method: "PUT",
+      headers: getHeaders(),
+      body: JSON.stringify({ bakim_idler: bakimIdler.map(Number) }),
+    });
+    return handleResponse(res);
+  },
 
   // ═══════════════ 21. PUANLANACAK FİRMALAR ═══════════════
   getFirmsToRate: async () => {
@@ -554,13 +595,13 @@ export const api = {
       body: JSON.stringify({
         tedarikci_id: Number(purchaseData.tedarikci_id),
         parca_adi: purchaseData.parca_adi,
-        adet: Number(purchaseData.adet),
-        birim_fiyat: Number(purchaseData.birim_fiyat),
-        tedarik_suresi: purchaseData.tedarik_suresi ? Number(purchaseData.tedarik_suresi) : null,
+        adet: parseLocaleNumber(purchaseData.adet),
+        birim_fiyat: parseLocaleNumber(purchaseData.birim_fiyat),
+        tedarik_suresi: purchaseData.tedarik_suresi ? parseLocaleNumber(purchaseData.tedarik_suresi) : null,
         tarih: purchaseData.tarih || new Date().toISOString(),
-        puan: Number(purchaseData.puan),
+        puan: parseLocaleNumber(purchaseData.puan),
         makine_tur_id: purchaseData.makine_tur_id ? Number(purchaseData.makine_tur_id) : null,
-        tahmini_omur: purchaseData.tahmini_omur ? Number(purchaseData.tahmini_omur) : null,
+        tahmini_omur: purchaseData.tahmini_omur ? parseLocaleNumber(purchaseData.tahmini_omur) : null,
       }),
     });
     return handleResponse(res);
@@ -634,6 +675,35 @@ export const api = {
     });
     const json = await handleResponse(res);
     return json.data;
+  },
+
+  // ═══════════════ 30. QR BAZLI BAKIM TAMAMLAMA ═══════════════
+  // POST /api/bakimlar/qr-tamamla
+  // Teknisyen sahada QR okutup formu doldurduktan sonra çağrılır
+  qrBakimTamamla: async (formData) => {
+    const res = await fetch(`${API_BASE}/bakimlar/qr-tamamla`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({
+        bakim_id: Number(formData.bakim_id),
+        bakim_maliyet: formData.bakim_maliyet ? Number(formData.bakim_maliyet) : undefined,
+        aciklama: formData.aciklama || undefined,
+        durus_suresi: formData.durus_suresi ? Number(formData.durus_suresi) : undefined,
+        degisen_parcalar: formData.degisen_parcalar || [],
+      }),
+    });
+    return handleResponse(res);
+  },
+
+  // ═══════════════ 31. BEKLEYENİŞLERİ GETİR (ONAYLANDI durumunda) ═══════════════
+  // GET /api/bakimlar/teknik-servis
+  // Makineye ait ONAYLANDI durumundaki bekleyen bakım görevlerini getirir
+  getBekleyenIsler: async () => {
+    const res = await fetch(`${API_BASE}/bakimlar/teknik-servis`, {
+      headers: getHeaders(),
+    });
+    const json = await handleResponse(res);
+    return json.data || [];
   },
 
 

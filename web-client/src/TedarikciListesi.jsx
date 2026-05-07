@@ -77,19 +77,23 @@ export default function TedarikciListesi() {
   // --- TEDARİKÇİ EKLEME ---
   const handleSaveFirm = async (firmData) => {
     try {
-      const newFirm = await api.addFirm(firmData);
+      const response = await api.addFirm(firmData);
+      const newFirm = response?.data || response;
       const newSupplier = {
-        tedarikci_id: newFirm.id,
-        firma_adi: newFirm.ad,
-        telefon: newFirm.telefon,
-        email: newFirm.email,
-        adres: newFirm.adres,
-        aktiflik: true
+        tedarikci_id: newFirm.tedarikci_id || newFirm.id,
+        firma_adi: newFirm.firma_adi || newFirm.ad || firmData.ad,
+        telefon: firmData.telefon || newFirm.iletisim?.telefon || null,
+        email: firmData.email || newFirm.iletisim?.mail || null,
+        adres: firmData.adres || newFirm.iletisim?.acik_adres || null,
+        aktiflik: newFirm.aktiflik ?? true,
+        vergi_no: newFirm.vergi_no || firmData.vergi_no || null,
+        yetkili_kisi: newFirm.yetkili_kisi || firmData.yetkili_kisi || null
       };
       setTedarikciler([...tedarikciler, newSupplier]);
       setIsModalOpen(false);
       alert("Tedarikçi başarıyla eklendi!");
     } catch (error) {
+      console.error("Tedarikçi eklenirken hata:", error); 
       alert("Tedarikçi eklenirken hata oluştu!");
     }
   };
@@ -644,7 +648,7 @@ export default function TedarikciListesi() {
 
                 <div>
                   <h3 style={{ margin: 0, color: "#0f3460", fontSize: "18px" }}>Satın Alma Geçmişi</h3>
-                  <p style={{ margin: "2px 0 0 0", color: "#95a5a6", fontSize: "13px" }}>Tüm satın alma kayıtları ve tedarikçi puanlamaları</p>
+                  <p style={{ margin: "2px 0 0 0", color: "#95a5a6", fontSize: "13px" }}>Stok hareketlerinden oluşturulan parça alım geçmişi</p>
                 </div>
               </div>
 
@@ -661,90 +665,21 @@ export default function TedarikciListesi() {
                 <table style={tableStyle}>
                   <thead>
                     <tr>
-                      <th style={thStyle}>Tarih</th>
-                      <th style={thStyle}>Tedarikçi</th>
-                      <th style={thStyle}>Makine Türü</th>
                       <th style={thStyle}>Parça</th>
-                      <th style={thStyle}>Adet</th>
-                      <th style={thStyle}>Birim Fiyat</th>
-                      <th style={thStyle}>Süre</th>
-                      <th style={thStyle}>Toplam</th>
-                      <th style={thStyle}>Tahmini Ömür</th>
-                      <th style={thStyle}>Puan</th>
+                      <th style={thStyle}>Kategori</th>
+                      <th style={thStyle}>Stok Giriş Tarihi</th>
+                      <th style={thStyle}>Girilen Adet</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {satinAlmalar.map((sa) => (
-                      <tr key={sa.satin_alma_id} style={trStyle}>
+                    {satinAlmalar.map((sa, index) => (
+                      <tr key={`${sa.parca_adi}-${sa.stok_giris_tarihi}-${index}`} style={trStyle}>
+                        <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>{sa.parca_adi || "-"}</td>
+                        <td style={tdStyle}>{sa.kategori_adi || "-"}</td>
                         <td style={{ ...tdStyle, fontSize: "13px", color: "#7f8c8d" }}>
-                          {sa.tarih ? new Date(sa.tarih).toLocaleDateString("tr-TR") : "-"}
+                          {sa.stok_giris_tarihi ? new Date(sa.stok_giris_tarihi).toLocaleString("tr-TR") : "-"}
                         </td>
-                        <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>
-                          {sa.tedarikci?.firma_adi || "-"}
-                        </td>
-                        <td style={tdStyle}>
-                          <span style={{
-                            padding: "4px 10px",
-                            background: sa.makine_turu ? "#f1f2f6" : "transparent",
-                            borderRadius: "6px",
-                            fontSize: "12px",
-                            color: "#0f3460"
-                          }}>
-                            {sa.makine_turu?.makine_tur_adi || "-"}
-                          </span>
-                        </td>
-                        <td style={tdStyle}>{sa.parca_adi}</td>
-                        <td style={{ ...tdStyle, fontWeight: "bold" }}>{sa.adet}</td>
-                        <td style={tdStyle}>{Number(sa.birim_fiyat).toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ₺</td>
-                        <td style={tdStyle}>{(sa.tedarik_suresi !== null && sa.tedarik_suresi !== undefined) ? `${sa.tedarik_suresi} Gün` : "-"}</td>
-                        <td style={{ ...tdStyle, fontWeight: "bold", color: "#27ae60" }}>
-                          {(sa.adet * Number(sa.birim_fiyat)).toLocaleString("tr-TR", { minimumFractionDigits: 2 })} ₺
-                        </td>
-                        <td style={tdStyle}>
-                          {sa.tahmini_omur_saati ? (
-                            <span style={{ 
-                              background: "rgba(52,152,219,0.1)", 
-                              color: "#3498db", 
-                              padding: "4px 10px", 
-                              borderRadius: "12px", 
-                              fontSize: "12px",
-                              fontWeight: "bold"
-                            }}>
-                              ⏳ {sa.tahmini_omur_saati} Saat
-                            </span>
-                          ) : "-"}
-                        </td>
-                        <td style={tdStyle}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                            {[...Array(10)].map((_, idx) => (
-                              <span
-                                key={idx}
-                                onClick={() => handlePurchaseRate(sa.satin_alma_id, idx + 1)}
-                                onMouseEnter={() => setPurchaseRatingId(`${sa.satin_alma_id}-${idx + 1}`)}
-                                onMouseLeave={() => setPurchaseRatingId(null)}
-                                style={{
-                                  fontSize: "16px",
-                                  cursor: "pointer",
-                                  color: (purchaseRatingId?.startsWith(`${sa.satin_alma_id}-`) && idx < parseInt(purchaseRatingId.split("-")[1])) || (idx < (sa.puan || 0))
-                                    ? "#f39c12"
-                                    : "#ecf0f1",
-                                  transition: "transform 0.1s"
-                                }}
-                              >
-                                ★
-                              </span>
-                            ))}
-                            <span style={{
-                              marginLeft: "8px",
-                              fontWeight: "bold",
-                              fontSize: "13px",
-                              width: "40px",
-                              color: !sa.puan ? "#95a5a6" : (sa.puan >= 8 ? "#27ae60" : sa.puan >= 5 ? "#f39c12" : "#e74c3c")
-                            }}>
-                              {sa.puan ? `${sa.puan}/10` : "Puanla"}
-                            </span>
-                          </div>
-                        </td>
+                        <td style={{ ...tdStyle, fontWeight: "bold", color: "#27ae60" }}>{sa.girilen_adet ?? "-"}</td>
                       </tr>
                     ))}
                   </tbody>

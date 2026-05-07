@@ -1,9 +1,14 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
 import prisma from "../config/prisma";
 
-
-
+const parseLocaleNumber = (value: unknown): number => {
+    if (typeof value === "number") return value;
+    const normalized = String(value ?? "")
+        .trim()
+        .replace(/\./g, "")
+        .replace(",", ".");
+    return Number(normalized);
+};
 
 export const satinAlmaKaydet = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -36,11 +41,17 @@ export const satinAlmaKaydet = async (req: Request, res: Response): Promise<void
         
         const p_parca_adi = parca_adi;
         const p_tahmini_omur_saati = 0; // Varsayılan değer
-        const p_parca_maliyeti = parseFloat(birim_fiyat);
-        const p_stok_miktari = parseInt(adet, 10);
+        const parsedBirimFiyat = parseLocaleNumber(birim_fiyat);
+        const p_parca_maliyeti = Math.round(parsedBirimFiyat);
+        const p_stok_miktari = Math.trunc(parseLocaleNumber(adet));
         const p_min_stok_seviyesi = 5; // Varsayılan değer
-        const p_tedarik_gun_suresi = parseInt(tedarik_suresi || '0', 10);
+        const p_tedarik_gun_suresi = Math.trunc(parseLocaleNumber(tedarik_suresi || 0));
         const p_kategori_adi = 'Genel'; // Varsayılan değer
+
+        if (!Number.isFinite(parsedBirimFiyat) || !Number.isFinite(p_stok_miktari) || p_stok_miktari <= 0) {
+            res.status(400).json({ hata: 'Adet ve birim fiyat geçerli sayısal değerler olmalıdır.' });
+            return;
+        }
 
         // Parça Ekleme Prosedürünü Çağır
         await prisma.$executeRawUnsafe(
@@ -94,6 +105,34 @@ export const satinAlmaKaydet = async (req: Request, res: Response): Promise<void
         res.status(500).json({
             hata: hataMesaji
         });
+    }
+};
+
+// GET /api/satin-alma
+export const getAlimGecmisi = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const alimGecmisi = await prisma.$queryRaw<Array<{
+            parca_adi: string | null;
+            kategori_adi: string | null;
+            stok_giris_tarihi: Date | null;
+            girilen_adet: number | null;
+        }>>`
+            SELECT
+                parca_adi,
+                kategori_adi,
+                stok_giris_tarihi,
+                girilen_adet
+            FROM public.vw_parca_alim_gecmisi
+        `;
+
+        res.json({
+            success: true,
+            message: `${alimGecmisi.length} adet alım geçmişi kaydı getirildi.`,
+            data: alimGecmisi
+        });
+    } catch (error) {
+        console.error("Alım geçmişi çekme hatası:", error);
+        res.status(500).json({ hata: "Alım geçmişi çekilirken bir hata oluştu." });
     }
 };
 

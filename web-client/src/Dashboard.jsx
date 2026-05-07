@@ -38,10 +38,10 @@ export default function Dashboard() {
   const [fabrikaOee, setFabrikaOee] = useState(0); // Ana OEE skorunu tutmak için
 
   const getMachineStatus = (machine) => String(machine?.aktiflik_durumu || "").trim().toLowerCase();
-  const pendingMachines = machinesList.filter((machine) => {
-    const status = getMachineStatus(machine);
-    return status.includes("onay") && status.includes("bek");
-  });
+  const pendingMachines = pendingTasks.map((task) => ({
+    id: task.makine_id ?? task.id,
+    makine_adi: task.makine_ad || task.makine_adi || `Makine #${task.makine_id ?? task.id}`,
+  }));
   const bakimdaMachines = machinesList.filter((machine) => getMachineStatus(machine) === "bakımda");
   const yaklasanMachines = machinesList.filter((machine) => getMachineStatus(machine) === "bakımı yaklaşan");
   const activeMachines = machinesList.filter((machine) => {
@@ -57,14 +57,23 @@ export default function Dashboard() {
         setIsLoading(true);
 
         // 1. ADIM: Tüm ağır işi backend'de yapan o tek fonksiyonu çağır!
-        const dashboardOzet = await api.getDashboardOzet(); // Backend'deki zengin veri
-        const operasyonelPerformans = dashboardOzet?.operasyonel_performans ?? {};
-        const acilAksiyonlar = dashboardOzet?.acil_aksiyonlar ?? {};
+        const response = await api.getDashboardOzet();
+
+        // KRİTİK DÜZELTME BURADA: Backend veriyi "data" objesi içinde gönderiyor!
+        // (Eğer api.js dosyasında zaten response.data olarak dönüyorsa diye güvenli bir atama yapıyoruz)
+        const gercekOzet = response?.data?.acil_aksiyonlar ? response.data : response;
+
+        const operasyonelPerformans = gercekOzet?.operasyonel_performans ?? {};
+        const acilAksiyonlar = gercekOzet?.acil_aksiyonlar ?? {};
 
         // Backend'den gelen hazır özetleri state'lere dağıt
         setFabrikaOee(Number(operasyonelPerformans.ortalama_oee ?? 0));
         setPendingApprovals(Number(acilAksiyonlar.onay_bekleyen_is ?? 0));
-        // ... diğer set işlemleri
+        
+        // Yeni Backend Formatından Onay Bekleyen Makineleri (Görevleri) Al
+        if (acilAksiyonlar.onay_bekleyen_makineler) {
+           setPendingTasks(acilAksiyonlar.onay_bekleyen_makineler);
+        }
 
         // 2. ADIM: Sadece liste için gereken veriyi çek
         const machinesData = await api.getMachines();
@@ -151,17 +160,18 @@ export default function Dashboard() {
     if (selectedTaskIds.length === 0) return;
 
     try {
-      if (selectedTaskIds.length > 0) {
-        await Promise.all(selectedTaskIds.map(id => api.updateTaskStatus(id, "ONAYLANDI")));
-      }
+      await api.sendTasksToTechnicalService(selectedTaskIds);
 
       const count = selectedTaskIds.length;
-      alert(`${count} Adet bakım görevi onaylandı ve teknik servis listesine aktarıldı!`);
+      const selectedIdSet = new Set(selectedTaskIds);
 
       // Onaylananları listeden çıkar ve seçimleri sıfırla
-      setPendingTasks(prev => prev.filter(t => !selectedTaskIds.includes(t.id)));
+      setPendingTasks(prev => prev.filter(t => !selectedIdSet.has(t.id)));
+      setPendingApprovals(prev => Math.max(0, prev - count));
       setSelectedTaskIds([]);
       setIsApprovalModalOpen(false);
+      window.alert(`${count} adet makine bakımı onaylandı ve teknik servise gönderildi!`);
+      navigate("/teknik-servis");
     } catch (err) {
       console.error("Görevler onaylanırken hata oluştu", err);
       alert("Görevler onaylanırken bir hata oluştu!");
@@ -885,34 +895,9 @@ export default function Dashboard() {
                                   }}
                                 />
                                 <div style={{ flex: 1 }}>
-                                  <div style={{ fontWeight: "700", color: "#1e293b", fontSize: "14px" }}>{t.makine_ad}</div>
+                                  <div style={{ fontWeight: "700", color: "#1e293b", fontSize: "14px" }}>{t.makine_ad} <span style={{fontSize:"11px", color:"#94a3b8", fontWeight:"normal"}}>(ID: {t.id})</span></div>
                                   <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>{t.ariza_notu}</div>
                                 </div>
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    const machine = machinesList.find(m => m.ad === t.makine_ad);
-                                    if (machine) navigate(`/makine/${machine.id}`);
-                                    else alert("Makine detay bilgisi bulunamadı.");
-                                  }}
-                                  style={{
-                                    padding: "6px 12px",
-                                    background: "#f1f5f9",
-                                    color: "#475569",
-                                    border: "1px solid #e2e8f0",
-                                    borderRadius: "8px",
-                                    fontSize: "11px",
-                                    fontWeight: "800",
-                                    cursor: "pointer",
-                                    transition: "0.2s",
-                                    whiteSpace: "nowrap"
-                                  }}
-                                  onMouseOver={(e) => { e.currentTarget.style.background = "#e2e8f0"; e.currentTarget.style.color = "#1e293b"; }}
-                                  onMouseOut={(e) => { e.currentTarget.style.background = "#f1f5f9"; e.currentTarget.style.color = "#475569"; }}
-                                >
-                                  Detay Gör
-                                </button>
                               </label>
                             );
                           })

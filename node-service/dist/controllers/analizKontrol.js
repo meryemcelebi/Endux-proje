@@ -48,11 +48,11 @@ async function maliyetAnalizi(req, res) {
                 toplamParcaMaliyeti += Number(degisim.parca?.parca_maliyeti ?? 0);
             }
         }
-        //toplam onarım maliyeti
+        // Toplam onarım maliyeti
         const toplamOnarimMaliyeti = toplamBakimMaliyeti + toplamParcaMaliyeti;
-        //maliyet oranı yüzdesi
+        // Maliyet oranı yüzdesi
         const maliyetOraniYuzdesi = satinAlmaMaliyeti > 0
-            //bölme hatası almamak için satinAlmaMaliyeti sıfırdan büyükse hesaplama yapıyoruz
+            // Bölme hatası almamak için satinAlmaMaliyeti sıfırdan büyükse hesaplama yapıyoruz
             ? parseFloat(((toplamOnarimMaliyeti / satinAlmaMaliyeti) * 100).toFixed(2))
             : 0;
         res.status(200).json({
@@ -138,7 +138,7 @@ async function lokasyonHaritasi(req, res) {
                 }
             }
         });
-        // harita verileri
+        // Harita verileri
         // harita verileri
         const haritaVerisi = makineler
             .filter((m) => {

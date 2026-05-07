@@ -14,5 +14,6 @@ router.get("/qr/:qr_uuid", yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)("YONET
 router.get("/lokasyon-haritasi", yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)("YONETICI"), analizKontrol_1.lokasyonHaritasi);
 router.get("/:id/qr-yazdir", yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)("YONETICI", "TEKNISYEN"), makineKontrol_1.QRKodYazdir);
 router.get('/:id/maliyet-analizi', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)("YONETICI", "TEKNISYEN"), analizKontrol_1.maliyetAnalizi);
-router.get('/:id', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)("YONETICI", "TEKNISYEN"), makineKontrol_1.makineDetayGetir);
+router.patch('/:id/durum', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)("YONETICI"), makineKontrol_1.makineDurumGuncelle);
+router.get('/:id', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)("YONETICI", "TEKNISYEN", "OPERATOR", "SERVIS"), makineKontrol_1.makineDetayGetir);
 exports.default = router;

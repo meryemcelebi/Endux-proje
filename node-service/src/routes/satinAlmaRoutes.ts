@@ -1,8 +1,10 @@
 import { Router } from "express";
-import { satinAlmaKaydet, getStokDurumu } from "../controllers/satinAlmaKontrol";
+import { satinAlmaKaydet, getStokDurumu, getAlimGecmisi } from "../controllers/satinAlmaKontrol";
 import { oturumKontrol, rolKontrol } from "../middlewares/yetki";
 
 const router = Router();
+
+router.get('/', oturumKontrol, getAlimGecmisi);
 
 router.post('/',
     oturumKontrol,

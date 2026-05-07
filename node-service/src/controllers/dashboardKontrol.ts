@@ -1,13 +1,13 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 
-const ONAY_BEKLEYEN_DURUMLAR = ['BEKLEYEN' , 'Onay Bekliyor'];
+const ONAY_BEKLEYEN_DURUMLAR = ['BEKLEYEN', 'Onay Bekliyor'];
 
 export const getDashboardOzet = async (req: Request, res: Response): Promise<Response> => {
     try {
-        const  [
+        const [
             makineDurumlari,
-            onayBekleyenIs,
+            onayBekleyenMakineler,
             ortalamaOee,
             kritikRiskliMakineler,
 
@@ -18,9 +18,32 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
                     _all: true,
                 },
             }),
-            prisma.bakim_kaydi.count({
+            prisma.makine.findMany({
                 where: {
-                    durum: { in: ONAY_BEKLEYEN_DURUMLAR }
+                    aktiflik_durumu: false,
+                    bakim_kaydi: {
+                        some: {
+                            durum: {
+                                in: ONAY_BEKLEYEN_DURUMLAR
+                            }
+                        }
+                    }
+                },
+                include: {
+                    bakim_kaydi: {
+                        where: {
+                            durum: {
+                                in: ONAY_BEKLEYEN_DURUMLAR
+                            }
+                        },
+                        orderBy: { bakim_tarihi: 'desc' },
+                        take: 1,
+                        select: {
+                            bakim_id: true,
+                            aciklama: true,
+                            durum: true
+                        }
+                    }
                 }
             }),
             prisma.oee_raporlari.aggregate({
@@ -30,7 +53,7 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
             }),
 
             prisma.risk_skoru.findMany({
-                where: { 
+                where: {
                     risk_skoru: {
                         not: null,
 
@@ -53,11 +76,11 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
         ]);
 
         const toplamMakine = makineDurumlari.reduce(
-            (toplam , durum) => toplam + durum._count._all,
-            0    
-          );
-        const toplamAktifMAkine = makineDurumlari.find( durum => durum.aktiflik_durumu === true)?._count._all ?? 0;
-        const toplamPasifMakine = makineDurumlari.find( durum => durum.aktiflik_durumu === false)?._count._all ?? 0;
+            (toplam, durum) => toplam + durum._count._all,
+            0
+        );
+        const toplamAktifMAkine = makineDurumlari.find(durum => durum.aktiflik_durumu === true)?._count._all ?? 0;
+        const toplamPasifMakine = makineDurumlari.find(durum => durum.aktiflik_durumu === false)?._count._all ?? 0;
 
         return res.status(200).json({
             success: true,
@@ -67,13 +90,24 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
                     aktif: toplamAktifMAkine,
                     bakimda: toplamPasifMakine
                 },
-                operasyonel_performans:  {
+                operasyonel_performans: {
                     ortalama_oee: Number((ortalamaOee._avg.oee_skoru ?? 0).toFixed(2))
 
 
                 },
                 acil_aksiyonlar: {
-                    onay_bekleyen_is: onayBekleyenIs,
+                    onay_bekleyen_is: onayBekleyenMakineler.length,
+                    onay_bekleyen_makineler: onayBekleyenMakineler.map(m => {
+                        const bekleyenBakim = m.bakim_kaydi?.[0];
+                        return {
+                            id: bekleyenBakim?.bakim_id ?? m.makine_id,
+                            bakim_id: bekleyenBakim?.bakim_id ?? null,
+                            makine_id: m.makine_id,
+                            makine_ad: m.makine_adi,
+                            ariza_notu: bekleyenBakim?.aciklama || "Makine pasife alınmış, arıza notu yok.",
+                            bakim_durum: bekleyenBakim?.durum || "Bekliyor"
+                        };
+                    }),
                     kritik_riskli_makineler: kritikRiskliMakineler.map((risk) => ({
                         makine_adi: risk.makine.makine_adi ?? 'Makine Adı yok',
                         risk_skoru: Number(risk.risk_skoru ?? 0)
@@ -90,4 +124,4 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
         });
     }
 };
-    
+

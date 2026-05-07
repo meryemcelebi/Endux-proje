@@ -6,6 +6,7 @@ import prisma from "../config/prisma";
 export async function tumTedarikcileriGetir(req: Request, res: Response) {
     try {
         const tedarikciler = await prisma.tedarikci.findMany({
+            where: { aktiflik: true },
             include: {
                 iletisim: true,
                 tedarikci_puan: {
@@ -16,10 +17,31 @@ export async function tumTedarikcileriGetir(req: Request, res: Response) {
             orderBy: { tedarikci_id: "asc" }
         });
 
+        const dataWithScores = tedarikciler.map(t => {
+            const puanlar = t.tedarikci_puan
+                .map(tp => Number(tp.puan))
+                .filter(puan => Number.isFinite(puan));
+            const ortalama = puanlar.length > 0
+                ? Number((puanlar.reduce((a, b) => a + b, 0) / puanlar.length).toFixed(1))
+                : 0;
+            const guvenilirlikSkoru = puanlar.length > 0
+                ? Number((ortalama * 10).toFixed(1))
+                : Number(t.guvenilirlik_skoru || 0);
+            const sonYorum = t.tedarikci_puan.find(tp => tp.yorum)?.yorum || null;
+
+            return {
+                ...t,
+                guvenilirlik_skoru: guvenilirlikSkoru,
+                ortalama_puan: ortalama,
+                toplam_degerlendirme: puanlar.length,
+                yorum: sonYorum
+            };
+        });
+
         res.status(200).json({
             success: true,
             message: `${tedarikciler.length} adet tedarikçi getirildi.`,
-            data: tedarikciler
+            data: dataWithScores
         });
     } catch (error) {
         console.error("Tedarikçileri getirme hatası:", error);
@@ -94,6 +116,7 @@ export async function tedarikciSil(req: Request, res: Response) {
 export async function tumServisFirmalariniGetir(req: Request, res: Response) {
     try {
         const servisFirmalari = await prisma.servis_firma.findMany({
+            where: { aktiflik: true },
             include: {
                 servis_sorumlusu: true,
                 iletisim: true,
@@ -127,7 +150,7 @@ export async function tumServisFirmalariniGetir(req: Request, res: Response) {
 
 export async function servisFirmasiEkle(req: Request, res: Response) {
     try {
-        const { firma_adi, telefon, email, adres, il, ilce, uzmanlik_alani } = req.body;
+        const { firma_adi, telefon, email, adres, il, ilce, uzmanlik_alani, sorumlu_ad, sorumlu_telefon, sorumlu_unvan } = req.body;
         if (!firma_adi) return res.status(400).json({ success: false, message: "Firma adı zorunludur." });
 
         // iletişim bilgileri ayrı tabloda
@@ -156,7 +179,31 @@ export async function servisFirmasiEkle(req: Request, res: Response) {
             });
         }
 
-        res.status(201).json({ success: true, message: 'Servis firması başarıyla eklendi.', data: yeniServisFirmasi });
+        if (sorumlu_ad) {
+            const [ad, ...soyadParts] = String(sorumlu_ad).trim().split(/\s+/);
+            await prisma.servis_sorumlusu.create({
+                data: {
+                    servis_firma_id: yeniServisFirmasi.servis_firma_id,
+                    ad: ad || String(sorumlu_ad).trim(),
+                    soyad: soyadParts.join(" ") || "-",
+                    telefon: sorumlu_telefon ? String(sorumlu_telefon) : String(telefon || "Belirtilmedi"),
+                    aktiflik: true,
+                    unvan: sorumlu_unvan ? String(sorumlu_unvan) : null,
+                    sorumlu_adi: String(sorumlu_ad).trim()
+                }
+            });
+        }
+
+        const servisFirmasi = await prisma.servis_firma.findUnique({
+            where: { servis_firma_id: yeniServisFirmasi.servis_firma_id },
+            include: {
+                servis_sorumlusu: true,
+                iletisim: true,
+                servis_firma_uzmanlik: true
+            }
+        });
+
+        res.status(201).json({ success: true, message: 'Servis firması başarıyla eklendi.', data: servisFirmasi });
     } catch (error) {
         console.error("Servis firması ekleme hatası:", error);
         res.status(500).json({ success: false, message: 'Servis firması eklenirken bir hata oluştu.' });

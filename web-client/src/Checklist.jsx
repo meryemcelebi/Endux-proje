@@ -49,13 +49,15 @@ export default function Checklist() {
   };
 
   const saveChecklist = async () => {
-    const cevaplanmamis = sorular.filter(s => cevaplar[s.madde_id] === undefined);
+    // form_doldurma_suresi_sn ekranda gösterilmiyor, validasyondan hariç tut
+    const yanitlanabilirSorular = sorular.filter(s => s.teknik_parametre !== "form_doldurma_suresi_sn");
+    const cevaplanmamis = yanitlanabilirSorular.filter(s => cevaplar[s.madde_id] === undefined);
     if (cevaplanmamis.length > 0) {
       alert(`Lütfen tüm soruları yanıtlayın! (${cevaplanmamis.length} soru eksik)`);
       return;
     }
 
-    const answersPayload = sorular.map(s => ({
+    const answersPayload = yanitlanabilirSorular.map(s => ({
       madde_id: s.madde_id,
       girilen_deger: String(cevaplar[s.madde_id]),
       durum: cevaplar[s.madde_id] === 0 ? "NORMAL" : cevaplar[s.madde_id] === 1 ? "UYARI" : "KRITIK",
@@ -236,7 +238,7 @@ const soruKartStil = { padding: "16px", marginBottom: "16px", background: "#fafb
 const kaydetButonStil = { width: "100%", padding: "14px", color: "white", border: "none", borderRadius: "12px", fontSize: "15px", fontWeight: "700", transition: "all 0.3s ease" };
 const notKonteynerStil = { padding: "15px", background: "#fef2f2", borderRadius: "12px", border: "1px solid #fecdd2" };
 const notEtiketStil = { display: "block", marginBottom: "10px", color: "#c62828", fontWeight: "bold", fontSize: "14px" };
-const notTextareaStil = { width: "100%", height: "100px", padding: "12px", boxSizing: "border-box", borderRadius: "10px", border: "1px solid #e2e8f0", fontSize: "14px", fontFamily: "inherit", resize: "vertical", outline: "none", background: "white" };
+const notTextareaStil = { width: "100%", height: "100px", padding: "12px", boxSizing: "border-box", borderRadius: "10px", border: "1px solid #e2e8f0", fontSize: "14px", fontFamily: "inherit", resize: "vertical", outline: "none", background: "white", color: "#333" };
 const spinnerStil = { width: "40px", height: "40px", border: "4px solid rgba(255,255,255,0.1)", borderTop: "4px solid #5dade2", borderRadius: "50%", animation: "spin 1s linear infinite" };
 
 const modalOverlayStil = { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(4px)" };

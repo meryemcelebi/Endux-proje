@@ -227,6 +227,8 @@ export async function lokasyonHaritasi(req: Request, res: Response): Promise<voi
                 tum_makineler: haritaVerisi,
             }
         });
+
+
     } catch (error) {
         console.error("Lokasyon haritası oluşturma hatası:", error);
         res.status(500).json({
