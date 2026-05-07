@@ -154,7 +154,7 @@ async function servisGiris(req, res, next) {
             rol: 'SERVIS'
         });
         res.status(200).json({
-            succes: true,
+            success: true,
             message: yeniKayitMi
                 ? 'Yeni servis sorumlusu kaydedildi ve giriş başarılı.'
                 : 'Mevcut servis sorumlusu ile giriş başarılı.',

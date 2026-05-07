@@ -12,6 +12,8 @@ router.get('/stok-uyarisi', yetki_1.oturumKontrol, bakimKontrol_1.dusukStokUyari
 router.get('/teknik-servis', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('YONETICI', 'TEKNISYEN'), bakimKontrol_1.getTeknikServisIsleri);
 // GET /api/bakimlar/tum-bakimlar — Tüm bakım geçmişini toplu getirir
 router.get('/tum-bakimlar', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('YONETICI'), bakimKontrol_1.TumBakimlarToplu);
+// POST /api/bakimlar/qr-tamamla — QR okutarak sahada bakım tamamlama
+router.post('/qr-tamamla', yetki_1.oturumKontrol, bakimKontrol_1.qrBakimTamamla);
 // POST /api/bakimlar  — Yeni bakım kaydı oluşturur
 router.post('/', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('TEKNISYEN', 'YONETICI', 'SERVIS'), bakimKontrol_1.bakimKaydiGir);
 // PUT /api/bakimlar/onayla — Bekleyen bakımları onaylar (Teknik Servis'e aktarır)
@@ -22,6 +24,7 @@ router.put('/yoksay', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('YONETICI')
 router.patch('/:bakim_id/puan', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('YONETICI', 'TEKNISYEN'), bakimKontrol_1.bakimPuaniKaydet);
 // PATCH /api/bakimlar/:bakim_id/onayla — Teknik servis işlemini tamamlandı olarak işaretler
 router.patch('/:bakim_id/onayla', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('YONETICI', 'TEKNISYEN'), bakimKontrol_1.bakimIsleminiOnayla);
+router.patch('/:bakim_id/baslat', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)("TEKNISYEN", "YONETICI"), bakimKontrol_1.bakimBaslat);
 // GET /api/bakimlar/:makine_id — Makinenin bakım geçmişini getirir
 // DİKKAT: Bu kural her şeyi yutabileceği için daima en altta durmalıdır!
 router.get('/:makine_id', yetki_1.oturumKontrol, bakimKontrol_1.makineBakimKayitlari);

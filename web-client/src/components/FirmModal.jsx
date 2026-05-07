@@ -14,7 +14,7 @@ export default function FirmModal({ isOpen, onClose, onSave, initialType = "Serv
     sorumlu_soyad: "", // İlgili personelin soyadı
     sorumlu_telefon: "", // İlgili personelin doğrudan ulaşım numarası
     yetkili_kisi: "", // Sadece Tedarikçiler için ana temas kişisi
-    veri_no: "", // Vergi numarası veya resmi sicil no
+    vergi_no: "", // Vergi numarası veya resmi sicil no
     il: "", // İl bilgisi
     ilce: "" // İlçe bilgisi
   });
@@ -41,7 +41,7 @@ export default function FirmModal({ isOpen, onClose, onSave, initialType = "Serv
     setForm({
       ad: "", tip: initialType, telefon: "", email: "", adres: "",
       uzmanlik_alani: "", sorumlu_ad: "", sorumlu_soyad: "", sorumlu_telefon: "",
-      yetkili_kisi: "", veri_no: "", il: "", ilce: ""
+      yetkili_kisi: "", vergi_no: "", il: "", ilce: ""
     }); // Formu sıfırla
   };
 
@@ -102,7 +102,7 @@ export default function FirmModal({ isOpen, onClose, onSave, initialType = "Serv
 
               <div style={{ marginBottom: "12px" }}>
                 <label style={labelStil}>Veri / Vergi No</label>
-                <input type="text" name="veri_no" value={form.veri_no} onChange={handleChange} style={inputStil} placeholder="Örn: TR123..." />
+                <input type="text" name="vergi_no" value={form.vergi_no} onChange={handleChange} style={inputStil} placeholder="Örn: TR123..." />
               </div>
             </React.Fragment>
           )}

@@ -56,8 +56,14 @@ export default function ChecklistGiris() {
           try {
             // QR Merkezi üzerinden (qrileMakineGetir) AUDIT loglarını yazdır ve gerçek veriyi getir
             const qrResult = await api.getMachineByQR(id);
+            console.log("QR Sonuç:", qrResult);
             const roleStr = qrResult.rol;
-            const makineId = qrResult.makine.makine_id;
+            const makineId = qrResult.makine?.makine_id || qrResult.data?.makine_id;
+
+            if (!makineId) {
+              alert("Makine ID alınamadı. Backend yanıtı: " + JSON.stringify(qrResult).substring(0, 200));
+              return;
+            }
 
             // Dinamik olarak merkezin belirlediği role göre form/panellere yönlendir
             if (roleStr === "YONETICI") navigate(`/makine/${makineId}`);
@@ -65,7 +71,8 @@ export default function ChecklistGiris() {
             else if (roleStr === "TEKNISYEN") navigate(`/servis/${makineId}`);
             else navigate(`/dashboard`);
           } catch (err) {
-            alert("QR kod doğrulanamadı veya bu makineye erişiminiz kısıtlı.");
+            console.error("QR giriş hatası:", err);
+            alert("QR kod doğrulanamadı: " + (err.message || "Bilinmeyen hata"));
           }
         } else {
           // Eğer direkt URL'den /checklist-giris yazıp girdiyse (makine yoksa) panele at
@@ -99,7 +106,7 @@ export default function ChecklistGiris() {
         saveLogin(result);
 
         // API'den gelen makine_id'yi (integer) kullan (UUID yerine)
-        const finalId = result.data?.makine?.makine_id || result.makine_id;
+        const finalId = result.makine?.makine_id || result.data?.makine?.makine_id;
 
         setTimeout(() => {
           if (finalId) navigate(`/servis/${finalId}`);
