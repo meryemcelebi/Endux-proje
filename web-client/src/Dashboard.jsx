@@ -77,10 +77,12 @@ export default function Dashboard() {
 
         // 2. ADIM: Sadece liste için gereken veriyi çek
         const machinesData = await api.getMachines();
-        setMachinesList(machinesData);
+        setMachinesList(machinesData || []);
 
       } catch (err) {
         console.error("Dashboard yükleme hatası:", err);
+        alert("Dashboard verileri yüklenirken bir hata oluştu. Lütfen sayfayı yenileyiniz. Hata: " + err.message);
+        setMachinesList([]);
       } finally {
         setIsLoading(false);
       }
@@ -456,7 +458,7 @@ export default function Dashboard() {
               </div>
               <div style={{ ...aisleStyleH, gridColumn: "span 5" }}>ANA LOJİSTİK AKSI</div>
               <div style={{ ...gridZoneStyle, gridColumn: "span 5" }}>
-                <span style={zoneLabelStyle}>DEPO VE SEVKİYAT MERKEZİ</span>
+                <span style={zoneLabelStyle}>DEPO</span>
                 {renderMachinesInZone(groupedMachines["Zemin"]?.["DEPO"] || [])}
               </div>
             </>

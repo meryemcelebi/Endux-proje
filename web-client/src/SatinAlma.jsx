@@ -272,15 +272,19 @@ export default function SatinAlma() {
                         style={inputStyle}
                       />
                     </div>
-                    <div style={formGroupStyle}>
+                    <div style={{ ...formGroupStyle, position: "relative" }}>
                       <label style={labelStyle}>Alım Tarihi</label>
                       <input
                         id="tarih-input"
                         type="date"
                         value={formData.tarih}
                         onChange={(e) => handleInputChange("tarih", e.target.value)}
-                        style={inputStyle}
+                        style={{ ...inputStyle, paddingRight: "40px", color: formData.tarih ? "#333" : "#999" }}
                       />
+                      <span
+                        onClick={() => document.getElementById("tarih-input")?.showPicker?.()}
+                        style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", fontSize: "20px", cursor: "pointer", userSelect: "none", filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.2))" }}
+                      >📅</span>
                     </div>
                   </div>
 
@@ -494,7 +498,7 @@ export default function SatinAlma() {
                     {satinAlmalar.map((sa) => (
                       <tr key={sa.satin_alma_id} style={trStyle}>
                         <td style={{ ...tdStyle, fontSize: "13px", color: "#7f8c8d" }}>
-                          {sa.tarih ? new Date(sa.tarih).toLocaleDateString("tr-TR") : "-"}
+                          {sa.tarih?.split('T')[0] || "-"}
                         </td>
                         <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>
                           {sa.tedarikci?.firma_adi || "-"}

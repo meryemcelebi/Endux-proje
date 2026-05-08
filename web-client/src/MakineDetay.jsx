@@ -224,13 +224,57 @@ export default function MakineDetay() {
                                         <strong style={{ color: "#e94560", fontSize: "17px" }}>{machine.lokasyon?.[0]?.fabrika_alani || "Tanımlanmamış"}</strong>
                                     </div>
                                     <div style={{ ...tedarikciSatirStil, padding: "8px 12px" }}>
-                                        <span style={tedarikciEtiketStil}>Makine Kategori ID:</span>
-                                        <strong style={{ color: "#2c3e50" }}>{machine.makine_tur_id || "N/A"}</strong>
+                                        <span style={tedarikciEtiketStil}>Makine Türü / Kategori:</span>
+                                        <strong style={{ color: "#2c3e50" }}>{machine.makine_turu?.makine_tur_adi || machine.makine_tur_id || "N/A"}</strong>
                                     </div>
                                     <div style={{ ...tedarikciSatirStil, padding: "8px 12px", borderBottom: "none" }}>
                                         <span style={tedarikciEtiketStil}>Kapasite & Donanım Özellikleri:</span>
-                                        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", justifyContent: "flex-end" }}>
-                                            {safeVal(machine.makine_ozellikleri?.teknik_ozellikler)}
+                                        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", justifyContent: "flex-end", marginTop: "5px" }}>
+                                            {(() => {
+                                                const mo = machine.makine_ozellikleri;
+                                                if (!mo) return <span style={{ color: "#999" }}>Belirtilmemiş</span>;
+
+                                                const allValues = [];
+                                                // 1. Teknik özellikler alanı (JSON string veya obje olabilir)
+                                                if (mo.teknik_ozellikler) {
+                                                    try {
+                                                        const data = typeof mo.teknik_ozellikler === "string" 
+                                                            ? JSON.parse(mo.teknik_ozellikler) 
+                                                            : mo.teknik_ozellikler;
+                                                        
+                                                        if (typeof data === "object" && data !== null) {
+                                                            // Eğer kullanıcı serbest metin girdiyse { teknik_ozellikler: "metin" } şeklinde olabilir
+                                                            if (data.teknik_ozellikler) allValues.push(String(data.teknik_ozellikler));
+                                                            else Object.values(data).forEach(v => { if (v && typeof v !== 'object') allValues.push(String(v)); });
+                                                        } else {
+                                                            allValues.push(String(data));
+                                                        }
+                                                    } catch (e) {
+                                                        allValues.push(String(mo.teknik_ozellikler));
+                                                    }
+                                                } 
+                                                // 2. Doğrudan string ise
+                                                else if (typeof mo === "string") {
+                                                    allValues.push(mo);
+                                                }
+
+                                                if (allValues.length === 0) return <span style={{ color: "#999" }}>Belirtilmemiş</span>;
+
+                                                return allValues.map((val, idx) => (
+                                                    <span key={idx} style={{
+                                                        background: "#f0f4f8",
+                                                        padding: "4px 12px",
+                                                        borderRadius: "20px",
+                                                        fontSize: "12px",
+                                                        color: "#2c3e50",
+                                                        fontWeight: "600",
+                                                        border: "1px solid #dfe6e9",
+                                                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
+                                                    }}>
+                                                        {val}
+                                                    </span>
+                                                ));
+                                            })()}
                                         </div>
                                     </div>
                                 </div>
@@ -278,8 +322,16 @@ export default function MakineDetay() {
                                         </span>
                                     </div>
 
-                                    <div style={riskSebepStil}>
-                                        <strong>⚠️ Risk Sebebi:</strong> {item.risk_sebebi}
+                                    <div style={{ 
+                                        marginTop: "15px", 
+                                        padding: "10px", 
+                                        borderRadius: "8px", 
+                                        background: item.risk_sebebi?.toLowerCase().includes("normal") ? "#f0fff4" : "#fff5f5",
+                                        borderLeft: `4px solid ${item.risk_sebebi?.toLowerCase().includes("normal") ? "#38a169" : "#e53e3e"}`,
+                                        color: item.risk_sebebi?.toLowerCase().includes("normal") ? "#2f855a" : "#c53030",
+                                        fontSize: "13px"
+                                    }}>
+                                        <strong>{item.risk_sebebi?.toLowerCase().includes("normal") ? "✅ Analiz Özeti:" : "⚠️ Risk Sebebi:"}</strong> {item.risk_sebebi}
                                     </div>
 
                                     <div style={{ marginTop: "15px" }}>
