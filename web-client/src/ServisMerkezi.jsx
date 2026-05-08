@@ -207,7 +207,7 @@ export default function ServisMerkezi() {
                   </td>
                   <td style={{ ...tdStyle, maxWidth: "300px", whiteSpace: "normal" }}>{t.ariza_notu}</td>
                   <td style={tdStyle}>
-                    <div style={{ fontSize: "14px", color: "#555" }}>📅 {t.tarih || t.kayit_tarihi}</div>
+                    <div style={{ fontSize: "14px", color: "#555" }}>📅 {t.tarih?.split('T')[0] || t.kayit_tarihi?.split('T')[0]}</div>
                   </td>
                   <td style={tdStyle}>
                     {t.durum === "TAMAMLANDI" ? (
@@ -286,7 +286,7 @@ export default function ServisMerkezi() {
 
                 <div style={raporKutuStil}>
                   <div style={raporBaslikStil}>📅 Tamamlanma Tarihi</div>
-                  <div style={{ fontSize: "15px", color: "#2c3e50" }}>{raporModal.tarih || raporModal.kayit_tarihi || "-"}</div>
+                  <div style={{ fontSize: "15px", color: "#2c3e50" }}>{raporModal.tarih?.split('T')[0] || raporModal.kayit_tarihi?.split('T')[0] || "-"}</div>
                 </div>
 
                 <div style={raporKutuStil}>

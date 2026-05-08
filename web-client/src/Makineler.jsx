@@ -48,8 +48,9 @@ export default function Makineler() {
           ...m,
           id: m.makine_id,
           makineid: "MKN-" + m.makine_id,
-          makine_ad: m.makine_adi || m.makine_ad, // İkinci bloktan aldığımız güvenlik önlemi
-          aktiflik_durumu: typeof m.aktiflik_durumu === "string" ? m.aktiflik_durumu : (m.aktiflik_durumu ? "Aktif" : "Pasif")
+          makine_ad: m.makine_adi || m.makine_ad,
+          aktiflik_durumu: typeof m.aktiflik_durumu === "string" ? m.aktiflik_durumu : (m.aktiflik_durumu ? "Aktif" : "Pasif"),
+          lokasyon: Array.isArray(m.lokasyon) ? m.lokasyon[0] || null : m.lokasyon || null
         }));
 
         // formatedData bloğunu tamamen sildik!
@@ -81,10 +82,21 @@ export default function Makineler() {
     servis_telefon: "",
     servis_il_ilce: "", // Yeni: İl/İlçe
     servis_adres: "",    // Yeni: Tam Adres
+    makine_ozellikleri: "", // Kapasite & Donanım Özellikleri (JSON)
   });
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    let value = e.target.value;
+
+    // Makine adı alanı için otomatik büyük harf ve standardizasyon
+    if (e.target.name === "makine_ad") {
+      value = value
+        .toUpperCase()
+        .replace(/[^A-ZÇĞİÖŞÜ0-9\s\-]/g, "") // Sadece harf, rakam, boşluk ve tire
+        .replace(/\s+/g, " "); // Çoklu boşlukları tek boşluğa indir
+    }
+
+    setForm({ ...form, [e.target.name]: value });
   };
 
   // --- YENİ MAKİNE EKLEME FONKSİYONU ---
@@ -109,12 +121,15 @@ export default function Makineler() {
         ...form,
         firma_id: Number(currentFirmaId),
         m_tur_id: Number(form.m_tur_id),
+        lokasyon_id: form.lo_id ? Number(form.lo_id) : undefined,
         seri_no: seriNoArray,
         satin_alma_tarihi: form.satin_alma_tarihi ? new Date(form.satin_alma_tarihi).toISOString() : new Date().toISOString(),
         satin_alma_maliyeti: Number(form.satin_alma_maliyeti),
         aktiflik_durumu: form.aktiflik_durumu === "Aktif",
         top_cal_sma_saati: [],
-        makine_ozellikleri: [],
+        makine_ozellikleri: form.makine_ozellikleri ? (() => {
+          try { return JSON.parse(form.makine_ozellikleri); } catch { return { teknik_ozellikler: form.makine_ozellikleri }; }
+        })() : [],
         // Garanti bilgisi varsa tedarikçi objesini doldur
         tedarikci: form.garanti_suresi ? {
           firma_adi: form.servis_firma_adi,
@@ -140,7 +155,8 @@ export default function Makineler() {
       setForm({
         makine_ad: "", m_tur_id: "", seri_no: "",
         satin_alma_tarihi: "", satin_alma_maliyeti: "", garanti_suresi: "", aktiflik_durumu: "Aktif",
-        lo_id: "", servis_firma_adi: "", servis_telefon: "", servis_il_ilce: "", servis_adres: ""
+        lo_id: "", servis_firma_adi: "", servis_telefon: "", servis_il_ilce: "", servis_adres: "",
+        makine_ozellikleri: ""
       });
       setIsModalOpen(false);
     } catch (err) {
@@ -224,8 +240,8 @@ export default function Makineler() {
                 }}
               >
                 <option value="">Kat</option>
-                <option value="0">Z.Kat</option>
-
+                <option value="Zemin">Zemin Kat</option>
+                <option value="1.Kat">1. Kat</option>
               </select>
 
               {/* Lokasyon Filtresi */}
@@ -245,11 +261,19 @@ export default function Makineler() {
                 }}
               >
                 <option value="">Lokasyon</option>
-                {[...new Set(machines.map(m => m.lo_id).filter(Boolean))].map((id) => (
-                  <option key={id} value={id}>
-                    L{id}
-                  </option>
-                ))}
+                <optgroup label="Zemin Kat">
+                  <option value="BÖLGE 1">BÖLGE 1</option>
+                  <option value="BÖLGE 2">BÖLGE 2</option>
+                  <option value="BÖLGE 3">BÖLGE 3</option>
+                  <option value="DEPO">DEPO</option>
+                </optgroup>
+                <optgroup label="1. Kat">
+                  <option value="BÖLGE D">BÖLGE 4</option>
+                  <option value="TEKNİK">TEKNİK SERVİS</option>
+                  <option value="OFİS">PERSONEL ALANI</option>
+                  <option value="KALİTE">İDARİ OFİS</option>
+                  <option value="BÖLGE 5">BÖLGE 5</option>
+                </optgroup>
               </select>
 
               {/* Filtreleri Sıfırla */}
@@ -333,15 +357,11 @@ export default function Makineler() {
                   if (!matches) return false;
                 }
 
-                // Lokasyon filtresi
-                if (filterLokasyon && m.lo_id?.toString() !== filterLokasyon) return false;
+                // Lokasyon filtresi (lokasyon objesinin fabrika_alani alanına göre)
+                if (filterLokasyon && m.lokasyon?.fabrika_alani !== filterLokasyon) return false;
 
-                // Kat filtresi (lo_id'den kat bilgisini çıkart veya varsayılan olarak kullan)
-                if (filterKat && m.lo_id) {
-                  // lo_id formatı örneğin: "203" ise ilk digit kat (2. kat), veya ayrı kat bilgisi varsa onu kullan
-                  const machineKat = m.kat || Math.floor(m.lo_id / 100)?.toString();
-                  if (machineKat?.toString() !== filterKat?.toString()) return false;
-                }
+                // Kat filtresi (lokasyon objesinin kat alanına göre)
+                if (filterKat && m.lokasyon?.kat !== filterKat) return false;
 
                 return true;
               })
@@ -402,7 +422,7 @@ export default function Makineler() {
                     <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "14px", color: "#555" }}>
                       <div><strong>ID:</strong> {m.makineid}</div>
 
-                      {m.satin_alma_tarihi && <div><strong>Satın Alma:</strong> {m.satin_alma_tarihi}</div>}
+                      {m.satin_alma_tarihi && <div><strong>Satın Alma:</strong> {m.satin_alma_tarihi?.split('T')[0]}</div>}
                       <div><strong>Risk Skoru:</strong> {m.mevcut_risk_skoru}</div>
                     </div>
 
@@ -412,7 +432,7 @@ export default function Makineler() {
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "13px", color: "#555" }}>
                           <div><strong>Maliyet:</strong> {m.satin_alma_maliyeti || "-"} ₺</div>
                           <div><strong>Çalışma Saatleri:</strong> {m.toplam_calisma_saati || 0} Saat</div>
-                          <div><strong>Lokasyon ID:</strong> {m.lo_id || "-"}</div>
+                          <div><strong>Lokasyon:</strong> {m.lokasyon ? `${m.lokasyon.kat} — ${m.lokasyon.fabrika_alani}` : (m.lo_id || "-")}</div>
                           <div><strong>Makine Türü:</strong> {m.makine_turu?.makine_tur_adi || m.m_tur_id || "-"}</div>
                           <div><strong>Seri No:</strong> {Array.isArray(m.seri_no) ? m.seri_no.join(", ") : m.seri_no || "-"}</div>
                           <div style={{ color: "#e94560", fontWeight: "bold" }}><strong>Servis PIN:</strong> {m.servis_pin || "####"}</div>
@@ -423,7 +443,35 @@ export default function Makineler() {
                               <div><strong>Garanti Tel:</strong> {m.tedarikci.telefon || "-"}</div>
                             </>
                           )}
-                          <div style={{ gridColumn: "span 2" }}><strong>Özellikler:</strong> {m.makine_ozellikleri?.teknik_ozellikler ? Object.entries(m.makine_ozellikleri.teknik_ozellikler).map(([k, v]) => `${k}: ${v}`).join(" | ") : "Belirtilmemiş"}</div>
+                          <div style={{ gridColumn: "span 2" }}>
+                            <span style={tedarikEtiketStil}>Kapasite & Donanım Özellikleri:</span>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", justifyContent: "flex-end" }}>
+                              {(() => {
+                                const oz = m.makine_ozellikleri?.teknik_ozellikler;
+                                if (!oz) return <span style={{ color: "#999" }}>Belirtilmemiş</span>;
+
+                                // String ise parse et
+                                const data = typeof oz === "string" ? JSON.parse(oz) : oz;
+
+                                if (typeof data === "object" && data !== null) {
+                                  return Object.entries(data).map(([key, val]) => (
+                                    <span key={key} style={{
+                                      background: "#f0f4f8",
+                                      padding: "4px 10px",
+                                      borderRadius: "8px",
+                                      fontSize: "13px",
+                                      color: "#2c3e50",
+                                      border: "1px solid #dfe6e9"
+                                    }}>
+                                      <strong>{key}:</strong> {String(val)}
+                                    </span>
+                                  ));
+                                }
+
+                                return String(data);
+                              })()}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -525,17 +573,47 @@ export default function Makineler() {
                     ))}
                   </select>
                   <input name="seri_no" placeholder="Seri No" value={form.seri_no} onChange={handleChange} style={inputStyle} />
-                  <input name="satin_alma_tarihi" type="date" placeholder="Satın Alma Tarihi" value={form.satin_alma_tarihi} onChange={handleChange} style={inputStyle} />
+                  <div style={{ position: "relative" }}>
+                    <input
+                      name="satin_alma_tarihi"
+                      type="date"
+                      placeholder="Satın Alma Tarihi"
+                      value={form.satin_alma_tarihi}
+                      onChange={handleChange}
+                      id="datePickerInput"
+                      style={{ ...inputStyle, paddingRight: "40px", color: form.satin_alma_tarihi ? "#333" : "#999" }}
+                    />
+                    <span
+                      onClick={() => document.getElementById("datePickerInput")?.showPicker?.()}
+                      style={{
+                        position: "absolute",
+                        right: "10px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        fontSize: "20px",
+                        cursor: "pointer",
+                        userSelect: "none",
+                        filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.2))"
+                      }}
+                    >📅</span>
+                  </div>
                   <input name="satin_alma_maliyeti" type="number" placeholder="Satın Alma Maliyeti" value={form.satin_alma_maliyeti} onChange={handleChange} style={inputStyle} />
 
                   <select name="lo_id" value={form.lo_id} onChange={handleChange} style={inputStyle}>
                     <option value="">Lokasyon Seçiniz</option>
-                    <option value="LO-A1">LO-A1 (Blok A)</option>
-                    <option value="LO-B2">LO-B2 (Blok B)</option>
-                    <option value="LO-C3">LO-C3 (Blok C)</option>
-                    <option value="LO-D4">LO-D4 (Blok D)</option>
-                    <option value="LO-E5">LO-E5 (Blok E)</option>
-                    <option value="LO-OF">Ofis / Arge</option>
+                    <optgroup label="Zemin Kat">
+                      <option value="BÖLGE 1">BÖLGE 1</option>
+                      <option value="BÖLGE 2">BÖLGE 2</option>
+                      <option value="BÖLGE 3">BÖLGE 3</option>
+                      <option value="DEPO">DEPO</option>
+                    </optgroup>
+                    <optgroup label="1. Kat">
+                      <option value="BÖLGE D">BÖLGE 4</option>
+                      <option value="TEKNİK">TEKNİK SERVİS</option>
+                      <option value="OFİS">PERSONEL ALANI</option>
+                      <option value="KALİTE">İDARİ OFİS</option>
+                      <option value="BÖLGE 5">BÖLGE 5</option>
+                    </optgroup>
                   </select>
 
                   <input name="garanti_suresi" type="number" placeholder="Garanti Süresi (Ay)" value={form.garanti_suresi} onChange={handleChange} style={inputStyle} />
@@ -557,6 +635,18 @@ export default function Makineler() {
                     <option value="Arızalı">Arızalı</option>
                     <option value="Pasif">Pasif</option>
                   </select>
+
+                  {/* MAKİNE ÖZELLİKLERİ */}
+                  <div style={{ gridColumn: "span 2" }}>
+                    <label style={labelStyle}>Makine Özellikleri</label>
+                    <textarea
+                      name="makine_ozellikleri"
+                      placeholder="Örn: 2000 RPM, 50 Ton Kapasite..."
+                      value={form.makine_ozellikleri}
+                      onChange={handleChange}
+                      style={{ ...inputStyle, height: "70px", resize: "vertical" }}
+                    />
+                  </div>
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "15px", marginTop: "25px", paddingTop: "15px", borderTop: "1px solid #eee" }}>
@@ -603,4 +693,25 @@ const garantiRozetStyle = {
   justifyContent: "center",
   gap: "3px",
   minWidth: "95px" // Genişlik eşitlendi
+};
+const tedarikEtiketStil = {
+  color: "#0f3460",
+  fontWeight: "bold",
+  fontSize: "13px",
+  marginBottom: "4px",
+  display: "block"
+};
+
+const formGroupStyle = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "5px",
+  marginBottom: "15px"
+};
+
+const labelStyle = {
+  fontSize: "13px",
+  fontWeight: "bold",
+  color: "#4b5563",
+  marginBottom: "2px"
 };

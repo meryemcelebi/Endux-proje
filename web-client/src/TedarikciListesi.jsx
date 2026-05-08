@@ -256,7 +256,7 @@ export default function TedarikciListesi() {
                       <tr key={t.tedarikci_id || t.id} style={trStyle}>
                         <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>
                           {t.firma_adi || t.ad}
-                          <div style={{ fontSize: "11px", color: "#95a5a6", fontWeight: "normal" }}>Kayıt: {t.kayit_tarihi ? new Date(t.kayit_tarihi).toLocaleDateString("tr-TR") : "-"}</div>
+                          <div style={{ fontSize: "11px", color: "#95a5a6", fontWeight: "normal" }}>Kayıt: {t.kayit_tarihi?.split('T')[0] || "-"}</div>
                         </td>
                         <td style={tdStyle}>{t.yetkili_kisi || "-"}</td>
                         <td style={tdStyle}>
@@ -462,15 +462,19 @@ export default function TedarikciListesi() {
                   )}
 
                   {/* TARİH */}
-                  <div style={formGroupStyle}>
+                  <div style={{ ...formGroupStyle, position: "relative" }}>
                     <label style={labelStyle}>Alım Tarihi</label>
                     <input
                       id="tarih-input"
                       type="date"
                       value={formData.tarih}
                       onChange={(e) => handleInputChange("tarih", e.target.value)}
-                      style={inputStyle}
+                      style={{ ...inputStyle, paddingRight: "40px", color: formData.tarih ? "#333" : "#999" }}
                     />
+                    <span
+                      onClick={() => document.getElementById("tarih-input")?.showPicker?.()}
+                      style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", fontSize: "20px", cursor: "pointer", userSelect: "none", filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.2))" }}
+                    >📅</span>
                   </div>
 
                   {/* PUAN (1–10 Yıldız) */}
@@ -677,7 +681,7 @@ export default function TedarikciListesi() {
                         <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>{sa.parca_adi || "-"}</td>
                         <td style={tdStyle}>{sa.kategori_adi || "-"}</td>
                         <td style={{ ...tdStyle, fontSize: "13px", color: "#7f8c8d" }}>
-                          {sa.stok_giris_tarihi ? new Date(sa.stok_giris_tarihi).toLocaleString("tr-TR") : "-"}
+                          {sa.stok_giris_tarihi?.split('T')[0] || "-"}
                         </td>
                         <td style={{ ...tdStyle, fontWeight: "bold", color: "#27ae60" }}>{sa.girilen_adet ?? "-"}</td>
                       </tr>
