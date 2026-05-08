@@ -139,7 +139,7 @@ export default function KisiEkle() {
                     <div><strong>Telefon:</strong> {k.telefon}</div>
                     <div><strong>E-Posta:</strong> {k.eposta}</div>
                     <div><strong>Kullanıcı Adı:</strong> {k.kullanici_adi}</div>
-                    <div><strong>Başlama Tarihi:</strong> {k.baslama_tarihi}</div>
+                    <div><strong>Başlama Tarihi:</strong> {k.baslama_tarihi?.split('T')[0]}</div>
                   </div>
 
                   {seciliKisiId === k.kullanici_id && (
@@ -182,7 +182,13 @@ export default function KisiEkle() {
                 <input name="telefon" placeholder="Telefon" value={form.telefon} onChange={handleChange} style={inputStyle} />
                 <input name="eposta" placeholder="E-Posta" type="email" value={form.eposta} onChange={handleChange} style={inputStyle} />
                 <input name="sifre" placeholder="Şifre" type="password" value={form.sifre} onChange={handleChange} style={inputStyle} />
-                <input name="baslama_tarihi" placeholder="Başlama Tarihi" type="date" value={form.baslama_tarihi} onChange={handleChange} style={inputStyle} className="date-input-dark" />
+                <div style={{ position: "relative" }}>
+                  <input name="baslama_tarihi" placeholder="Başlama Tarihi" type="date" value={form.baslama_tarihi} onChange={handleChange} style={{ ...inputStyle, paddingRight: "40px", color: form.baslama_tarihi ? "#333" : "#999" }} id="datePickerBaslama" className="date-input-dark" />
+                  <span
+                    onClick={() => document.getElementById("datePickerBaslama")?.showPicker?.()}
+                    style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", fontSize: "20px", cursor: "pointer", userSelect: "none", filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.2))" }}
+                  >📅</span>
+                </div>
                 <select name="rol" value={form.rol} onChange={handleChange} style={inputStyle}>
                   <option value="" disabled>Rol seçin</option>
                   <option value="OPERATOR">Operatör</option>

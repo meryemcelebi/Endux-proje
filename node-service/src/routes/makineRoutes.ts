@@ -5,21 +5,26 @@ import { oturumKontrol, rolKontrol } from "../middlewares/yetki";
 
 const router = Router();
 
-
-/// ! kontrol edilmeliii !!!!
-
-
 // Makine ekleme (Sadece yönetici erişebilir)
 router.post("/",
     oturumKontrol,
     rolKontrol("YONETICI"),
     makineEkle
 );
+
 router.get("/",
     oturumKontrol,
     rolKontrol("YONETICI", "TEKNISYEN"),
     tumMakineBilgileriGetir
 );
+
+// Durum Güncelle (Aktif/Pasif)
+router.patch("/:id/durum",
+    oturumKontrol,
+    rolKontrol("YONETICI", "TEKNISYEN"),
+    makineDurumGuncelle
+);
+
 // QR ile makine bilgisi getir (Tüm roller erişebilir)
 router.get("/qr/:qr_uuid",
     oturumKontrol,

@@ -282,8 +282,7 @@ export async function tumMakineBilgileriGetir(req: Request, res: Response) {
                 },
                 risk_skoru: { orderBy: { hesaplama_tarihi: 'desc' }, take: 1 },
                 bakim_kaydi: { orderBy: { bakim_tarihi: 'desc' }, take: 5 },
-                ariza_kaydi: { orderBy: { olusturma_tarihi: 'desc' }, take: 5 },
-                makine_ozellikleri: true
+                ariza_kaydi: { orderBy: { olusturma_tarihi: 'desc' }, take: 5 }
             }
         });
         res.status(200).json({

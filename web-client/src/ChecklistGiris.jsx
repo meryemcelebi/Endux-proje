@@ -32,8 +32,12 @@ export default function ChecklistGiris() {
   useEffect(() => {
     const fetchFirms = async () => {
       try {
-        const allFirms = await api.getFirms();
-        setFirms(allFirms);
+        const servisFirmalari = await api.getServiceFirms();
+        // Dropdown formatına uygun map
+        setFirms(servisFirmalari.map(f => ({
+          id: f.servis_firma_id,
+          ad: f.firma_adi
+        })));
       } catch (err) {
         console.error("Firmalar yüklenemedi:", err);
       }
@@ -129,7 +133,7 @@ export default function ChecklistGiris() {
     <div style={sayfaStil}>
       <div style={kartStil}>
         <div style={{ textAlign: "center", marginBottom: "25px" }}>
-          <h1 style={{ color: "#e94560", margin: 0, fontSize: "32px", fontWeight: "bold", letterSpacing: "2px" }}>ENDUX</h1>
+          <h1 style={{ color: "#e94560", margin: 0, fontSize: "32px", fontWeight: "bold", letterSpacing: "2px" }}>MAİNTFY</h1>
           <p style={{ color: "#a0a5b1", marginTop: "5px", fontSize: "14px" }}>
             {isGuestMode ? "Misafir (Servis) Girişi" : "Personel Giriş Paneli"}
           </p>

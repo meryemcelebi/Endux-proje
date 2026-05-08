@@ -72,6 +72,7 @@ export const api = {
         top_calisma_saati: Number(m.toplam_calisma_saati || 0),
         lo_id: m.lokasyon?.[0]?.lokasyon_adi || "-",
         m_tur_id: m.makine_turu?.makine_tur_adi || "-",
+        satin_alma_tarihi: m.satin_alma_tarihi ? String(m.satin_alma_tarihi).split('T')[0] : "-",
         pin: m.servis_pin,
         tedarikci: m.garanti_firma ? {
           firma_adi: m.garanti_firma.firma_adi,
@@ -106,6 +107,7 @@ export const api = {
       top_calisma_saati: Number(m.toplam_calisma_saati || 0),
       lo_id: m.lokasyon?.[0]?.lokasyon_adi || "-",
       m_tur_id: m.makine_turu?.makine_tur_adi || "-",
+      satin_alma_tarihi: m.satin_alma_tarihi ? String(m.satin_alma_tarihi).split('T')[0] : "-",
       pin: m.servis_pin,
       tedarikci: m.garanti_firma ? {
         firma_adi: m.garanti_firma.firma_adi,
@@ -140,6 +142,14 @@ export const api = {
         garanti_firma_id: machineData.garanti_firma_id ? Number(machineData.garanti_firma_id) : undefined,
         lokasyon_id: machineData.lokasyon_id ? Number(machineData.lokasyon_id) : undefined,
       }),
+    });
+    return handleResponse(res);
+  },
+  updateMachineStatus: async (makine_id, status) => {
+    const res = await fetch(`${API_BASE}/makineler/${makine_id}/durum`, {
+      method: "PATCH",
+      headers: getHeaders(),
+      body: JSON.stringify({ aktiflik_durumu: status }),
     });
     return handleResponse(res);
   },

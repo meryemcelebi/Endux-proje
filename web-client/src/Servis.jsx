@@ -226,7 +226,7 @@ export default function Servis() {
               }}>
                 <div style={{ fontSize: "12px", color: "#e94560", fontWeight: "bold", textTransform: "uppercase", marginBottom: "4px" }}>Bekleyen Görev</div>
                 <div style={{ fontSize: "14px", color: "#2c3e50" }}>
-                  {bekleyenIs.ariza_notu || "Belirtilmemiş"} — <span style={{ color: "#7f8c8d" }}>{bekleyenIs.kayit_tarihi}</span>
+                  {bekleyenIs.ariza_notu || "Belirtilmemiş"} — <span style={{ color: "#7f8c8d" }}>{bekleyenIs.kayit_tarihi?.split('T')[0]}</span>
                 </div>
               </div>
 
