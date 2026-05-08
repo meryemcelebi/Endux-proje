@@ -3,8 +3,17 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getStokDurumu = exports.satinAlmaKaydet = void 0;
+exports.getStokDurumu = exports.getAlimGecmisi = exports.satinAlmaKaydet = void 0;
 const prisma_1 = __importDefault(require("../config/prisma"));
+const parseLocaleNumber = (value) => {
+    if (typeof value === "number")
+        return value;
+    const normalized = String(value ?? "")
+        .trim()
+        .replace(/\./g, "")
+        .replace(",", ".");
+    return Number(normalized);
+};
 const satinAlmaKaydet = async (req, res) => {
     try {
         const { tedarikci_id, parca_adi, adet, birim_fiyat, tedarik_suresi, tarih, puan } = req.body;
@@ -22,11 +31,16 @@ const satinAlmaKaydet = async (req, res) => {
         const p_tedarikci_firma_adi = tedarikci ? tedarikci.firma_adi : 'Bilinmeyen Tedarikçi';
         const p_parca_adi = parca_adi;
         const p_tahmini_omur_saati = 0; // Varsayılan değer
-        const p_parca_maliyeti = parseFloat(birim_fiyat);
-        const p_stok_miktari = parseInt(adet, 10);
+        const parsedBirimFiyat = parseLocaleNumber(birim_fiyat);
+        const p_parca_maliyeti = Math.round(parsedBirimFiyat);
+        const p_stok_miktari = Math.trunc(parseLocaleNumber(adet));
         const p_min_stok_seviyesi = 5; // Varsayılan değer
-        const p_tedarik_gun_suresi = parseInt(tedarik_suresi || '0', 10);
+        const p_tedarik_gun_suresi = Math.trunc(parseLocaleNumber(tedarik_suresi || 0));
         const p_kategori_adi = 'Genel'; // Varsayılan değer
+        if (!Number.isFinite(parsedBirimFiyat) || !Number.isFinite(p_stok_miktari) || p_stok_miktari <= 0) {
+            res.status(400).json({ hata: 'Adet ve birim fiyat geçerli sayısal değerler olmalıdır.' });
+            return;
+        }
         // Parça Ekleme Prosedürünü Çağır
         await prisma_1.default.$executeRawUnsafe(`CALL public.sp_parca_ekle($1, $2, $3, $4, $5, $6, $7, $8)`, p_parca_adi, p_tahmini_omur_saati, p_parca_maliyeti, p_stok_miktari, p_min_stok_seviyesi, p_tedarik_gun_suresi, p_kategori_adi, p_tedarikci_firma_adi);
         // İsteğe bağlı: Puan geldiyse tedarikçi puan tablosuna ekleyelim
@@ -67,6 +81,29 @@ const satinAlmaKaydet = async (req, res) => {
     }
 };
 exports.satinAlmaKaydet = satinAlmaKaydet;
+// GET /api/satin-alma
+const getAlimGecmisi = async (req, res) => {
+    try {
+        const alimGecmisi = await prisma_1.default.$queryRaw `
+            SELECT
+                parca_adi,
+                kategori_adi,
+                stok_giris_tarihi,
+                girilen_adet
+            FROM public.vw_parca_alim_gecmisi
+        `;
+        res.json({
+            success: true,
+            message: `${alimGecmisi.length} adet alım geçmişi kaydı getirildi.`,
+            data: alimGecmisi
+        });
+    }
+    catch (error) {
+        console.error("Alım geçmişi çekme hatası:", error);
+        res.status(500).json({ hata: "Alım geçmişi çekilirken bir hata oluştu." });
+    }
+};
+exports.getAlimGecmisi = getAlimGecmisi;
 // GET /api/satin-alma/stok
 const getStokDurumu = async (req, res) => {
     try {

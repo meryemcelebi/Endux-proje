@@ -27,32 +27,42 @@ export default function Makineler() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [machinesData, typesData] = await Promise.all([
-          api.getMachines(),
-          api.getSystemMachineTypes()
-        ]);
+        let machinesData = [];
+        let typesData = [];
+
+        try {
+          machinesData = await api.getMachines();
+        } catch (e) {
+          console.error("Makineler listesi çekilemedi:", e);
+        }
+
+        try {
+          typesData = await api.getSystemMachineTypes();
+        } catch (e) {
+          console.error("Makine türleri çekilemedi:", e);
+        }
 
 
         // API'den gelen veriyi yerel state'e uygun hale getir (ID ve durum eşleştirmesi)
-      const formattedData = machinesData.map(m => ({
-        ...m,
-        id: m.makine_id,
-        makineid: "MKN-" + m.makine_id,
-        makine_ad: m.makine_adi || m.makine_ad, // İkinci bloktan aldığımız güvenlik önlemi
-        aktiflik_durumu: typeof m.aktiflik_durumu === "string" ? m.aktiflik_durumu : (m.aktiflik_durumu ? "Aktif" : "Pasif")
-      }));
+        const formattedData = machinesData.map(m => ({
+          ...m,
+          id: m.makine_id,
+          makineid: "MKN-" + m.makine_id,
+          makine_ad: m.makine_adi || m.makine_ad, // İkinci bloktan aldığımız güvenlik önlemi
+          aktiflik_durumu: typeof m.aktiflik_durumu === "string" ? m.aktiflik_durumu : (m.aktiflik_durumu ? "Aktif" : "Pasif")
+        }));
 
-      // formatedData bloğunu tamamen sildik!
+        // formatedData bloğunu tamamen sildik!
 
-      setMachines(formattedData);
-      setMachineTypes(typesData);
-    } catch (err) {
-      console.error("Veriler yüklenirken hata oluştu", err);
-    }
-  };
+        setMachines(formattedData);
+        setMachineTypes(typesData);
+      } catch (err) {
+        console.error("Veriler yüklenirken hata oluştu", err);
+      }
+    };
 
-       
-   
+
+
     fetchData();
   }, []);
 
@@ -391,7 +401,7 @@ export default function Makineler() {
 
                     <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "14px", color: "#555" }}>
                       <div><strong>ID:</strong> {m.makineid}</div>
-                      {m.firma_id && <div><strong>Firma ID:</strong> {m.firma_id}</div>}
+
                       {m.satin_alma_tarihi && <div><strong>Satın Alma:</strong> {m.satin_alma_tarihi}</div>}
                       <div><strong>Risk Skoru:</strong> {m.mevcut_risk_skoru}</div>
                     </div>
@@ -401,7 +411,7 @@ export default function Makineler() {
                         <div style={{ marginBottom: "10px", color: "#0f3460", fontWeight: "bold", fontSize: "14px" }}>Detaylı Bilgiler</div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "13px", color: "#555" }}>
                           <div><strong>Maliyet:</strong> {m.satin_alma_maliyeti || "-"} ₺</div>
-                          <div><strong>Çalışma Saatleri:</strong> {m.top_calisma_saati || 0} Saat</div>
+                          <div><strong>Çalışma Saatleri:</strong> {m.toplam_calisma_saati || 0} Saat</div>
                           <div><strong>Lokasyon ID:</strong> {m.lo_id || "-"}</div>
                           <div><strong>Makine Türü:</strong> {m.makine_turu?.makine_tur_adi || m.m_tur_id || "-"}</div>
                           <div><strong>Seri No:</strong> {Array.isArray(m.seri_no) ? m.seri_no.join(", ") : m.seri_no || "-"}</div>

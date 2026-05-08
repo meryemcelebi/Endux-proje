@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
+import { Prisma } from "@prisma/client";
 import prisma from "../src/config/prisma";
 
 async function main() {
@@ -214,8 +215,8 @@ async function main() {
     // 7. 100 Adet Makine ve Özellikleri
     console.log("Mevcut sahte test verileri temizleniyor...");
     await prisma.oee_raporlari.deleteMany({});
-    await prisma.durus_kaydi.deleteMany({});
-    await prisma.uretim_kaydi.deleteMany({});
+    await prisma.uretim_kaydi.deleteMany({});
+    await prisma.durus_kaydi.deleteMany({});
     await prisma.parca_degisim.deleteMany({});
     await prisma.bakim_kaydi.deleteMany({});
     await prisma.arizayi_tetikleyen_form.deleteMany({});
@@ -299,6 +300,25 @@ async function main() {
             data: { makine_id: m.makine_id, teknik_ozellikler: teknikSpecs }
         });
 
+        // LOKASYON EKLEME (Harita için kritik)
+        const kat = (i % 5 < 3) ? "Zemin" : "1.Kat";
+        const alanlar = kat === "Zemin"
+            ? ["BÖLGE 1", "BÖLGE 2", "BÖLGE 3", "DEPO"]
+            : ["BÖLGE D", "TEKNİK", "OFİS", "KALİTE"];
+        const secilenAlan = alanlar[Math.floor(Math.random() * alanlar.length)];
+
+        await prisma.lokasyon.create({
+            data: {
+                makine_id: m.makine_id,
+                firma_id: firma.firma_id,
+                kat: kat,
+                fabrika_alani: secilenAlan,
+                x_koor: new Prisma.Decimal(Math.floor(Math.random() * 80) + 10), // %10-90 arası
+                y_koor: new Prisma.Decimal(Math.floor(Math.random() * 80) + 10),
+                guncelleme_tarihi: new Date()
+            }
+        });
+
         // ARIZALI ise veya eski makine ise Bakım Kayıtları Oluştur
         if (isArizali || (!isSifir && Math.random() > 0.5)) {
             const bakimSayisi = isArizali ? 3 : 1;
@@ -308,7 +328,7 @@ async function main() {
                         makine_id: m.makine_id,
                         servis_firma_id: servisFirma.servis_firma_id,
                         bakim_tur_id: bakimTuru.bakim_tur_id,
-                        bakim_maliyet: Math.floor(Math.random() * 15000) + 1500,
+                        bakim_maliyet: new Prisma.Decimal(Math.floor(Math.random() * 15000) + 1500),
                         aciklama: (isArizali && k === 0) ? "Makine arızaya geçti, motor sürücüleri yandı." : "Periyodik genel bakım tamamlandı.",
                         bakim_tarihi: new Date(Date.now() - Math.floor(Math.random() * 10000000000)),
                     }
@@ -415,7 +435,7 @@ async function main() {
             data: {
                 makine_id: allMachines[0].makine_id,
                 servis_firma_id: (await prisma.servis_firma.findFirst())!.servis_firma_id,
-                bakim_maliyet: 3500,
+                bakim_maliyet: new Prisma.Decimal(3500),
                 bakim_tarihi: new Date(Date.now() - (i * 15 * 24 * 60 * 60 * 1000)),
                 aciklama: `Hatalı okuma nedeniyle ${badPart.parca_adi} değişimi.`
             }
@@ -432,20 +452,17 @@ async function main() {
     }
     const currentServis = (await prisma.servis_firma.findFirst())!.servis_firma_id;
     for (let i = 5; i <= 6; i++) { // Devam Eden
-        await prisma.bakim_kaydi.create({ data: { makine_id: allMachines[i].makine_id, servis_firma_id: currentServis, bakim_maliyet: 0, bakim_tarihi: new Date(), aciklama: "Bakım devam ediyor." } });
+        await prisma.bakim_kaydi.create({ data: { makine_id: allMachines[i].makine_id, servis_firma_id: currentServis, bakim_maliyet: new Prisma.Decimal(0), bakim_tarihi: new Date(), aciklama: "Bakım devam ediyor." } });
     }
     for (let i = 7; i <= 10; i++) { // Planlı
-        await prisma.bakim_kaydi.create({ data: { makine_id: allMachines[i].makine_id, servis_firma_id: currentServis, bakim_maliyet: 0, bakim_tarihi: new Date(Date.now() + (10 * 24 * 60 * 60 * 1000)), aciklama: "Planlı Bakım" } });
+        await prisma.bakim_kaydi.create({ data: { makine_id: allMachines[i].makine_id, servis_firma_id: currentServis, bakim_maliyet: new Prisma.Decimal(0), bakim_tarihi: new Date(Date.now() + (10 * 24 * 60 * 60 * 1000)), aciklama: "Planlı Bakım" } });
     }
     const costM = [18500, 12400, 14100]; // Bu Ay Maliyeti
     for (let i = 0; i < costM.length; i++) {
-        await prisma.bakim_kaydi.create({ data: { makine_id: allMachines[15 + i].makine_id, servis_firma_id: currentServis, bakim_maliyet: costM[i], bakim_tarihi: new Date(new Date().getFullYear(), new Date().getMonth(), 5 + i), aciklama: "Ağır bakım maliyeti." } });
+        await prisma.bakim_kaydi.create({ data: { makine_id: allMachines[15 + i].makine_id, servis_firma_id: currentServis, bakim_maliyet: new Prisma.Decimal(costM[i]), bakim_tarihi: new Date(new Date().getFullYear(), new Date().getMonth(), 5 + i), aciklama: "Ağır bakım maliyeti." } });
     }
 
     console.log("OEE, Üretim ve Duruş verileri üretiliyor...");
-    await prisma.uretim_kaydi.deleteMany({});
-    await prisma.durus_kaydi.deleteMany({});
-    await prisma.oee_raporlari.deleteMany({});
 
     for (const makine of allMachines) {
         for (let j = 0; j < 30; j++) {
@@ -457,11 +474,11 @@ async function main() {
             const durus_sure_dk = Math.floor(Math.random() * 61); // 0-60 dk arası
             const fiili_sure_dk = planlanan_sure_dk - durus_sure_dk;
             const teorik_uretim = 1000;
-            
+
             // %80 ile %98 arası
             const percentGercek = 0.8 + Math.random() * 0.18;
             const gercek_uretim = Math.floor(teorik_uretim * percentGercek);
-            
+
             // %1 ile %5 arası
             const percentHatali = 0.01 + Math.random() * 0.04;
             const hatali_uretim = Math.floor(gercek_uretim * percentHatali);
@@ -483,7 +500,7 @@ async function main() {
             if (durus_sure_dk > 0) {
                 const nedenler = ["Mekanik Arıza", "Ayar", "Parça Bekleme"];
                 const neden = nedenler[Math.floor(Math.random() * nedenler.length)];
-                
+
                 await prisma.durus_kaydi.create({
                     data: {
                         makine_id: makine.makine_id,

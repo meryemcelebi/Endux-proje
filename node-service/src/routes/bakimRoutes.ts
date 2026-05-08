@@ -1,17 +1,21 @@
 import { Router } from "express";
 
-import { 
-    bakimKaydiGir, 
-    makineBakimKayitlari, 
-    dusukStokUyarisi, 
-    bakimlariOnayla, 
-    bakimiYokSay, 
-    getOnayBekleyenler, 
-    getTeknikServisIsleri, 
+import {
+    bakimKaydiGir,
+    makineBakimKayitlari,
+    dusukStokUyarisi,
+    bakimlariOnayla,
+    bakimiYokSay,
+    getOnayBekleyenler,
+    getTeknikServisIsleri,
     TumBakimlarToplu,
     bakimPuaniKaydet,
-    bakimIsleminiOnayla
+    bakimIsleminiOnayla,
+    bakimBaslat,
+    qrBakimTamamla
 } from "../controllers/bakimKontrol";
+
+
 
 import { oturumKontrol, rolKontrol } from "../middlewares/yetki";
 
@@ -33,6 +37,9 @@ router.get('/tum-bakimlar', oturumKontrol, rolKontrol('YONETICI'), TumBakimlarTo
 
 
 
+// POST /api/bakimlar/qr-tamamla — QR okutarak sahada bakım tamamlama
+router.post('/qr-tamamla', oturumKontrol, qrBakimTamamla);
+
 // POST /api/bakimlar  — Yeni bakım kaydı oluşturur
 router.post('/', oturumKontrol, rolKontrol('TEKNISYEN', 'YONETICI', 'SERVIS'), bakimKaydiGir);
 
@@ -48,6 +55,11 @@ router.patch('/:bakim_id/puan', oturumKontrol, rolKontrol('YONETICI', 'TEKNISYEN
 // PATCH /api/bakimlar/:bakim_id/onayla — Teknik servis işlemini tamamlandı olarak işaretler
 router.patch('/:bakim_id/onayla', oturumKontrol, rolKontrol('YONETICI', 'TEKNISYEN'), bakimIsleminiOnayla);
 
+router.patch('/:bakim_id/baslat',
+    oturumKontrol,
+    rolKontrol("TEKNISYEN", "YONETICI"),
+    bakimBaslat
+);
 
 
 // GET /api/bakimlar/:makine_id — Makinenin bakım geçmişini getirir

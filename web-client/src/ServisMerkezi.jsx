@@ -39,16 +39,16 @@ export default function ServisMerkezi() {
       try {
         // Görevler, firmalar ve servis geçmişini eşzamanlı olarak çek
         const [taskData, firmData, historyData] = await Promise.all([
-          api.getTechTasks(),
+          api.getBekleyenIsler(),
           api.getFirms(),
           api.getAllServiceHistory()
         ]);
 
         const formattedTasks = taskData.map(t => ({
           ...t,
-          makine_ad: t.makine?.makine_adi || t.makine_adi || "Bilinmeyen",
-          ariza_notu: t.ariza_kaydi?.ariza_aciklama || t.aciklama || "Not yok",
-          tarih: t.bakim_tarihi ? new Date(t.bakim_tarihi).toLocaleDateString("tr-TR") : (t.tarih || "-"),
+          makine_ad: t.makine_adi || t.makine?.makine_adi || "Bilinmeyen",
+          ariza_notu: t.ariza_notu || t.ariza_kaydi?.ariza_aciklama || t.aciklama || "Not yok",
+          tarih: t.kayit_tarihi || (t.bakim_tarihi ? new Date(t.bakim_tarihi).toLocaleDateString("tr-TR") : "-"),
           durum: t.durum || "ONAYLANDI"
         }));
 
@@ -74,6 +74,7 @@ export default function ServisMerkezi() {
       await api.rateFirm(firmaId, puan);
       setFirms(firms.map(f => f.id === firmaId ? { ...f, ortalama_puan: puan } : f));
     } catch (error) {
+      console.error("Firma puanlama hatası:", error);
       alert("Puanlama sırasında hata oluştu!");
     }
   };
@@ -103,6 +104,7 @@ export default function ServisMerkezi() {
       setDisRatingValue(0);
       alert("İşlem puanı başarıyla kaydedildi!");
     } catch (error) {
+      console.error("Dış servis puanlama hatası:", error);
       alert("Hata: " + error.message);
     }
   };
@@ -140,16 +142,22 @@ export default function ServisMerkezi() {
       setFirms(updatedFirms);
       alert(`${firmData.tip} başarıyla eklendi!`);
     } catch (error) {
+      console.error("Firma eklenirken hata:", error);
       alert("Firma eklenirken hata oluştu!");
     }
   };
 
 
 
-  // RENDER: GÖREV LİSTESİ
+  // --- RAPOR MODAL STATE ---
+  const [raporModal, setRaporModal] = useState(null); // Tıklanan görevin detayı (null = kapalı)
+
+  // RENDER: GÖREV LİSTESİ (YENİ İŞ AKIŞI)
   const renderGorevListesi = () => {
-    // Sadece yöneticinin onayladığı veya tamamlanmış işleri göster
-    const approvedTasks = tasks.filter(t => t.durum !== "BEKLEYEN");
+    // Sadece ONAYLANDI ve TAMAMLANDI olan görevleri listele
+    const filteredTasks = tasks.filter(t =>
+      t.durum === "ONAYLANDI" || t.durum === "TAMAMLANDI"
+    );
 
     return (
       <div style={{ overflowX: "auto" }}>
@@ -160,29 +168,177 @@ export default function ServisMerkezi() {
               <th style={thStyle}>Durum</th>
               <th style={thStyle}>Arıza Notu</th>
               <th style={thStyle}>Kayıt Tarihi</th>
+              <th style={thStyle}>İşlem</th>
             </tr>
           </thead>
           <tbody>
-            {approvedTasks.length === 0 ? (
-              <tr><td colSpan="4" style={{ textAlign: "center", padding: "40px", color: "#95a5a6" }}>Henüz onaylanmış veya devam eden bir iş kaydı bulunamadı.</td></tr>
+            {filteredTasks.length === 0 ? (
+              <tr><td colSpan="5" style={{ textAlign: "center", padding: "40px", color: "#95a5a6" }}>Henüz onaylanmış veya tamamlanmış bir iş kaydı bulunamadı.</td></tr>
             ) : (
-              approvedTasks.map(t => (
-                <tr key={t.id} style={trStyle}>
-                  <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>{t.makine_ad}</td>
+              filteredTasks.map(t => (
+                <tr key={t.bakim_id} style={trStyle}>
+                  <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>{t.makine_ad || t.makine_adi}</td>
                   <td style={tdStyle}>
-                    <span style={t.durum === "TAMAMLANDI" ? badgeActive : { ...badgeInactive, background: "rgba(46, 204, 113, 0.1)", color: "#27ae60", border: "1px solid rgba(46, 204, 113, 0.2)" }}>
-                      {t.durum === "ONAYLANDI" ? "İŞLEMDE" : t.durum}
-                    </span>
+                    {t.durum === "ONAYLANDI" ? (
+                      <span style={{
+                        padding: "6px 14px",
+                        background: "rgba(243, 156, 18, 0.12)",
+                        color: "#e67e22",
+                        borderRadius: "20px",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                        border: "1px solid rgba(243, 156, 18, 0.3)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px"
+                      }}>
+                        📱 Sahada Müdahale Bekleniyor
+                      </span>
+                    ) : (
+                      <span style={{
+                        ...badgeActive,
+                        background: "rgba(46, 204, 113, 0.12)",
+                        color: "#27ae60",
+                        border: "1px solid rgba(46, 204, 113, 0.3)"
+                      }}>
+                        ✅ TAMAMLANDI
+                      </span>
+                    )}
                   </td>
                   <td style={{ ...tdStyle, maxWidth: "300px", whiteSpace: "normal" }}>{t.ariza_notu}</td>
                   <td style={tdStyle}>
-                    <div style={{ fontSize: "14px", color: "#555" }}>📅 {t.tarih}</div>
+                    <div style={{ fontSize: "14px", color: "#555" }}>📅 {t.tarih || t.kayit_tarihi}</div>
+                  </td>
+                  <td style={tdStyle}>
+                    {t.durum === "TAMAMLANDI" ? (
+                      <button
+                        onClick={() => setRaporModal(t)}
+                        style={{
+                          padding: "8px 16px",
+                          background: "linear-gradient(135deg, #3498db 0%, #2980b9 100%)",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "8px",
+                          fontSize: "12px",
+                          fontWeight: "bold",
+                          cursor: "pointer",
+                          boxShadow: "0 3px 10px rgba(52, 152, 219, 0.3)",
+                          transition: "all 0.2s",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px"
+                        }}
+                        onMouseOver={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 5px 15px rgba(52, 152, 219, 0.4)"; }}
+                        onMouseOut={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 3px 10px rgba(52, 152, 219, 0.3)"; }}
+                      >
+                        📄 Raporu Gör
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: "12px", color: "#bdc3c7", fontStyle: "italic" }}>QR ile tamamlanacak</span>
+                    )}
                   </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
+
+        {/* RAPOR MODAL (SALT OKUNUR) */}
+        {raporModal && (
+          <div style={{
+            position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+            background: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center",
+            alignItems: "center", zIndex: 1000, backdropFilter: "blur(4px)"
+          }}>
+            <div style={{
+              background: "white", padding: "30px", borderRadius: "20px",
+              width: "90%", maxWidth: "600px", boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+              maxHeight: "80vh", overflowY: "auto"
+            }}>
+              {/* Başlık */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "25px", borderBottom: "2px solid #f1f2f6", paddingBottom: "15px" }}>
+                <div>
+                  <h3 style={{ margin: 0, color: "#0f3460", fontSize: "20px" }}>📄 Bakım Raporu</h3>
+                  <p style={{ margin: "4px 0 0 0", color: "#7f8c8d", fontSize: "13px" }}>{raporModal.makine_ad || raporModal.makine_adi}</p>
+                </div>
+                <button
+                  onClick={() => setRaporModal(null)}
+                  style={{ background: "transparent", border: "none", fontSize: "22px", cursor: "pointer", color: "#999", padding: "5px 10px" }}
+                >✕</button>
+              </div>
+
+              {/* Rapor İçeriği */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                  <div style={raporKutuStil}>
+                    <div style={raporBaslikStil}>💰 Maliyet</div>
+                    <div style={{ fontSize: "22px", fontWeight: "bold", color: "#27ae60" }}>
+                      {Number(raporModal.bakim_maliyet || 0).toLocaleString("tr-TR")} ₺
+                    </div>
+                  </div>
+                  <div style={raporKutuStil}>
+                    <div style={raporBaslikStil}>⏱️ Duruş Süresi</div>
+                    <div style={{ fontSize: "22px", fontWeight: "bold", color: "#e74c3c" }}>
+                      {raporModal.durus_suresi || 0} Saat
+                    </div>
+                  </div>
+                </div>
+
+                <div style={raporKutuStil}>
+                  <div style={raporBaslikStil}>📅 Tamamlanma Tarihi</div>
+                  <div style={{ fontSize: "15px", color: "#2c3e50" }}>{raporModal.tarih || raporModal.kayit_tarihi || "-"}</div>
+                </div>
+
+                <div style={raporKutuStil}>
+                  <div style={raporBaslikStil}>🔧 Servis Firması</div>
+                  <div style={{ fontSize: "15px", color: "#2c3e50" }}>{raporModal.servis_firmasi || "Belirtilmemiş"}</div>
+                </div>
+
+                <div style={raporKutuStil}>
+                  <div style={raporBaslikStil}>👤 Teknisyen</div>
+                  <div style={{ fontSize: "15px", color: "#2c3e50" }}>{raporModal.teknisyen || "Belirtilmemiş"}</div>
+                </div>
+
+                <div style={raporKutuStil}>
+                  <div style={raporBaslikStil}>📝 Yapılan İş / Açıklama</div>
+                  <div style={{ fontSize: "14px", color: "#555", lineHeight: "1.6", fontStyle: "italic" }}>
+                    "{raporModal.aciklama || raporModal.ariza_notu || "Açıklama belirtilmemiş"}"
+                  </div>
+                </div>
+
+                {/* Değişen Parçalar */}
+                {raporModal.degisen_parcalar && raporModal.degisen_parcalar.length > 0 && (
+                  <div style={raporKutuStil}>
+                    <div style={raporBaslikStil}>🔩 Değişen Parçalar</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "8px" }}>
+                      {raporModal.degisen_parcalar.map((p, i) => (
+                        <div key={i} style={{
+                          display: "flex", justifyContent: "space-between",
+                          padding: "8px 12px", background: "#f8f9fa", borderRadius: "8px", fontSize: "13px"
+                        }}>
+                          <span style={{ color: "#2c3e50", fontWeight: "500" }}>{p.parca_adi}</span>
+                          <span style={{ color: "#7f8c8d" }}>x{p.adet} — {Number(p.maliyet || 0).toLocaleString("tr-TR")} ₺</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Kapat Butonu */}
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "25px" }}>
+                <button
+                  onClick={() => setRaporModal(null)}
+                  style={{
+                    padding: "12px 30px", background: "#1e293b", color: "white",
+                    border: "none", borderRadius: "10px", fontWeight: "bold",
+                    cursor: "pointer", fontSize: "14px"
+                  }}
+                >Kapat</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -731,6 +887,23 @@ const emptyListStil = {
   background: "#f8f9fa",
   borderRadius: "12px",
   border: "1px dashed #ddd"
+};
+
+// --- RAPOR MODAL STİLLERİ ---
+const raporKutuStil = {
+  background: "#f8f9fa",
+  padding: "16px",
+  borderRadius: "12px",
+  border: "1px solid #e1e5eb"
+};
+
+const raporBaslikStil = {
+  fontSize: "12px",
+  color: "#7f8c8d",
+  fontWeight: "bold",
+  textTransform: "uppercase",
+  letterSpacing: "0.5px",
+  marginBottom: "8px"
 };
 
 if (typeof document !== "undefined") {

@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { makineEkle, qrileMakineGetir, tumMakineBilgileriGetir, makineDetayGetir, QRKodYazdir } from "../controllers/makineKontrol";
-import { maliyetAnalizi,lokasyonHaritasi} from "../controllers/analizKontrol";
+import { makineEkle, qrileMakineGetir, tumMakineBilgileriGetir, makineDetayGetir, QRKodYazdir, makineDurumGuncelle } from "../controllers/makineKontrol";
+import { maliyetAnalizi, lokasyonHaritasi } from "../controllers/analizKontrol";
 import { oturumKontrol, rolKontrol } from "../middlewares/yetki";
 
 const router = Router();
@@ -47,12 +47,17 @@ router.get('/:id/maliyet-analizi',
     maliyetAnalizi
 );
 
+router.patch('/:id/durum',
+    oturumKontrol,
+    rolKontrol("YONETICI"),
+    makineDurumGuncelle
+);
 
 
 
 router.get('/:id',
     oturumKontrol,
-    rolKontrol("YONETICI", "TEKNISYEN"),
+    rolKontrol("YONETICI", "TEKNISYEN", "OPERATOR", "SERVIS"),
     makineDetayGetir
 );
 

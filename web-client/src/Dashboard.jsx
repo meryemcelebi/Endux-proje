@@ -20,7 +20,7 @@ export default function Dashboard() {
   const [, setIsLoading] = useState(true); // Veriler yüklenirken gösterilen yükleme durumu
   const [pendingApprovals, setPendingApprovals] = useState(0); // Servis firması tarafından tamamlanmış, kullanıcı puanı bekleyen kayıtlar
   const [pendingTasks, setPendingTasks] = useState([]); // Arıza kaydı açılmış ancak henüz teknisyen ataması bekleyen görevler
- const  [allHistory] = useState([]); // Grafikler için kullanılan geçmiş servis verileri
+  const [allHistory] = useState([]); // Grafikler için kullanılan geçmiş servis verileri
   const [isOeeModalOpen, setIsOeeModalOpen] = useState(false); // Verimlilik (OEE) detaylarını gösteren pencerenin durumu
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false); // Bakım/Onay detaylarını yöneten ana modalin durumu
   const [selectedTaskIds, setSelectedTaskIds] = useState([]); // Toplu onaylama işlemi için seçilen görevlerin ID'leri
@@ -38,10 +38,10 @@ export default function Dashboard() {
   const [fabrikaOee, setFabrikaOee] = useState(0); // Ana OEE skorunu tutmak için
 
   const getMachineStatus = (machine) => String(machine?.aktiflik_durumu || "").trim().toLowerCase();
-  const pendingMachines = machinesList.filter((machine) => {
-    const status = getMachineStatus(machine);
-    return status.includes("onay") && status.includes("bek");
-  });
+  const pendingMachines = pendingTasks.map((task) => ({
+    id: task.makine_id ?? task.id,
+    makine_adi: task.makine_ad || task.makine_adi || `Makine #${task.makine_id ?? task.id}`,
+  }));
   const bakimdaMachines = machinesList.filter((machine) => getMachineStatus(machine) === "bakımda");
   const yaklasanMachines = machinesList.filter((machine) => getMachineStatus(machine) === "bakımı yaklaşan");
   const activeMachines = machinesList.filter((machine) => {
@@ -52,32 +52,41 @@ export default function Dashboard() {
 
   // --- VERİ ÇEKME VE ZENGİNLEŞTİRME SÜRECİ ---
   React.useEffect(() => {
-  const fetchDashboardData = async () => {
-    try {
-      setIsLoading(true);
-      
-      // 1. ADIM: Tüm ağır işi backend'de yapan o tek fonksiyonu çağır!
-      const dashboardOzet = await api.getDashboardOzet(); // Backend'deki zengin veri
-      const operasyonelPerformans = dashboardOzet?.operasyonel_performans ?? {};
-      const acilAksiyonlar = dashboardOzet?.acil_aksiyonlar ?? {};
-      
-      // Backend'den gelen hazır özetleri state'lere dağıt
-      setFabrikaOee(Number(operasyonelPerformans.ortalama_oee ?? 0));
-      setPendingApprovals(Number(acilAksiyonlar.onay_bekleyen_is ?? 0));
-      // ... diğer set işlemleri
-      
-      // 2. ADIM: Sadece liste için gereken veriyi çek
-      const machinesData = await api.getMachines();
-      setMachinesList(machinesData);
+    const fetchDashboardData = async () => {
+      try {
+        setIsLoading(true);
 
-    } catch (err) {
-      console.error("Dashboard yükleme hatası:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  fetchDashboardData();
-}, []);
+        // 1. ADIM: Tüm ağır işi backend'de yapan o tek fonksiyonu çağır!
+        const response = await api.getDashboardOzet();
+
+        // KRİTİK DÜZELTME BURADA: Backend veriyi "data" objesi içinde gönderiyor!
+        // (Eğer api.js dosyasında zaten response.data olarak dönüyorsa diye güvenli bir atama yapıyoruz)
+        const gercekOzet = response?.data?.acil_aksiyonlar ? response.data : response;
+
+        const operasyonelPerformans = gercekOzet?.operasyonel_performans ?? {};
+        const acilAksiyonlar = gercekOzet?.acil_aksiyonlar ?? {};
+
+        // Backend'den gelen hazır özetleri state'lere dağıt
+        setFabrikaOee(Number(operasyonelPerformans.ortalama_oee ?? 0));
+        setPendingApprovals(Number(acilAksiyonlar.onay_bekleyen_is ?? 0));
+        
+        // Yeni Backend Formatından Onay Bekleyen Makineleri (Görevleri) Al
+        if (acilAksiyonlar.onay_bekleyen_makineler) {
+           setPendingTasks(acilAksiyonlar.onay_bekleyen_makineler);
+        }
+
+        // 2. ADIM: Sadece liste için gereken veriyi çek
+        const machinesData = await api.getMachines();
+        setMachinesList(machinesData);
+
+      } catch (err) {
+        console.error("Dashboard yükleme hatası:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchDashboardData();
+  }, []);
 
   // --- KRİTİK ALARMLARI BELİRLE ---
   // Sadece Yüksek Riskli olanları "Risky Machines" olarak al
@@ -89,13 +98,15 @@ export default function Dashboard() {
   const yRCount = riskyMachines.length;
 
 
-  // --- MALİYET VE BÜTÇE ANALİZİ (Reduce Kullanımı) ---
-  // Tüm makinelerin toplam satın alma bedelini hesapla
-  const toplamMakineAlim = machinesList.reduce((sum, m) => sum + (m.satin_alma_maliyeti || 0), 0);
-  // Geçmişteki tüm servis/parça harcamalarını topla
-  const toplamServisUcreti = allHistory.reduce((sum, h) => sum + (h.bakim_maliyet?.[0] || 0), 0);
-  // Parça masrafı: Servis ücretinin %40'ı olarak simüle edilen tahmini masraf
-  const toplamParcaMasrafi = Math.round(toplamServisUcreti * 0.4);
+  // --- MALİYET VE BÜTÇE ANALİZİ (Tamamen Canlı Veri) ---
+  const toplamMakineAlim = machinesList.reduce((sum, m) => sum + Number(m.satin_alma_maaliyeti || m.satin_alma_maliyeti || 0), 0);
+  const toplamServisUcreti = allHistory.reduce((sum, h) => sum + Number(h.bakim_maliyet || 0), 0);
+
+  // Parça masrafı: Bakım geçmişindeki parça değişim kayıtlarından gerçek toplamı hesapla
+  const toplamParcaMasrafi = allHistory.reduce((sum, h) => {
+    const parcaToplami = (h.parca_degisim || []).reduce((pSum, p) => pSum + (Number(p.parca?.parca_maliyeti || 0) * (p.adet || 1)), 0);
+    return sum + parcaToplami;
+  }, 0);
 
   // Grafik ölçeklendirmesi için en yüksek maliyeti bul
   const maxMaliyet = Math.max(toplamMakineAlim, toplamServisUcreti, toplamParcaMasrafi, 1);
@@ -149,17 +160,18 @@ export default function Dashboard() {
     if (selectedTaskIds.length === 0) return;
 
     try {
-      if (selectedTaskIds.length > 0) {
-        await Promise.all(selectedTaskIds.map(id => api.updateTaskStatus(id, "ONAYLANDI")));
-      }
+      await api.sendTasksToTechnicalService(selectedTaskIds);
 
       const count = selectedTaskIds.length;
-      alert(`${count} Adet bakım görevi onaylandı ve teknik servis listesine aktarıldı!`);
+      const selectedIdSet = new Set(selectedTaskIds);
 
       // Onaylananları listeden çıkar ve seçimleri sıfırla
-      setPendingTasks(prev => prev.filter(t => !selectedTaskIds.includes(t.id)));
+      setPendingTasks(prev => prev.filter(t => !selectedIdSet.has(t.id)));
+      setPendingApprovals(prev => Math.max(0, prev - count));
       setSelectedTaskIds([]);
       setIsApprovalModalOpen(false);
+      window.alert(`${count} adet makine bakımı onaylandı ve teknik servise gönderildi!`);
+      navigate("/teknik-servis");
     } catch (err) {
       console.error("Görevler onaylanırken hata oluştu", err);
       alert("Görevler onaylanırken bir hata oluştu!");
@@ -225,33 +237,23 @@ export default function Dashboard() {
       else if (gercekMaliyetYuzdesi >= 5) { renkCode = "#F59E0B"; kRit = "Uyarı / Risk"; }
       else { renkCode = "#22C55E"; kRit = "İdeal"; }
 
-      const dbAlan = m.lokasyon?.[0]?.fabrika_alani;
-      // Kat ataması: %50 zemin, %50 1. kat (ancak sıralı değil, daha karışık)
-      let targetKat = m.lokasyon?.[0]?.kat || (index % 5 < 3 ? "Zemin Kat" : "1. Kat");
-
-      let targetBlock = dbAlan;
-      if (!targetBlock) {
-        const mName = (m.ad || "").toUpperCase();
-        if (targetKat === "Zemin Kat") {
-          if (mName.includes("PRES") || mName.includes("BASKI")) targetBlock = "BÖLGE 1";
-          else if (mName.includes("LAZER") || mName.includes("KESİM")) targetBlock = "BÖLGE 2";
-          else if (mName.includes("MONTAJ") || mName.includes("HATT")) targetBlock = "BÖLGE 3";
-          else if (mName.includes("DEPO") || mName.includes("LOJİSTİK") || mName.includes("STOK")) targetBlock = "DEPO";
-          // Dağıtımı düzelttik: index % 4 yerine farklı bir çarpan kullanarak tüm bölgelere yayıyoruz
-          else targetBlock = ["BÖLGE 1", "BÖLGE 2", "BÖLGE 3", "DEPO"][(index * 3) % 4];
-        } else {
-          if (mName.includes("OFİS") || mName.includes("MASA")) targetBlock = "OFİS";
-          else if (mName.includes("KALİTE") || mName.includes("TEST")) targetBlock = "KALİTE";
-          else if (mName.includes("TEKNİK") || mName.includes("BAKIM")) targetBlock = "TEKNİK";
-          else targetBlock = ["BÖLGE D", "TEKNİK", "OFİS", "KALİTE"][(index * 7) % 4];
-        }
-      }
+      const loc = m.lokasyon?.[0];
+      const targetKat = loc?.kat || "Zemin";
+      const targetBlock = loc?.fabrika_alani || "BÖLGE 1";
 
       if (!acc[targetKat]) acc[targetKat] = {};
       if (!acc[targetKat][targetBlock]) acc[targetKat][targetBlock] = [];
 
       const displayNo = index + 1;
-      acc[targetKat][targetBlock].push({ ...m, gercekMaliyetYuzdesi, renkCode, kRit, displayNo });
+      acc[targetKat][targetBlock].push({
+        ...m,
+        gercekMaliyetYuzdesi,
+        renkCode,
+        kRit,
+        displayNo,
+        x: loc?.x_koor != null ? Number(loc.x_koor) : undefined,
+        y: loc?.y_koor != null ? Number(loc.y_koor) : undefined
+      });
       return acc;
     }, {});
 
@@ -266,19 +268,33 @@ export default function Dashboard() {
           padding: '10px'
         }}>
           {machines.map((m, i) => {
-            // Kenar dizilimi hesaplama (Basit bir çevre dizilimi)
-            let pos = {};
+            // Makineleri kutunun çevresine (kenarlarına) sırayla diz
             const count = machines.length;
-            const sideCount = Math.ceil(count / 4);
+            const boxSize = isLarge ? 24 : 18;
+            const padding = 8;
+            // Her kenara kaç makine düşeceğini hesapla
+            const perSide = Math.max(1, Math.ceil(count / 4));
+            let pos = {};
 
-            if (i < sideCount) { // Üst kenar
-              pos = { top: '5px', left: `${(i / sideCount) * 85 + 5}%` };
-            } else if (i < sideCount * 2) { // Sağ kenar
-              pos = { right: '5px', top: `${((i - sideCount) / sideCount) * 75 + 15}%` };
-            } else if (i < sideCount * 3) { // Alt kenar
-              pos = { bottom: '5px', right: `${((i - sideCount * 2) / sideCount) * 85 + 5}%` };
-            } else { // Sol kenar
-              pos = { left: '5px', bottom: `${((i - sideCount * 3) / sideCount) * 75 + 15}%` };
+            if (i < perSide) {
+              // ÜST KENAR: soldan sağa
+              const step = (100 - padding * 2) / Math.max(perSide, 1);
+              pos = { top: `${padding}%`, left: `${padding + i * step}%` };
+            } else if (i < perSide * 2) {
+              // SAĞ KENAR: yukarıdan aşağıya
+              const idx = i - perSide;
+              const step = (100 - padding * 2) / Math.max(perSide, 1);
+              pos = { top: `${padding + idx * step}%`, right: `${padding}%` };
+            } else if (i < perSide * 3) {
+              // ALT KENAR: sağdan sola
+              const idx = i - perSide * 2;
+              const step = (100 - padding * 2) / Math.max(perSide, 1);
+              pos = { bottom: `${padding}%`, right: `${padding + idx * step}%` };
+            } else {
+              // SOL KENAR: aşağıdan yukarıya
+              const idx = i - perSide * 3;
+              const step = (100 - padding * 2) / Math.max(perSide, 1);
+              pos = { bottom: `${padding + idx * step}%`, left: `${padding}%` };
             }
 
             return (
@@ -302,7 +318,7 @@ export default function Dashboard() {
                 }}
                 onMouseOver={(e) => { e.currentTarget.style.transform = 'scale(1.3) rotate(5deg)'; e.currentTarget.style.zIndex = 20; }}
                 onMouseOut={(e) => { e.currentTarget.style.transform = 'scale(1) rotate(0deg)'; e.currentTarget.style.zIndex = 5; }}
-                title={`${m.ad}\nRisk: %${m.gercekMaliyetYuzdesi}`}
+                title={`${m.makine_adi || m.ad}\nRisk: %${m.gercekMaliyetYuzdesi}`}
               >
                 {m.displayNo}
               </div>
@@ -425,40 +441,40 @@ export default function Dashboard() {
           {activeFloor === 0 ? (
             <>
               <div style={gridZoneStyle}>
-                <span style={zoneLabelStyle}>BÖLGE 1 (PRES)</span>
-                {renderMachinesInZone(groupedMachines["Zemin Kat"]?.["BÖLGE 1"] || [])}
+                <span style={zoneLabelStyle}>BÖLGE 1 </span>
+                {renderMachinesInZone(groupedMachines["Zemin"]?.["BÖLGE 1"] || [])}
               </div>
               <div style={aisleStyleV}>YOL</div>
               <div style={gridZoneStyle}>
-                <span style={zoneLabelStyle}>BÖLGE 2 (LAZER)</span>
-                {renderMachinesInZone(groupedMachines["Zemin Kat"]?.["BÖLGE 2"] || [])}
+                <span style={zoneLabelStyle}>BÖLGE 2 </span>
+                {renderMachinesInZone(groupedMachines["Zemin"]?.["BÖLGE 2"] || [])}
               </div>
               <div style={aisleStyleV}>YOL</div>
               <div style={gridZoneStyle}>
-                <span style={zoneLabelStyle}>BÖLGE 3 (MONTAJ)</span>
-                {renderMachinesInZone(groupedMachines["Zemin Kat"]?.["BÖLGE 3"] || [])}
+                <span style={zoneLabelStyle}>BÖLGE 3 </span>
+                {renderMachinesInZone(groupedMachines["Zemin"]?.["BÖLGE 3"] || [])}
               </div>
               <div style={{ ...aisleStyleH, gridColumn: "span 5" }}>ANA LOJİSTİK AKSI</div>
               <div style={{ ...gridZoneStyle, gridColumn: "span 5" }}>
                 <span style={zoneLabelStyle}>DEPO VE SEVKİYAT MERKEZİ</span>
-                {renderMachinesInZone(groupedMachines["Zemin Kat"]?.["DEPO"] || [])}
+                {renderMachinesInZone(groupedMachines["Zemin"]?.["DEPO"] || [])}
               </div>
             </>
           ) : (
             <>
               <div style={gridZoneStyle}>
-                <span style={zoneLabelStyle}>BÖLGE D</span>
-                {renderMachinesInZone(groupedMachines["1. Kat"]?.["BÖLGE D"] || [])}
+                <span style={zoneLabelStyle}>BÖLGE 4 </span>
+                {renderMachinesInZone(groupedMachines["1.Kat"]?.["BÖLGE D"] || [])}
               </div>
               <div style={aisleStyleV}>YOL</div>
               <div style={gridZoneStyle}>
                 <span style={zoneLabelStyle}>TEKNİK SERVİS</span>
-                {renderMachinesInZone(groupedMachines["1. Kat"]?.["TEKNİK"] || [])}
+                {renderMachinesInZone(groupedMachines["1.Kat"]?.["TEKNİK"] || [])}
               </div>
               <div style={aisleStyleV}>YOL</div>
               <div style={gridZoneStyle}>
-                <span style={zoneLabelStyle}>LABORATUVAR</span>
-                {renderMachinesInZone(groupedMachines["1. Kat"]?.["OFİS"] || [])}
+                <span style={zoneLabelStyle}>PERSONEL ALANI </span>
+                {renderMachinesInZone(groupedMachines["1.Kat"]?.["OFİS"] || [])}
               </div>
               <div style={{ ...aisleStyleH, gridColumn: "span 5" }}>YÖNETİM KORİDORU</div>
               <div style={gridZoneStyle}>
@@ -467,8 +483,8 @@ export default function Dashboard() {
               </div>
               <div style={aisleStyleV}>YOL</div>
               <div style={{ ...gridZoneStyle, gridColumn: "span 3" }}>
-                <span style={zoneLabelStyle}>KALİTE KONTROL</span>
-                {renderMachinesInZone(groupedMachines["1. Kat"]?.["KALİTE"] || [])}
+                <span style={zoneLabelStyle}>BÖLGE 5</span>
+                {renderMachinesInZone(groupedMachines["1.Kat"]?.["KALİTE"] || [])}
               </div>
             </>
           )}
@@ -613,7 +629,7 @@ export default function Dashboard() {
               onMouseOver={(e) => { e.currentTarget.style.transform = "scale(1.02)"; e.currentTarget.style.boxShadow = "0 8px 16px rgba(0, 0, 0, 0.1)"; }}
               onMouseOut={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 15px rgba(0,0,0,0.05)"; }}
             >
-              
+
               <div style={{ fontSize: "11px", color: "#2ecc71", fontWeight: "bold", background: "rgba(46, 204, 113, 0.1)", padding: "4px 8px", borderRadius: "15px", marginTop: "8px" }}>Canlı Verimlilik Analizi</div>
               <div style={{ fontSize: "42px", fontWeight: "900", color: "#27ae60", marginTop: "5px", textShadow: "0 2px 4px rgba(0,0,0,0.05)" }}>%{fabrikaOee}</div>
               <div style={{ fontSize: "12px", color: "#2ecc71", fontWeight: "bold", background: "rgba(46, 204, 113, 0.1)", padding: "4px 8px", borderRadius: "15px", marginTop: "8px" }}></div>
@@ -705,25 +721,25 @@ export default function Dashboard() {
           {
             isMapExpanded && (
               <div style={modalOverlayStyle} onClick={() => setIsMapExpanded(false)}>
-                <div style={{ ...modalContentStyle, maxWidth: "90%", width: "1200px", height: "80vh", position: "relative" }} onClick={(e) => e.stopPropagation()}>
-                  <button onClick={() => setIsMapExpanded(false)} style={{ ...closeBtnStyle, position: "absolute", top: "20px", right: "20px", fontSize: "30px" }}>✕</button>
+                <div style={{ ...modalContentStyle, maxWidth: "95%", width: "1300px", height: "90vh", position: "relative", padding: "0", background: "transparent", boxShadow: "none" }} onClick={(e) => e.stopPropagation()}>
+                  <button onClick={() => setIsMapExpanded(false)} style={{ ...closeBtnStyle, position: "absolute", top: "20px", right: "20px", zIndex: 100, background: "#1e293b", color: "white", width: "40px", height: "40px", fontSize: "20px" }}>✕</button>
 
-                  <div style={{ position: "absolute", top: "25px", right: "80px", display: "flex", gap: "10px", zIndex: 10 }}>
+                  {renderFloorPlan(true)}
+
+                  <div style={{ position: "absolute", top: "25px", right: "100px", display: "flex", gap: "10px", zIndex: 1100 }}>
                     <button
-                      onClick={() => setActiveFloor(0)}
+                      onClick={(e) => { e.stopPropagation(); setActiveFloor(0); }}
                       style={{ ...floorBtnStyle, padding: "10px 20px", background: activeFloor === 0 ? "#34495e" : "#f1f2f6", color: activeFloor === 0 ? "white" : "#333" }}
                     >
                       Zemin Kat
                     </button>
                     <button
-                      onClick={() => setActiveFloor(1)}
+                      onClick={(e) => { e.stopPropagation(); setActiveFloor(1); }}
                       style={{ ...floorBtnStyle, padding: "10px 20px", background: activeFloor === 1 ? "#34495e" : "#f1f2f6", color: activeFloor === 1 ? "white" : "#333" }}
                     >
                       1. Kat
                     </button>
                   </div>
-
-                  {renderFloorPlan(true)}
 
 
                 </div>
@@ -879,34 +895,9 @@ export default function Dashboard() {
                                   }}
                                 />
                                 <div style={{ flex: 1 }}>
-                                  <div style={{ fontWeight: "700", color: "#1e293b", fontSize: "14px" }}>{t.makine_ad}</div>
+                                  <div style={{ fontWeight: "700", color: "#1e293b", fontSize: "14px" }}>{t.makine_ad} <span style={{fontSize:"11px", color:"#94a3b8", fontWeight:"normal"}}>(ID: {t.id})</span></div>
                                   <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>{t.ariza_notu}</div>
                                 </div>
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    const machine = machinesList.find(m => m.ad === t.makine_ad);
-                                    if (machine) navigate(`/makine/${machine.id}`);
-                                    else alert("Makine detay bilgisi bulunamadı.");
-                                  }}
-                                  style={{
-                                    padding: "6px 12px",
-                                    background: "#f1f5f9",
-                                    color: "#475569",
-                                    border: "1px solid #e2e8f0",
-                                    borderRadius: "8px",
-                                    fontSize: "11px",
-                                    fontWeight: "800",
-                                    cursor: "pointer",
-                                    transition: "0.2s",
-                                    whiteSpace: "nowrap"
-                                  }}
-                                  onMouseOver={(e) => { e.currentTarget.style.background = "#e2e8f0"; e.currentTarget.style.color = "#1e293b"; }}
-                                  onMouseOut={(e) => { e.currentTarget.style.background = "#f1f5f9"; e.currentTarget.style.color = "#475569"; }}
-                                >
-                                  Detay Gör
-                                </button>
                               </label>
                             );
                           })
@@ -931,7 +922,7 @@ export default function Dashboard() {
                               transition: "all 0.2s"
                             }}
                           >
-                            {selectedTaskIds.length} BAKIMI ONAYLA
+                            {selectedTaskIds.length}  BAKIMA GÖNDER
                           </button>
                           <button
                             onClick={handleBulkIgnore}
@@ -1156,7 +1147,21 @@ const modalOverlayStyle = { position: "absolute", top: 0, left: 0, right: 0, bot
 const modalContentStyle = { background: "white", padding: "30px", borderRadius: "12px", width: "100%", maxWidth: "600px", boxShadow: "0 10px 40px rgba(0,0,0,0.2)" };
 
 // Genel kapatma butonu (X)
-const closeBtnStyle = { background: "transparent", border: "none", fontSize: "20px", cursor: "pointer", color: "#999" };
+const closeBtnStyle = {
+  background: "#f1f5f9",
+  border: "none",
+  width: "36px",
+  height: "36px",
+  borderRadius: "50%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "18px",
+  cursor: "pointer",
+  color: "#475569",
+  transition: "all 0.2s",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.15)"
+};
 
 // Aksiyon butonları (e.g. Detay Gör, Yoksay)
 const btnStyle = { minWidth: "115px", padding: "10px 5px", background: "#e94560", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", fontSize: "13px", transition: "0.2s", textAlign: "center" };

@@ -48,12 +48,12 @@ export default function Bakim() {
       const d = new Date(h.bakim_tarihi);
       return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     })
-    .reduce((sum, h) => sum + (h.bakim_maliyet || 0), 0);
+    .reduce((sum, h) => sum + (Number(h.bakim_maliyet) || 0), 0);
 
   // 4. Makine Bazlı Maliyet Tablosu (Aggregated)
   const maliyetOzet = machines.map(m => {
     const mHistory = history.filter(h => h.makine_id === m.makine_id);
-    const totalCost = mHistory.reduce((sum, h) => sum + (h.bakim_maliyet || 0), 0);
+    const totalCost = mHistory.reduce((sum, h) => sum + (Number(h.bakim_maliyet) || 0), 0);
     const lastMaint = mHistory.length > 0
       ? new Date(Math.max(...mHistory.map(h => new Date(h.bakim_tarihi)))).toLocaleDateString("tr-TR")
       : "Yok";
@@ -84,7 +84,7 @@ export default function Bakim() {
         const d = new Date(h.bakim_tarihi);
         return d.getMonth() === m && d.getFullYear() === y;
       })
-      .reduce((sum, h) => sum + (h.bakim_maliyet || 0), 0);
+      .reduce((sum, h) => sum + (Number(h.bakim_maliyet) || 0), 0);
 
     last3Months.push({ name: monthName, cost });
   }

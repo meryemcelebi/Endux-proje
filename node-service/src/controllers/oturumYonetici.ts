@@ -97,10 +97,10 @@ export async function servisGiris(req: Request, res: Response, next: NextFunctio
         }
 
         const makine = await prisma.makine.findFirst({
-            where : { servis_pin: Number(servis_pin) }
+            where: { servis_pin: Number(servis_pin) }
         });
 
-        if(!makine || (qr_uuid && makine.makine_qr !== qr_uuid)){
+        if (!makine || (qr_uuid && makine.makine_qr !== qr_uuid)) {
             res.status(401).json({
                 success: false,
                 message: 'Geçersiz Pin Kodu.'
@@ -109,71 +109,71 @@ export async function servisGiris(req: Request, res: Response, next: NextFunctio
         }
 
         const servisFirma = await prisma.servis_firma.findUnique({
-            where : { servis_firma_id : Number(servis_firma_id) }
+            where: { servis_firma_id: Number(servis_firma_id) }
 
         });
 
-        if(!servisFirma){
+        if (!servisFirma) {
             res.status(401).json({
                 success: false,
                 message: 'Servis firması bulunamadi.'
             });
-            return ;
+            return;
         }
 
-       let servisSorumlusu = await prisma.servis_sorumlusu.findFirst({
-        where : {
-            servis_firma_id: Number(servis_firma_id),
-            telefon: String(telefon)
-        }
-    });
+        let servisSorumlusu = await prisma.servis_sorumlusu.findFirst({
+            where: {
+                servis_firma_id: Number(servis_firma_id),
+                telefon: String(telefon)
+            }
+        });
 
-    let yeniKayitMi = false;
+        let yeniKayitMi = false;
 
-    if(!servisSorumlusu){
-        //kişi sisteme daha önce girmemis - kayıt olusturulur
-        servisSorumlusu = await prisma.servis_sorumlusu.create({
-            data: {
+        if (!servisSorumlusu) {
+            //kişi sisteme daha önce girmemis - kayıt olusturulur
+            servisSorumlusu = await prisma.servis_sorumlusu.create({
+                data: {
                     ad: String(ad),
                     soyad: String(soyad),
                     telefon: String(telefon),
                     unvan: unvan ? String(unvan) : null,
                     servis_firma_id: Number(servis_firma_id),
                     aktiflik: true
-            }
-        });
-        yeniKayitMi = true ;
-    }
+                }
+            });
+            yeniKayitMi = true;
+        }
         else {
-             // Kişi zaten var — bilgilerini güncelle (ad/soyad/unvan değişmiş olabilir)
-             servisSorumlusu = await prisma.servis_sorumlusu.update({
-                where : {
+            // Kişi zaten var — bilgilerini güncelle (ad/soyad/unvan değişmiş olabilir)
+            servisSorumlusu = await prisma.servis_sorumlusu.update({
+                where: {
                     sorumlu_id: servisSorumlusu.sorumlu_id
                 },
-                data : {
-                      ad: String(ad),
+                data: {
+                    ad: String(ad),
                     soyad: String(soyad),
                     unvan: unvan ? String(unvan) : servisSorumlusu.unvan,
                     aktiflik: true
                 }
-             });
+            });
 
         }
         //token uret
         const token = generateToken({
-           userId: servisSorumlusu.sorumlu_id.toString(),
+            userId: servisSorumlusu.sorumlu_id.toString(),
             kullanici_adi: `servis_${servisSorumlusu.ad.toLowerCase()}_${servisSorumlusu.soyad.toLowerCase()}`,
-            rol: 'SERVIS' 
+            rol: 'SERVIS'
         });
         res.status(200).json({
-            succes: true,
+            success: true,
             message: yeniKayitMi
-             ? 'Yeni servis sorumlusu kaydedildi ve giriş başarılı.'
-             : 'Mevcut servis sorumlusu ile giriş başarılı.',
+                ? 'Yeni servis sorumlusu kaydedildi ve giriş başarılı.'
+                : 'Mevcut servis sorumlusu ile giriş başarılı.',
             yeniKayit: yeniKayitMi,
             token,
             data: {
-                 sorumlu_id: servisSorumlusu.sorumlu_id,
+                sorumlu_id: servisSorumlusu.sorumlu_id,
                 ad: servisSorumlusu.ad,
                 soyad: servisSorumlusu.soyad,
                 unvan: servisSorumlusu.unvan,
@@ -191,11 +191,10 @@ export async function servisGiris(req: Request, res: Response, next: NextFunctio
     } catch (error) {
         next(error);
     }
-            }
-     
+}
 
 
 
 
 
-    
+
