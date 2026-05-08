@@ -36,7 +36,6 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
             }
         }
 
-        // 3. İŞLEM (TRANSACTION) BAŞLIYOR
         const sonuc = await prisma.$transaction(async (tx) => {
 
             // A. Bakım Kaydını Oluştur
@@ -61,7 +60,7 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                 },
             });
 
-            // B. TPM İş Akışı: Makineyi otomatik olarak Aktif yap!
+            
             await tx.makine.update({
                 where: { makine_id: Number(makine_id) },
                 data: { aktiflik_durumu: true }
@@ -80,7 +79,7 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                 });
             }
 
-            // D. Parça değişimleri ve stok düşme (ÇİFT KAYIT BUG'I TEMİZLENDİ)
+            
             if (degisen_Parcalar && Array.isArray(degisen_Parcalar) && degisen_Parcalar.length > 0) {
                 for (const parca of degisen_Parcalar) {
                     const parcaId = Number(parca.parca_id);
@@ -109,7 +108,7 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                         data: {
                             bakim_id: bakimKaydi.bakim_id,
                             parca_id: parcaId,
-                            adet: adet // Orijinalinde adet kolonu yoktu, şemanda varsa bu çalışır
+                            adet: adet 
                         }
                     });
 
@@ -178,7 +177,7 @@ export const makineBakimKayitlari = async (req: Request, res: Response) => {
                     },
                 },
                 //değişen parçaların bilgileri (parca_degisim tablosundan)
-                // parca_degisim → parca ilişkisi üzerinden parça bilgilerine erişiyoruz
+                
                 parca_degisim: {
                     include: {
                         parca: {
