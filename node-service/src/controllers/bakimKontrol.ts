@@ -535,7 +535,7 @@ export const bakimPuaniKaydet = async (req: Request, res: Response) => {
     try {
         const bakimId = Number(req.params.bakim_id);
         const puanDegeri = Number(req.body?.puan);
-        const puanlayanKullaniciId = Number(req.user?.userId);
+        const puanlayanKullaniciId = Number((req as any).user?.userId);
 
         if (!bakimId || Number.isNaN(bakimId)) {
             return res.status(400).json({ success: false, message: "Geçerli bir bakım ID gereklidir." });
@@ -761,7 +761,7 @@ export const qrBakimTamamla = async (req: Request, res: Response) => {
         // ─── DEBUG LOG: Gelen veriyi konsola bas ───
         console.log('─────────────────────────────────────────');
         console.log('[QR-TAMAMLA] Gelen istek body:', JSON.stringify(req.body, null, 2));
-        console.log('[QR-TAMAMLA] Kullanıcı:', req.user?.userId, '| Rol:', req.user?.rol);
+        console.log('[QR-TAMAMLA] Kullanıcı:', (req as any).user?.userId, '| Rol:', (req as any).user?.rol);
         console.log('─────────────────────────────────────────');
 
         const {
