@@ -14,6 +14,8 @@ router.get('/teknik-servis', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('YON
 router.get('/tum-bakimlar', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('YONETICI'), bakimKontrol_1.TumBakimlarToplu);
 // POST /api/bakimlar/qr-tamamla — QR okutarak sahada bakım tamamlama
 router.post('/qr-tamamla', yetki_1.oturumKontrol, bakimKontrol_1.qrBakimTamamla);
+// POST /api/bakimlar/acil-bildir — Riskli makineden doğrudan teknik servis iş emri oluşturur
+router.post('/acil-bildir', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('YONETICI'), bakimKontrol_1.acilBakimBildir);
 // POST /api/bakimlar  — Yeni bakım kaydı oluşturur
 router.post('/', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('TEKNISYEN', 'YONETICI', 'SERVIS'), bakimKontrol_1.bakimKaydiGir);
 // PUT /api/bakimlar/onayla — Bekleyen bakımları onaylar (Teknik Servis'e aktarır)

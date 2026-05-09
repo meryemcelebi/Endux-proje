@@ -205,7 +205,26 @@ export default function ServisMerkezi() {
                       </span>
                     )}
                   </td>
-                  <td style={{ ...tdStyle, maxWidth: "300px", whiteSpace: "normal" }}>{t.ariza_notu}</td>
+                  <td style={{ ...tdStyle, maxWidth: "300px", whiteSpace: "normal" }}>
+                    {t.acil_bildirim && (
+                      <span style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        marginBottom: "6px",
+                        padding: "4px 10px",
+                        background: "#fee2e2",
+                        color: "#b91c1c",
+                        border: "1px solid #fecaca",
+                        borderRadius: "999px",
+                        fontSize: "11px",
+                        fontWeight: "900"
+                      }}>
+                        Acil Bildirim
+                      </span>
+                    )}
+                    <div>{t.ariza_notu}</div>
+                  </td>
                   <td style={tdStyle}>
                     <div style={{ fontSize: "14px", color: "#555" }}>📅 {t.tarih?.split('T')[0] || t.kayit_tarihi?.split('T')[0]}</div>
                   </td>

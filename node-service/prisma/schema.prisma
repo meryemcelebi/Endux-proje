@@ -20,7 +20,7 @@ model ai_ariza_tespit {
   form_id              Int
   madde_id             Int
   tahmin_edilen_ariza  String?              @db.VarChar(200)
-  risk_skoru           Decimal?             @db.Decimal(3, 2)
+  risk_skoru           Decimal?             @db.Decimal(5, 2)
   tespit_tarihi        DateTime?            @db.Timestamptz(6)
   model_versiyon       String?              @db.VarChar(100)
   tahmini_durus_suresi Decimal?             @db.Decimal(6, 2)

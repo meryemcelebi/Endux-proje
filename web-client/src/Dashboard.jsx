@@ -29,6 +29,8 @@ export default function Dashboard() {
   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
   const [activeBreakdownId, setActiveBreakdownId] = useState(null);
   const [breakdownDesc, setBreakdownDesc] = useState("");
+  const [emergencySubmitId, setEmergencySubmitId] = useState(null);
+  const [ignoredRiskIds, setIgnoredRiskIds] = useState([]);
   const [activeFloor, setActiveFloor] = useState(0); // Fabrika haritası kat kontrolü
   const [isMapExpanded, setIsMapExpanded] = useState(false); // Harita büyütme durumu
 
@@ -43,7 +45,10 @@ export default function Dashboard() {
     makine_adi: task.makine_ad || task.makine_adi || `Makine #${task.makine_id ?? task.id}`,
   }));
   const bakimdaMachines = machinesList.filter((machine) => getMachineStatus(machine) === "bakımda");
-  const yaklasanMachines = machinesList.filter((machine) => getMachineStatus(machine) === "bakımı yaklaşan");
+  const yaklasanMachines = machinesList.filter((machine) => {
+    const riskSkoru = Number(machine?.mevcut_risk_skoru || 0);
+    return getMachineStatus(machine) !== "bakımda" && riskSkoru >= 50 && riskSkoru < 80;
+  });
   const activeMachines = machinesList.filter((machine) => {
     const status = getMachineStatus(machine);
     return status === "aktif" || status === "normal" || status === "çalışıyor";
@@ -91,9 +96,11 @@ export default function Dashboard() {
   }, []);
 
   // --- KRİTİK ALARMLARI BELİRLE ---
-  // Sadece Yüksek Riskli olanları "Risky Machines" olarak al
   const riskyMachines = machinesList.filter(m =>
-    m.kategori === "Yüksek Riskli"
+    m?.id &&
+    (m.ad || m.makine_adi) &&
+    !ignoredRiskIds.includes(m.id) &&
+    (Number(m.mevcut_risk_skoru || 0) >= 80 || m.risk_seviyesi === "YUKSEK" || m.kategori === "Yüksek Riskli")
   );
 
   // Sayısal özet verileri
@@ -123,10 +130,43 @@ export default function Dashboard() {
   // --- HANDLERS (Olay Yakalayıcılar) ---
 
   // Yeni bir arıza kaydı oluşturma işlemi (Bildirim simülasyonu)
-  const handleCreateBreakdown = (mach) => {
-    alert(mach.ad + " için arıza kaydı başarıyla oluşturuldu!" + (breakdownDesc ? "\nNot: " + breakdownDesc : ""));
+  const handleCreateBreakdown = async (mach) => {
+    const aciklama = breakdownDesc.trim();
+    if (!aciklama) {
+      alert("Lütfen detaylı arıza açıklaması yazın.");
+      return;
+    }
+
+    try {
+      setEmergencySubmitId(mach.id);
+      const response = await api.createEmergencyMaintenance({
+        makine_id: mach.id,
+        aciklama,
+      });
+
+      setMachinesList(prev => prev.map(machine =>
+        machine.id === mach.id
+          ? { ...machine, aktiflik_durumu: "Pasif", bakim_kaydi: [...(machine.bakim_kaydi || []), response.data] }
+          : machine
+      ));
+      setIgnoredRiskIds(prev => prev.includes(mach.id) ? prev : [...prev, mach.id]);
+      setActiveBreakdownId(null);
+      setBreakdownDesc("");
+      alert(`${mach.ad || mach.makine_adi} için acil bakım iş emri teknik servise aktarıldı.`);
+      navigate("/teknik-servis");
+    } catch (err) {
+      console.error("Acil bakım bildirimi oluşturulurken hata:", err);
+      alert("Acil bakım bildirimi oluşturulurken hata oluştu: " + err.message);
+    } finally {
+      setEmergencySubmitId(null);
+    }
+  };
+
+  const handleIgnoreMachine = (machineId, machineName) => {
+    const confirmIgnore = window.confirm(`${machineName || "Makine"} kritik uyarılar listesinden gizlensin mi?`);
+    if (!confirmIgnore) return;
+    setIgnoredRiskIds(prev => prev.includes(machineId) ? prev : [...prev, machineId]);
     setActiveBreakdownId(null);
-    setBreakdownDesc("");
   };
 
 
@@ -142,6 +182,7 @@ export default function Dashboard() {
 
   // İkon yardımcı fonksiyonu: Kategoriye göre emoji döndürür
   const getCategoryIcon = (kat) => {
+    kat = kat || "";
     if (kat.includes("Riskli")) return "⚠️";
     if (kat.includes("Yaklaşan")) return "⏳";
     return "🔧";
@@ -963,68 +1004,64 @@ export default function Dashboard() {
                   </div>
 
                   <div style={{ maxHeight: "60vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px", paddingRight: "10px" }}>
-                    {riskyMachines
+                    {riskyMachines.length === 0 ? (
+                      <div style={{ textAlign: "center", padding: "35px 20px", color: "#64748b", background: "#f8fafc", borderRadius: "12px", border: "1px dashed #cbd5e1", fontWeight: "700" }}>
+                        Yüksek riskli makine bulunmuyor.
+                      </div>
+                    ) : riskyMachines
                       .sort((a, b) => {
                         const priority = { "Yüksek Riskli": 3, "Bakımı Yaklaşan": 2, "Bakımda Olan": 1 };
                         return (priority[b.kategori] || 0) - (priority[a.kategori] || 0);
                       })
-                      .map(m => (
-                        <div key={m.id} style={{ position: "relative", padding: "20px", background: "white", borderRadius: "12px", border: "1px solid #e1e5eb", borderLeft: "6px solid #e74c3c", boxShadow: "0 2px 8px rgba(0,0,0,0.02)", overflow: "hidden" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                            <div>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px", borderBottom: "1px solid #f1f5f9", transition: "0.2s" }}>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "4px" }}>
-                                    <strong style={{ fontSize: "19px", color: "#1e293b" }}>{m.ad}</strong>
-                                  </div>
-                                  <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
-                                    <span style={{ fontSize: "11px", fontWeight: "800", color: "#64748b", background: "#f1f5f9", padding: "4px 12px", borderRadius: "20px", display: "inline-flex", alignItems: "center", gap: "5px", border: "1px solid #e2e8f0" }}>
-                                      🚩 Yüksek Riskli Makine
-                                    </span>
-                                  </div>
+                      .map(m => {
+                        const makineAdi = m.ad || m.makine_adi || `Makine #${m.id}`;
+                        const riskSkoru = Number(m.mevcut_risk_skoru || 0).toFixed(2);
+                        return (
+                          <div key={m.id} style={{ padding: "16px", background: "white", borderRadius: "12px", border: "1px solid #e1e5eb", borderLeft: "6px solid #e74c3c", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px" }}>
+                              <div style={{ minWidth: 0 }}>
+                                <strong style={{ display: "block", fontSize: "17px", color: "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{makineAdi}</strong>
+                                <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
+                                  <span style={{ fontSize: "11px", fontWeight: "800", color: "#b91c1c", background: "#fee2e2", padding: "4px 10px", borderRadius: "20px", border: "1px solid #fecaca" }}>
+                                    Yüksek Riskli Makine
+                                  </span>
+                                  <span style={{ fontSize: "11px", fontWeight: "800", color: "#334155", background: "#f1f5f9", padding: "4px 10px", borderRadius: "20px", border: "1px solid #e2e8f0" }}>
+                                    Risk Skoru: {riskSkoru}/100
+                                  </span>
                                 </div>
-                                {/* Aksiyon Butonları: Detay, Arıza Kaydı ve Yoksay */}
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", minWidth: "360px" }}>
+                              </div>
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(90px, 1fr))", gap: "8px", minWidth: "330px" }}>
+                                <button onClick={() => navigate(`/makine/${m.id}`)} style={{ ...btnStyle, background: "#1e293b", width: "100%", minWidth: "0" }}>Detay Gör</button>
+                                <button onClick={() => setActiveBreakdownId(activeBreakdownId === m.id ? null : m.id)} style={{ ...btnStyle, background: "#e94560", width: "100%", minWidth: "0" }}>
+                                  {activeBreakdownId === m.id ? "Gizle" : "Arıza Kaydı"}
+                                </button>
+                                <button onClick={() => handleIgnoreMachine(m.id, makineAdi)} style={{ ...btnStyle, background: "#94a3b8", width: "100%", minWidth: "0" }}>Yoksay</button>
+                              </div>
+                            </div>
+
+                            {activeBreakdownId === m.id && (
+                              <div style={{ marginTop: "16px", padding: "16px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e1e5eb" }}>
+                                <div style={{ marginBottom: "10px", fontWeight: "bold", fontSize: "14px", color: "#333" }}>Detaylı Arıza Açıklaması:</div>
+                                <textarea
+                                  value={breakdownDesc}
+                                  onChange={(e) => setBreakdownDesc(e.target.value)}
+                                  placeholder="Açıklama..."
+                                  style={{ width: "100%", padding: "12px", boxSizing: "border-box", borderRadius: "6px", border: "1px solid #ccc", outline: "none", minHeight: "90px", marginBottom: "12px", fontSize: "14px", resize: "vertical" }}
+                                />
+                                <div style={{ display: "flex", justifyContent: "flex-end" }}>
                                   <button
-                                    onClick={() => navigate(`/makine/${m.id}`)}
-                                    style={{ ...btnStyle, background: "#1e293b", width: "100%", minWidth: "0" }}
+                                    onClick={() => handleCreateBreakdown({ ...m, ad: makineAdi })}
+                                    disabled={emergencySubmitId === m.id}
+                                    style={{ ...saveBtnStyle, opacity: emergencySubmitId === m.id ? 0.7 : 1, cursor: emergencySubmitId === m.id ? "default" : "pointer" }}
                                   >
-                                    Detay Gör
-                                  </button>
-                                  <button
-                                    onClick={() => setActiveBreakdownId(activeBreakdownId === m.id ? null : m.id)}
-                                    style={{ ...btnStyle, background: "#e94560", width: "100%", minWidth: "0" }}
-                                  >
-                                    {activeBreakdownId === m.id ? "Gizle" : "Arıza Kaydı"}
-                                  </button>
-                                  <button
-                                    onClick={() => handleIgnoreMachine(m.id, m.ad)}
-                                    style={{ ...btnStyle, background: "#94a3b8", width: "100%", minWidth: "0" }}
-                                  >
-                                    Yoksay
+                                    {emergencySubmitId === m.id ? "Gönderiliyor..." : "Kaydet ve Bildir"}
                                   </button>
                                 </div>
                               </div>
-
-                              {/* ARIZA KAYDI FORMU */}
-                              {activeBreakdownId === m.id && (
-                                <div style={{ marginTop: "20px", padding: "20px", background: "white", borderRadius: "8px", border: "2px solid #e1e5eb" }}>
-                                  <div style={{ marginBottom: "12px", fontWeight: "bold", fontSize: "16px", color: "#333" }}>Detaylı Arıza Açıklaması:</div>
-                                  <textarea
-                                    value={breakdownDesc}
-                                    onChange={(e) => setBreakdownDesc(e.target.value)}
-                                    placeholder="Açıklama..."
-                                    style={{ width: "100%", padding: "15px", boxSizing: "border-box", borderRadius: "6px", border: "1px solid #ccc", outline: "none", minHeight: "100px", marginBottom: "15px", fontSize: "15px", resize: "vertical" }}
-                                  />
-                                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                                    <button onClick={() => handleCreateBreakdown(m)} style={saveBtnStyle}>Kaydet ve Bildir</button>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                   </div>
                 </div>
               </div>

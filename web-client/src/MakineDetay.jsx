@@ -76,6 +76,37 @@ export default function MakineDetay() {
     };
 
     const warranty = getWarrantyStatus(machine.satin_alma_tarihi, machine.garanti_suresi);
+    const riskSkoru = Number(machine.mevcut_risk_skoru || 0);
+    const riskAnaliz = (() => {
+        if (riskSkoru >= 80) {
+            return {
+                renk: "#e74c3c",
+                durum: "kritik risk altındadır ve acil teknik müdahale gerektirir.",
+            };
+        }
+        if (riskSkoru >= 50) {
+            return {
+                renk: "#f39c12",
+                durum: "bakım riski yükselmiştir; planlı bakım öne alınmalıdır.",
+            };
+        }
+        if (machine.aktiflik_durumu === "Bakımda") {
+            return {
+                renk: "#f39c12",
+                durum: "bakım sürecindedir.",
+            };
+        }
+        if (machine.aktiflik_durumu === "Pasif" || machine.aktiflik_durumu === false) {
+            return {
+                renk: "#e74c3c",
+                durum: "pasif veya arızalı durumdadır.",
+            };
+        }
+        return {
+            renk: "#2ecc71",
+            durum: "aktif çalışmaya uygundur.",
+        };
+    })();
 
     return (
         <div style={sayfaStil}>
@@ -167,7 +198,7 @@ export default function MakineDetay() {
                                 <div style={kartIkonStil}>⚠️</div>
                                 <div>
                                     <div style={kartBaslikStil}>Anlık Risk Skoru</div>
-                                    <div style={kartDegerStil}>{safeVal(machine.mevcut_risk_skoru)} / 1.0</div>
+                                    <div style={kartDegerStil}>{safeVal(machine.mevcut_risk_skoru)} / 100</div>
                                 </div>
                             </div>
                         </div>
@@ -287,7 +318,7 @@ export default function MakineDetay() {
                         <div style={detayKartStil}>
                             <h3 style={bolumBaslikStil}>Makine Analiz Özeti</h3>
                             <p style={{ color: "#555", lineHeight: "1.6", margin: 0 }}>
-                                Bu makine en son satın alma tarihinden ({machine.satin_alma_tarihi ? safeVal(new Date(machine.satin_alma_tarihi).toLocaleDateString("tr-TR")) : "-"}) bu yana toplam <strong>{safeVal(machine.top_calisma_saati)} saat</strong> aktif hizmet vermiştir. Servis kayıtlarında toplam <strong>{safeVal(history?.length)}</strong> adet bakım veya arıza kaydı gözükmektedir. Risk skoru algoritmik olarak <strong>{safeVal(machine.mevcut_risk_skoru)}</strong> hesaplanmış olup, sistemde <strong style={{ color: machine.aktiflik_durumu === "Aktif" ? "#2ecc71" : machine.aktiflik_durumu === "Bakımda" ? "#f39c12" : "#e74c3c" }}>{safeVal(machine.aktiflik_durumu === "Aktif" ? "aktif çalışmaya uygundur." : machine.aktiflik_durumu === "Bakımda" ? "bakım sürecindedir." : "arızalı olarak etiketlenmiştir.")}</strong>
+                                Bu makine en son satın alma tarihinden ({machine.satin_alma_tarihi ? safeVal(new Date(machine.satin_alma_tarihi).toLocaleDateString("tr-TR")) : "-"}) bu yana toplam <strong>{safeVal(machine.top_calisma_saati)} saat</strong> aktif hizmet vermiştir. Servis kayıtlarında toplam <strong>{safeVal(history?.length)}</strong> adet bakım veya arıza kaydı gözükmektedir. Risk skoru algoritmik olarak <strong>{safeVal(machine.mevcut_risk_skoru)} / 100</strong> hesaplanmış olup, sistem değerlendirmesine göre <strong style={{ color: riskAnaliz.renk }}>{riskAnaliz.durum}</strong>
 
                                 {/* Garanti Bilgisi Rozeti */}
                                 {warranty && (
