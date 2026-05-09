@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.supabase = void 0;
 const supabase_js_1 = require("@supabase/supabase-js");
 const dotenv_1 = __importDefault(require("dotenv"));
+const ws_1 = __importDefault(require("ws"));
 dotenv_1.default.config();
 // .env dosyasındaki bilgileri alıyoruz
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -13,4 +14,11 @@ const supabaseUrl = process.env.SUPABASE_URL;
 // ama şimdilik elindeki .env değişkeni neyse onu yazabilirsin.
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 // İstemciyi yarat ve dışa aktar
-exports.supabase = (0, supabase_js_1.createClient)(supabaseUrl, supabaseKey);
+exports.supabase = (0, supabase_js_1.createClient)(supabaseUrl, supabaseKey, {
+    auth: {
+        persistSession: false,
+    },
+    realtime: {
+        transport: ws_1.default,
+    },
+});

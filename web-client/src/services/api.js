@@ -31,6 +31,11 @@ const parseLocaleNumber = (value) => {
   return Number(String(value ?? "").trim().replace(/\./g, "").replace(",", "."));
 };
 
+const normalizeRiskScore = (value) => {
+  const score = Number(value || 0);
+  return Number((score <= 1 ? score * 100 : score).toFixed(2));
+};
+
 export const api = {
 
   // ═══════════════ 1. LOGIN ═══════════════
@@ -62,12 +67,15 @@ export const api = {
     const json = await handleResponse(res);
     return (json.data || []).map((m) => {
       const sonRisk = m.risk_skoru?.[0] || null;
+      const riskScore = normalizeRiskScore(sonRisk?.risk_skoru);
       return {
         ...m,
         id: m.makine_id,
         ad: m.makine_adi,
         aktiflik_durumu: getMachineDisplayStatus(m),
-        mevcut_risk_skoru: sonRisk ? Number(sonRisk.risk_skoru) : 0,
+        mevcut_risk_skoru: riskScore,
+        risk_seviyesi: sonRisk?.risk_seviyesi || (riskScore >= 80 ? "YUKSEK" : riskScore >= 50 ? "ORTA" : "DUSUK"),
+        kategori: riskScore >= 80 ? "Yüksek Riskli" : riskScore >= 50 ? "Bakımı Yaklaşan" : "Normal",
         satin_alma_maliyeti: Number(m.satin_alma_maliyeti || 0),
         top_calisma_saati: Number(m.toplam_calisma_saati || 0),
         lo_id: m.lokasyon?.[0]?.lokasyon_adi || "-",
@@ -99,10 +107,14 @@ export const api = {
     const res = await fetch(`${API_BASE}/makineler/${makine_id}`, { headers: getHeaders() });
     const json = await handleResponse(res);
     const m = json.data;
+    const sonRisk = m.risk_skoru?.[0] || null;
+    const riskScore = normalizeRiskScore(m.mevcut_risk_skoru ?? sonRisk?.risk_skoru);
     return {
       ...m,
       aktiflik_durumu: getMachineDisplayStatus(m),
-      mevcut_risk_skoru: Number(m.mevcut_risk_skoru || 0),
+      mevcut_risk_skoru: riskScore,
+      risk_seviyesi: m.risk_seviyesi || sonRisk?.risk_seviyesi || (riskScore >= 80 ? "YUKSEK" : riskScore >= 50 ? "ORTA" : "DUSUK"),
+      kategori: riskScore >= 80 ? "Yüksek Riskli" : riskScore >= 50 ? "Bakımı Yaklaşan" : "Normal",
       satin_alma_maliyeti: Number(m.satin_alma_maliyeti || 0),
       top_calisma_saati: Number(m.toplam_calisma_saati || 0),
       lo_id: m.lokasyon?.[0]?.lokasyon_adi || "-",
@@ -179,10 +191,17 @@ export const api = {
           return v;
         };
 
+        const aiRisk = normalizeRiskScore(extractVal(form.ai_on_risk_durumu ?? form.AI_on_risk_durumu));
+        const riskSebebi = aiRisk >= 80
+          ? `Yüksek AI riski (${aiRisk.toFixed(2)})`
+          : aiRisk >= 50
+            ? `Bakım riski izlenmeli (${aiRisk.toFixed(2)})`
+            : "Her şey normal.";
+
         return {
           tarih: extractVal(form.kontrol_tarihi) || form.istek_tarihi_saati,
-          tespit_eden: String(extractVal(form.AI_on_risk_durumu) || "").includes("Yüksek") ? "AI" : "Operatör",
-          risk_sebebi: extractVal(form.genel_not) || "Risk Yok",
+          tespit_eden: aiRisk > 0 ? "AI" : "Operatör",
+          risk_sebebi: aiRisk > 0 ? riskSebebi : (extractVal(form.genel_not) || riskSebebi),
           cevaplar: (form.form_madde_cevap || []).map(c => ({
             soru: extractVal(c.kontrol_maddesi?.madde_adi) || "Bilinmeyen Soru",
             cevap: extractVal(c.girilen_deger) || "-"
@@ -496,6 +515,17 @@ export const api = {
       method: "PUT",
       headers: getHeaders(),
       body: JSON.stringify({ bakim_idler: bakimIdler.map(Number) }),
+    });
+    return handleResponse(res);
+  },
+  createEmergencyMaintenance: async ({ makine_id, aciklama }) => {
+    const res = await fetch(`${API_BASE}/bakimlar/acil-bildir`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({
+        makine_id: Number(makine_id),
+        aciklama,
+      }),
     });
     return handleResponse(res);
   },

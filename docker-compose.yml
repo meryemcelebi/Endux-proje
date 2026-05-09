@@ -27,13 +27,18 @@ services:
     container_name: endux_backend
     ports:
       - "3000:3000"
-    environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}?schema=public
-      - PORT=${PORT}
-      - JWT_SECRET=${JWT_SECRET}
     depends_on:
       postgres_db:
         condition: service_healthy
+    env_file:
+      - ./node-service/.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}?schema=public
+      DIRECT_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}?schema=public
+      AI_SERVICE_URL: http://endux_ai:8000
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     networks:
       - endux_network
     volumes:
@@ -62,8 +67,6 @@ services:
     container_name: endux_ai
     ports:
       - "8000:8000"
-    depends_on:
-      - endux_backend
     networks:
       - endux_network
     volumes:

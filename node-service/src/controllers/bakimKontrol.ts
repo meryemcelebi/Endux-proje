@@ -3,6 +3,8 @@ import prisma from '../config/prisma';
 import { Prisma } from '@prisma/client';
 import { supabase } from '../config/supabase';
 
+const ACIL_BILDIRIM_ETIKETI = "[ACIL_BILDIRIM]";
+
 
 
 export const bakimKaydiGir = async (req: Request, res: Response) => {
@@ -36,7 +38,6 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
             }
         }
 
-        // 3. İŞLEM (TRANSACTION) BAŞLIYOR
         const sonuc = await prisma.$transaction(async (tx) => {
 
             // A. Bakım Kaydını Oluştur
@@ -61,7 +62,7 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                 },
             });
 
-            // B. TPM İş Akışı: Makineyi otomatik olarak Aktif yap!
+            
             await tx.makine.update({
                 where: { makine_id: Number(makine_id) },
                 data: { aktiflik_durumu: true }
@@ -80,7 +81,7 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                 });
             }
 
-            // D. Parça değişimleri ve stok düşme (ÇİFT KAYIT BUG'I TEMİZLENDİ)
+            
             if (degisen_Parcalar && Array.isArray(degisen_Parcalar) && degisen_Parcalar.length > 0) {
                 for (const parca of degisen_Parcalar) {
                     const parcaId = Number(parca.parca_id);
@@ -109,7 +110,7 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                         data: {
                             bakim_id: bakimKaydi.bakim_id,
                             parca_id: parcaId,
-                            adet: adet // Orijinalinde adet kolonu yoktu, şemanda varsa bu çalışır
+                            adet: adet 
                         }
                     });
 
@@ -139,6 +140,74 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
         return res.status(500).json({
             success: false,
             message: error.message || 'Veritabanı kayıt işlemi sırasında bir hata oluştu.'
+        });
+    }
+};
+
+export const acilBakimBildir = async (req: Request, res: Response) => {
+    try {
+        const makineId = Number(req.body.makine_id);
+        const aciklama = String(req.body.aciklama || "").trim();
+        const kullaniciId = Number(req.user?.userId) || null;
+
+        if (!makineId) {
+            return res.status(400).json({
+                success: false,
+                message: "makine_id alanı zorunludur."
+            });
+        }
+
+        if (!aciklama) {
+            return res.status(400).json({
+                success: false,
+                message: "Detaylı arıza açıklaması zorunludur."
+            });
+        }
+
+        const makine = await prisma.makine.findUnique({
+            where: { makine_id: makineId },
+            select: { makine_id: true, makine_adi: true }
+        });
+
+        if (!makine) {
+            return res.status(404).json({
+                success: false,
+                message: "Makine bulunamadı."
+            });
+        }
+
+        await prisma.makine.update({
+            where: { makine_id: makineId },
+            data: { aktiflik_durumu: false }
+        });
+
+        const bakimKaydi = await prisma.bakim_kaydi.create({
+            data: {
+                makine_id: makineId,
+                kullanici_id: kullaniciId,
+                bakim_maliyet: 0,
+                aciklama: `${ACIL_BILDIRIM_ETIKETI} ${aciklama}`,
+                bakim_tarihi: new Date(),
+                durum: "ONAYLANDI"
+            }
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: "Acil bakım bildirimi oluşturuldu ve teknik servise aktarıldı.",
+            data: {
+                bakim_id: bakimKaydi.bakim_id,
+                makine_id: makine.makine_id,
+                makine_adi: makine.makine_adi,
+                durum: bakimKaydi.durum,
+                acil_bildirim: true
+            }
+        });
+    } catch (error: any) {
+        console.error("Acil bakım bildirimi oluşturulurken hata:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Acil bakım bildirimi oluşturulurken bir hata oluştu."
         });
     }
 };
@@ -178,7 +247,7 @@ export const makineBakimKayitlari = async (req: Request, res: Response) => {
                     },
                 },
                 //değişen parçaların bilgileri (parca_degisim tablosundan)
-                // parca_degisim → parca ilişkisi üzerinden parça bilgilerine erişiyoruz
+                
                 parca_degisim: {
                     include: {
                         parca: {
@@ -444,7 +513,7 @@ export const getTeknikServisIsleri = async (req: Request, res: Response) => {
         const isler = await prisma.bakim_kaydi.findMany({
             where: {
                 durum: {
-                    in: ['Teknik Serviste', 'TAMAMLANDI', 'Bakımda']
+                    in: ['Teknik Serviste', 'TAMAMLANDI', 'Bakımda', 'ONAYLANDI']
                 }
             },
             include: {
@@ -492,18 +561,22 @@ export const getTeknikServisIsleri = async (req: Request, res: Response) => {
             if (is.durum === 'Teknik Serviste' || is.durum === 'Bakımda') {
                 frontendDurum = 'ONAYLANDI';
             }
+            const aciklama = is.aciklama || "";
+            const acilBildirim = aciklama.includes(ACIL_BILDIRIM_ETIKETI);
+            const temizAciklama = aciklama.replace(ACIL_BILDIRIM_ETIKETI, "").trim();
 
             return {
                 bakim_id: is.bakim_id,
                 makine_id: is.makine_id,
                 makine_adi: is.makine?.makine_adi || `Makine #${is.makine_id}`,
                 durum: frontendDurum,
-                ariza_notu: is.ariza_kaydi?.ariza_aciklama || is.aciklama || "Belirtilmemiş",
+                ariza_notu: is.ariza_kaydi?.ariza_aciklama || temizAciklama || "Belirtilmemiş",
+                acil_bildirim: acilBildirim,
                 kayit_tarihi: is.bakim_tarihi ? is.bakim_tarihi.toISOString().split('T')[0] : "Bilinmiyor",
                 // Rapor detayları (TAMAMLANDI olanlar için)
                 bakim_maliyet: is.bakim_maliyet ? Number(is.bakim_maliyet) : 0,
                 durus_suresi: is.durus_suresi ? Number(is.durus_suresi) : 0,
-                aciklama: is.aciklama || "",
+                aciklama: temizAciklama,
                 servis_firmasi: is.servis_firma?.firma_adi || "Belirtilmemiş",
                 teknisyen: is.servis_sorumlusu
                     ? `${is.servis_sorumlusu.ad} ${is.servis_sorumlusu.soyad}`
