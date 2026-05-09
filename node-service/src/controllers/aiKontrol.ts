@@ -153,6 +153,21 @@ async function riskSkoruKaydet(
         data: { ai_on_risk_durumu: tahmin.risk_skoru },
     });
 
+    // AI EĞER YÜKSEK RİSK VEYA ARIZA TESPİT EDERSE OTOMATİK OLARAK "ONAY BEKLEYEN" BAKIM KAYDI OLUŞTURUR
+    if (tahmin.risk_skoru >= 0.50 || (tahmin.tahmin_edilen_ariza && tahmin.tahmin_edilen_ariza !== "YOK")) {
+        await prisma.bakim_kaydi.create({
+            data: {
+                makine_id: makineId,
+                kullanici_id: kullaniciId,
+                bakim_maliyet: tahmin.detaylar.tahmini_maliyet || 0,
+                durus_suresi: tahmin.detaylar.tahmini_durus_suresi || 0,
+                aciklama: `[AI Otonom Tespit] ${tahmin.tahmin_edilen_ariza} - ${tahmin.bakim_tavsiyesi}`,
+                bakim_tarihi: new Date(),
+                durum: "Onay Bekliyor"
+            }
+        });
+    }
+
     return riskKaydi;
 }
 
@@ -181,8 +196,12 @@ export async function tekMakineTahmin(makineId: number, formId: number, kullanic
         console.log(`[AI-TAHMİN] Sonuç alındı. Risk Skoru: ${tahminSonucu.risk_skoru}`);
 
         // 5. DB'ye risk skorunu ve tahmin detaylarını kaydet
-        // MaddeId olarak formun ana referans maddesini verebiliriz (şimdilik 1)
-        const maddeId = 1;
+        const ilkCevap = await prisma.form_madde_cevap.findFirst({ where: { form_id: formId } });
+        let maddeId = ilkCevap?.soru_referans_id;
+        if (!maddeId) {
+            const herhangiBirMadde = await prisma.kontrol_maddesi.findFirst();
+            maddeId = herhangiBirMadde ? herhangiBirMadde.madde_id : 1;
+        }
 
         await riskSkoruKaydet(
             makine.makine_id,
