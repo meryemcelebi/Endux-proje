@@ -9,6 +9,10 @@ exports.makineDetayGetir = makineDetayGetir;
 exports.QRKodYazdir = QRKodYazdir;
 const uuid_1 = require("uuid");
 const prisma_1 = __importDefault(require("../config/prisma"));
+const isDatabaseReachabilityError = (error) => ["P1001", "ETIMEDOUT", "ECONNREFUSED", "ENOTFOUND"].includes(error?.code) ||
+    error?.message?.includes("Can't reach database server") ||
+    error?.message?.includes("Connection terminated unexpectedly");
+const databaseUnavailableMessage = "Veritabanına ulaşılamıyor. Yerel geliştirmede Docker/PostgreSQL servisinin çalıştığından emin olun.";
 // Makine Ekle — POST /api/makineler/makine-ekle
 const makineEkle = async (req, res) => {
     try {
@@ -107,7 +111,14 @@ const qrileMakineGetir = async (req, res) => {
                 firma: true,
                 makine_turu: true,
                 bakim_kaydi: true,
-                gunluk_kontrol_formu: true,
+                gunluk_kontrol_formu: {
+                    orderBy: { kontrol_tarihi: 'desc' },
+                    include: {
+                        form_madde_cevap: {
+                            include: { kontrol_maddesi: true }
+                        }
+                    }
+                },
                 makine_kullanim: true,
                 ariza_kaydi: true,
                 makine_ozellikleri: true,
@@ -252,8 +263,7 @@ async function tumMakineBilgileriGetir(req, res) {
                 },
                 risk_skoru: { orderBy: { hesaplama_tarihi: 'desc' }, take: 1 },
                 bakim_kaydi: { orderBy: { bakim_tarihi: 'desc' }, take: 5 },
-                ariza_kaydi: { orderBy: { olusturma_tarihi: 'desc' }, take: 5 },
-                makine_ozellikleri: true
+                ariza_kaydi: { orderBy: { olusturma_tarihi: 'desc' }, take: 5 }
             }
         });
         res.status(200).json({
@@ -263,6 +273,13 @@ async function tumMakineBilgileriGetir(req, res) {
         });
     }
     catch (error) {
+        if (isDatabaseReachabilityError(error)) {
+            console.error("Tüm makine bilgileri getirme hatası: veritabanına ulaşılamıyor.");
+            return res.status(503).json({
+                success: false,
+                message: databaseUnavailableMessage
+            });
+        }
         console.error("Tüm makine bilgileri getirme hatası:", error);
         res.status(500).json({
             success: false,
@@ -293,7 +310,8 @@ async function makineDetayGetir(req, res) {
                 makine_kullanim: true,
                 ariza_kaydi: true,
                 makine_ozellikleri: true,
-                lokasyon: true
+                lokasyon: true,
+                risk_skoru: { orderBy: { hesaplama_tarihi: 'desc' }, take: 1 }
             }
         });
         if (!makine) {
@@ -302,10 +320,15 @@ async function makineDetayGetir(req, res) {
                 message: "Belirtilen ID ile makine bulunamadı."
             });
         }
+        const sonRisk = makine.risk_skoru?.[0] ?? null;
         res.status(200).json({
             success: true,
             message: "Makine detayları başarıyla getirildi.",
-            data: makine
+            data: {
+                ...makine,
+                mevcut_risk_skoru: sonRisk?.risk_skoru ?? null,
+                risk_seviyesi: sonRisk?.risk_seviyesi ?? null
+            }
         });
     }
     catch (error) {
@@ -367,44 +390,39 @@ const makineDurumGuncelle = async (req, res) => {
         if (typeof aktiflik_durumu !== "boolean") {
             return res.status(400).json({ success: false, message: "aktiflik_durumu boolean olmalıdır." });
         }
-        // Prisma Transaction: makine durumunu güncelle + gerekirse bakım kaydı oluştur
-        const sonuc = await prisma_1.default.$transaction(async (tx) => {
-            // 1) Makine durumunu güncelle
-            const guncellenen = await tx.makine.update({
-                where: { makine_id },
-                data: { aktiflik_durumu },
-                select: {
-                    makine_id: true,
-                    makine_adi: true,
-                    aktiflik_durumu: true,
-                    firma_id: true
+        const sonuc = await prisma_1.default.makine.update({
+            where: { makine_id },
+            data: { aktiflik_durumu },
+            select: {
+                makine_id: true,
+                makine_adi: true,
+                aktiflik_durumu: true,
+                firma_id: true
+            }
+        });
+        // Eğer makine PASİF'e çekiliyorsa otomatik BEKLEYEN bakım kaydı oluştur.
+        // Supabase pooler üzerinde kısa işlemlerde interactive transaction P2028 üretebildiği
+        // için bu akış bilinçli olarak sıralı, normal Prisma çağrılarıyla çalışır.
+        if (aktiflik_durumu === false) {
+            const mevcutBekleyen = await prisma_1.default.bakim_kaydi.findFirst({
+                where: {
+                    makine_id,
+                    durum: { in: ['BEKLEYEN', 'Onay Bekliyor', 'ONAYLANDI', 'Teknik Serviste', 'Bakımda'] }
                 }
             });
-            // 2) Eğer makine PASİF'e çekiliyorsa → otomatik BEKLEYEN bakım kaydı oluştur
-            if (aktiflik_durumu === false) {
-                // Aynı makine için zaten BEKLEYEN bir kayıt var mı kontrol et (çift kayıt önleme)
-                const mevcutBekleyen = await tx.bakim_kaydi.findFirst({
-                    where: {
-                        makine_id: makine_id,
-                        durum: { in: ['BEKLEYEN', 'Onay Bekliyor'] }
+            if (!mevcutBekleyen) {
+                await prisma_1.default.bakim_kaydi.create({
+                    data: {
+                        makine_id,
+                        bakim_maliyet: 0,
+                        durum: 'BEKLEYEN',
+                        aciklama: `Sistem tarafından otomatik oluşturuldu — "${sonuc.makine_adi || 'Makine #' + makine_id}" Pasif duruma alındı.`,
+                        bakim_tarihi: new Date()
                     }
                 });
-                // Henüz bekleyen yoksa yeni bir tane oluştur
-                if (!mevcutBekleyen) {
-                    await tx.bakim_kaydi.create({
-                        data: {
-                            makine_id: makine_id,
-                            bakim_maliyet: 0,
-                            durum: 'BEKLEYEN',
-                            aciklama: `Sistem tarafından otomatik oluşturuldu — "${guncellenen.makine_adi || 'Makine #' + makine_id}" Pasif duruma alındı.`,
-                            bakim_tarihi: new Date()
-                        }
-                    });
-                    console.log(`[AUTO-BAKIM] Makine #${makine_id} (${guncellenen.makine_adi}) Pasife alındı → BEKLEYEN bakım kaydı oluşturuldu.`);
-                }
+                console.log(`[AUTO-BAKIM] Makine #${makine_id} (${sonuc.makine_adi}) Pasife alındı → BEKLEYEN bakım kaydı oluşturuldu.`);
             }
-            return guncellenen;
-        });
+        }
         res.status(200).json({
             success: true,
             message: `Makine durumu ${aktiflik_durumu ? "Aktif" : "Pasif"} olarak güncellendi.${!aktiflik_durumu ? " Otomatik bakım talebi oluşturuldu." : ""}`,

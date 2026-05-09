@@ -12,7 +12,8 @@ import {
     bakimPuaniKaydet,
     bakimIsleminiOnayla,
     bakimBaslat,
-    qrBakimTamamla
+    qrBakimTamamla,
+    acilBakimBildir
 } from "../controllers/bakimKontrol";
 
 
@@ -39,6 +40,9 @@ router.get('/tum-bakimlar', oturumKontrol, rolKontrol('YONETICI'), TumBakimlarTo
 
 // POST /api/bakimlar/qr-tamamla — QR okutarak sahada bakım tamamlama
 router.post('/qr-tamamla', oturumKontrol, qrBakimTamamla);
+
+// POST /api/bakimlar/acil-bildir — Riskli makineden doğrudan teknik servis iş emri oluşturur
+router.post('/acil-bildir', oturumKontrol, rolKontrol('YONETICI'), acilBakimBildir);
 
 // POST /api/bakimlar  — Yeni bakım kaydı oluşturur
 router.post('/', oturumKontrol, rolKontrol('TEKNISYEN', 'YONETICI', 'SERVIS'), bakimKaydiGir);

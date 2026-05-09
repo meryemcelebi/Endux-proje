@@ -21,7 +21,7 @@ interface IAiTahminYanit {
     makine_turu: string;
     guvenilirlik_notu: string;
     tahmin_edilen_ariza: string;
-    risk_skoru: number;           // 0.00-1.00 arası
+    risk_skoru: number;           // 0-100 arası
     rul_tahmini_saat: number;     // Tahmini Kalan Faydalı Ömür
     bakim_tavsiyesi: string;
     uyari_durumu: string;
@@ -31,6 +31,68 @@ interface IAiTahminYanit {
         ekip: string;
         parca: string;
     };
+}
+
+function alternatifAiServisUrlListesi() {
+    const urls = [AI_SERVICE_URL];
+    if (AI_SERVICE_URL.includes("endux_ai")) {
+        urls.push("http://localhost:8000");
+        urls.push("http://127.0.0.1:8000");
+    }
+    return [...new Set(urls)];
+}
+
+function yerelRiskTahminiOlustur(payload: AITahminPayload): IAiTahminYanit {
+    const cevaplar = Object.entries(payload)
+        .filter(([key, value]) =>
+            !["makine_turu", "form_doldurma_suresi_sn", "toplam_calisma_saati"].includes(key) &&
+            typeof value === "number"
+        )
+        .map(([, value]) => Number(value));
+
+    const maksimumCevap = cevaplar.length > 0 ? Math.max(...cevaplar) : 0;
+    const ortalamaCevap = cevaplar.length > 0
+        ? cevaplar.reduce((toplam, deger) => toplam + deger, 0) / cevaplar.length
+        : 0;
+    const kritikCevapSayisi = cevaplar.filter((deger) => deger >= 2).length;
+    const kritikOran = cevaplar.length > 0 ? kritikCevapSayisi / cevaplar.length : 0;
+
+    let riskOrani = Math.min(1, (ortalamaCevap / 2) * 0.65 + kritikOran * 0.35);
+    if (maksimumCevap >= 2 && kritikCevapSayisi >= 3) riskOrani = Math.max(riskOrani, 0.80);
+    if (maksimumCevap >= 2 && kritikCevapSayisi >= 6) riskOrani = Math.max(riskOrani, 0.90);
+    const riskSkoru = Number((riskOrani * 100).toFixed(2));
+
+    const tahminEdilenAriza = riskSkoru >= 80
+        ? "KRITIK_FORM_ANOMALISI"
+        : riskSkoru >= 50
+            ? "PLANLI_BAKIM_RISKI"
+            : "YOK";
+
+    return {
+        sistem_mesaji: "AI servisine ulaşılamadığı için yerel risk analizi kullanıldı.",
+        makine_turu: String(payload.makine_turu),
+        guvenilirlik_notu: "Yerel yedek analiz",
+        tahmin_edilen_ariza: tahminEdilenAriza,
+        risk_skoru: riskSkoru,
+        rul_tahmini_saat: Math.max(0, Number(payload.toplam_calisma_saati || 0) * (1 - riskOrani) * 0.5),
+        bakim_tavsiyesi: riskSkoru >= 80
+            ? "ACİL BAKIM GEREKLİ! Makineyi durdurup derhal müdahale edin."
+            : riskSkoru >= 50
+                ? "Planlı bakımı öne çekin, arıza riski yüksek."
+                : "Makine sağlıklı, rutin bakım takvimini takip edin.",
+        uyari_durumu: riskSkoru >= 80 ? "KIRMIZI" : riskSkoru >= 50 ? "SARI" : "YEŞİL",
+        detaylar: {
+            tahmini_maliyet: riskSkoru >= 80 ? 15000 : riskSkoru >= 50 ? 5000 : 0,
+            tahmini_durus_suresi: riskSkoru >= 80 ? 8 : riskSkoru >= 50 ? 2 : 0,
+            ekip: riskSkoru >= 50 ? "Bakım Ekibi" : "Gerek Yok",
+            parca: riskSkoru >= 50 ? "Kontrol sonrası belirlenecek" : "Sorun Yok",
+        },
+    };
+}
+
+function riskSkorunuYuzeCevir(riskSkoru: number) {
+    const skor = Number(riskSkoru || 0);
+    return Number((skor <= 1 ? skor * 100 : skor).toFixed(2));
 }
 
 //veri tabanı sorgusu
@@ -70,34 +132,28 @@ async function formCevaplariToAIPayload(formId: number): Promise<Record<string, 
 }
 
 async function aiTahminIstegiGonder(payload: AITahminPayload): Promise<IAiTahminYanit> {
-    try {
-        const response = await axios.post<IAiTahminYanit>(
-            `${AI_SERVICE_URL}/tahmin-et`,
-            payload,
-            { timeout: AI_TIMEOUT_MS }
-        );
-        return response.data;
-    } catch (error) {
-        const axiosError = error as AxiosError;
-        if (axiosError.code === 'ECONNREFUSED') {
-            console.error('AI servisine bağlanılamadı.');
-            throw new Error('AI servisine bağlanılamadı. Lütfen daha sonra tekrar deneyin.');
+    const hatalar: string[] = [];
+    for (const servisUrl of alternatifAiServisUrlListesi()) {
+        try {
+            const response = await axios.post<IAiTahminYanit>(
+                `${servisUrl}/tahmin-et`,
+                payload,
+                { timeout: AI_TIMEOUT_MS }
+            );
+            return response.data;
+        } catch (error) {
+            const axiosError = error as AxiosError;
+            hatalar.push(`${servisUrl}: ${axiosError.message}`);
+            if (axiosError.response) {
+                const status = axiosError.response.status;
+                console.error(`AI servisi hata yanıtı: ${status}`);
+                throw new Error(`AI servisi hata yanıtı: ${status}`);
+            }
         }
-        if (axiosError.code === 'ECONNABORTED') {
-            console.error('AI servisi zaman aşımına uğradı.');
-            throw new Error('AI servisi zaman aşımına uğradı. Lütfen daha sonra tekrar deneyin.');
-        }
-
-        if (axiosError.response) {
-            const status = axiosError.response.status;
-            console.error(`AI servisi hata yanıtı: ${status}`);
-            throw new Error(`AI servisi hata yanıtı: ${status}`);
-        }
-        console.error('AI servisi isteği sırasında bir hata oluştu:', axiosError.message);
-        throw new Error('AI servisi isteği sırasında bir hata oluştu. Lütfen daha sonra tekrar deneyin.');
     }
 
-
+    console.warn("AI servisine ulaşılamadı, yerel risk analizi kullanılacak:", hatalar.join(" | "));
+    return yerelRiskTahminiOlustur(payload);
 }
 
 async function riskSkoruKaydet(
@@ -108,12 +164,13 @@ async function riskSkoruKaydet(
     maddeId: number
 ) {
     //risk skoru tablosuna kaydet
-    const riskSeviyesi = tahmin.risk_skoru >= 0.50 ? 'YUKSEK' : 'DUSUK';
+    const riskPuani = riskSkorunuYuzeCevir(tahmin.risk_skoru);
+    const riskSeviyesi = riskPuani >= 80 ? 'YUKSEK' : riskPuani >= 50 ? 'ORTA' : 'DUSUK';
 
     const riskKaydi = await prisma.risk_skoru.create({
         data: {
             makine_id: makineId,
-            risk_skoru: tahmin.risk_skoru,
+            risk_skoru: riskPuani,
             risk_seviyesi: riskSeviyesi,
             hesaplama_tarihi: new Date(),
         },
@@ -126,7 +183,7 @@ async function riskSkoruKaydet(
             form_id: formId,
             madde_id: maddeId,
             tahmin_edilen_ariza: tahmin.tahmin_edilen_ariza,
-            risk_skoru: tahmin.risk_skoru,
+            risk_skoru: riskPuani,
             tespit_tarihi: new Date(),
             model_versiyon: "xgboost-v4.0",
             tahmini_durus_suresi: tahmin.detaylar.tahmini_durus_suresi,
@@ -140,7 +197,7 @@ async function riskSkoruKaydet(
             makine_id: makineId,
             model_versiyon: "xgboost-v4.0",
             kullanilan_veri_sayisi: 1,
-            tahmin_risk: tahmin.risk_skoru,
+            tahmin_risk: riskPuani,
             tahmin_tarihi: new Date(),
             kullanici_id: kullaniciId,
             form_id: formId,
@@ -150,7 +207,7 @@ async function riskSkoruKaydet(
     // gunluk_kontrol_formu.ai_on_risk_durumu güncelle
     await prisma.gunluk_kontrol_formu.update({
         where: { form_id: formId },
-        data: { ai_on_risk_durumu: tahmin.risk_skoru },
+        data: { ai_on_risk_durumu: riskPuani },
     });
 
     return riskKaydi;
@@ -178,7 +235,9 @@ export async function tekMakineTahmin(makineId: number, formId: number, kullanic
         // 4. AI Service'e istek at
         const tahminSonucu = await aiTahminIstegiGonder(payload);
 
-        console.log(`[AI-TAHMİN] Sonuç alındı. Risk Skoru: ${tahminSonucu.risk_skoru}`);
+        const riskPuani = riskSkorunuYuzeCevir(tahminSonucu.risk_skoru);
+
+        console.log(`[AI-TAHMİN] Sonuç alındı. Risk Skoru: ${riskPuani}`);
 
         // 5. DB'ye risk skorunu ve tahmin detaylarını kaydet
         // MaddeId olarak formun ana referans maddesini verebiliriz (şimdilik 1)
@@ -198,7 +257,7 @@ export async function tekMakineTahmin(makineId: number, formId: number, kullanic
             data: {
                 makine_id: makine.makine_id,
                 makine_adi: makine.makine_adi,
-                risk_skoru: tahminSonucu.risk_skoru,
+                risk_skoru: riskPuani,
                 tahmin_edilen_ariza: tahminSonucu.tahmin_edilen_ariza,
                 uyari_durumu: tahminSonucu.uyari_durumu
             }

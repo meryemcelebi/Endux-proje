@@ -96,7 +96,7 @@ class TahminSonucu(BaseModel):
     makine_turu: str
     guvenilirlik_notu: str
     tahmin_edilen_ariza: str
-    risk_skoru: float = Field(..., description="0.0 ile 1.0 arası arıza riski")
+    risk_skoru: float = Field(..., description="0 ile 100 arası arıza riski")
     rul_tahmini_saat: float = Field(..., description="Tahmini Kalan Faydalı Ömür (saat)")
     bakim_tavsiyesi: str
     uyari_durumu: str
@@ -203,12 +203,14 @@ async def tahmin_yap(istek: BakimIstegi):
         # 6. Kural Motoru Çıktısı Ekle
         sonuc = KURAL_MOTORU.get(ariza_ad, KURAL_MOTORU["YOK"])
 
+        risk_yuzde = round(risk_skoru * 100, 2)
+
         return TahminSonucu(
             sistem_mesaji="Tahmin Başarılı",
             makine_turu=makine,
             guvenilirlik_notu=guvenilirlik,
             tahmin_edilen_ariza=ariza_ad,
-            risk_skoru=risk_skoru,  # 0.00-1.00 arası (DB: ai_ariza_tespit.risk_skoru numeric(3,2))
+            risk_skoru=risk_yuzde,
             rul_tahmini_saat=round(rul_tahmini, 1),
             bakim_tavsiyesi=bakim_tavsiyesi,
             uyari_durumu=uyari_rengi,

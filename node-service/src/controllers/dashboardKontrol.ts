@@ -55,7 +55,7 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
             prisma.risk_skoru.findMany({
                 where: {
                     risk_skoru: {
-                        not: null,
+                        gte: 80,
 
                     }
 
@@ -109,6 +109,7 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
                         };
                     }),
                     kritik_riskli_makineler: kritikRiskliMakineler.map((risk) => ({
+                        makine_id: risk.makine_id,
                         makine_adi: risk.makine.makine_adi ?? 'Makine Adı yok',
                         risk_skoru: Number(risk.risk_skoru ?? 0)
                     }))

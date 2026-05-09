@@ -66,7 +66,7 @@ export default function Bakim() {
 
   // 5. Yaklaşan Bakımlar (Risk skoru en yüksek olan ilk 5)
   const yaklasanBakimTablosu = machines
-    .filter(m => m.aktiflik_durumu !== "Pasif" && m.aktiflik_durumu !== "Bakımda" && m.mevcut_risk_skoru > 40)
+    .filter(m => m.aktiflik_durumu !== "Pasif" && m.aktiflik_durumu !== "Bakımda" && m.mevcut_risk_skoru >= 50)
     .sort((a, b) => b.mevcut_risk_skoru - a.mevcut_risk_skoru)
     .slice(0, 5);
 

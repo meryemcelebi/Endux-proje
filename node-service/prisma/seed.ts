@@ -261,7 +261,7 @@ async function main() {
         await prisma.risk_skoru.create({
             data: {
                 makine_id: m.makine_id,
-                risk_skoru: isArizali ? 0.9 : Math.random() * 0.4,
+                risk_skoru: isArizali ? 90 : Math.random() * 40,
                 risk_seviyesi: isArizali ? 'YUKSEK' : 'DUSUK',
                 hesaplama_tarihi: new Date()
             }
