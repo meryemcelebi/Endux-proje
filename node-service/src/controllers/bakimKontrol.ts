@@ -38,18 +38,22 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
             }
         }
 
+        // Teknisyen/Kullanıcı rolüne göre ID'yi ayarla
+        const currentUserId = Number(req.user?.userId || teknisyen_id);
+        const isServisRole = req.user?.rol === 'SERVIS';
+
         const sonuc = await prisma.$transaction(async (tx) => {
 
             // A. Bakım Kaydını Oluştur
             const bakimKaydi = await tx.bakim_kaydi.create({
                 data: {
                     makine_id: Number(makine_id),
-                    // Eğer id varsa bağla, yoksa null bırak (güvenli atama)
-                    // DİKKAT: sorumlu_id kullanici_id DEĞİLDİR, servis_sorumlusu tablosuna bakar! Bu yüzden frontend'den gelen teknisyen_id (kullanici_id) buraya doğrudan yazılamaz.
-                    sorumlu_id: null,
-                    kullanici_id: teknisyen_id ? Number(teknisyen_id) : null,
+                    // Eğer SERVIS rolüyse sorumlu_id'ye, değilse kullanici_id'ye ata
+                    sorumlu_id: isServisRole ? currentUserId : null,
+                    kullanici_id: !isServisRole ? currentUserId : null,
+                    
                     servis_firma_id: servis_firma_id ? Number(servis_firma_id) : null,
-                    ariza_id: null, // DÜZELTME: ariza_id ariza_kaydi tablosuna bakar, ariza_turu tablosuna DEĞİL! Hata vermemesi için null geçiyoruz.
+                    ariza_id: null, 
                     bakim_tur_id: bakim_tur_id ? Number(bakim_tur_id) : null,
 
                     bakim_maliyet: Number(bakim_maliyet),

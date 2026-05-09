@@ -33,11 +33,15 @@ export default function Dashboard() {
   const [ignoredRiskIds, setIgnoredRiskIds] = useState([]);
   const [activeFloor, setActiveFloor] = useState(0); // Fabrika haritası kat kontrolü
   const [isMapExpanded, setIsMapExpanded] = useState(false); // Harita büyütme durumu
+  const [bakimiYaklasanList, setBakimiYaklasanList] = useState([]); // TPM: Bakımı yaklaşan makineler
+  const [ignoredUpcomingIds, setIgnoredUpcomingIds] = useState([]); // Yok sayılan yaklaşan bakımlar
+  const [selectedUpcomingIds, setSelectedUpcomingIds] = useState([]); // Seçilen yaklaşan bakımlar
 
   // --- OEE ANALİZ VERİLERİ (Haftalık Verimlilik Değerleri) ---
   // --- OEE ANALİZ VERİLERİ (Haftalık Verimlilik Değerleri) ---
   //const [oeeWeeklyData, setOeeWeeklyData] = useState([]); // Sabit dizi yerine state
   const [fabrikaOee, setFabrikaOee] = useState(0); // Ana OEE skorunu tutmak için
+  const [maliyetOzeti, setMaliyetOzeti] = useState({ toplam_makine_alim: 0, toplam_servis_ucreti: 0, toplam_parca_masrafi: 0 }); // Maliyet analiz özeti
 
   const getMachineStatus = (machine) => String(machine?.aktiflik_durumu || "").trim().toLowerCase();
   const pendingMachines = pendingTasks.map((task) => ({
@@ -45,10 +49,18 @@ export default function Dashboard() {
     makine_adi: task.makine_ad || task.makine_adi || `Makine #${task.makine_id ?? task.id}`,
   }));
   const bakimdaMachines = machinesList.filter((machine) => getMachineStatus(machine) === "bakımda");
-  const yaklasanMachines = machinesList.filter((machine) => {
-    const riskSkoru = Number(machine?.mevcut_risk_skoru || 0);
-    return getMachineStatus(machine) !== "bakımda" && riskSkoru >= 50 && riskSkoru < 80;
-  });
+  // TPM: Bakımı yaklaşan makineler artık backend'den geliyor
+  const yaklasanMachines = bakimiYaklasanList
+    .filter(m => !ignoredUpcomingIds.includes(m.makine_id))
+    .map(m => ({
+      id: m.makine_id,
+      makine_adi: m.makine_adi,
+      makine_turu: m.makine_turu,
+      calisma_saati: m.calisma_saati,
+      periyodik_limit: m.periyodik_limit,
+      kalan_saat: m.kalan_saat,
+      aciliyet: m.aciliyet
+    }));
   const activeMachines = machinesList.filter((machine) => {
     const status = getMachineStatus(machine);
     return status === "aktif" || status === "normal" || status === "çalışıyor";
@@ -80,6 +92,17 @@ export default function Dashboard() {
            setPendingTasks(acilAksiyonlar.onay_bekleyen_makineler);
         }
 
+        // TPM: Bakımı yaklaşan makineleri al
+        const bakimiYaklasan = gercekOzet?.bakimi_yaklasan ?? {};
+        if (bakimiYaklasan.makineler) {
+           setBakimiYaklasanList(bakimiYaklasan.makineler);
+        }
+
+        // Maliyet Özeti
+        if (gercekOzet?.maliyet_ozeti) {
+           setMaliyetOzeti(gercekOzet.maliyet_ozeti);
+        }
+
         // 2. ADIM: Sadece liste için gereken veriyi çek
         const machinesData = await api.getMachines();
         setMachinesList(machinesData || []);
@@ -107,15 +130,10 @@ export default function Dashboard() {
   const yRCount = riskyMachines.length;
 
 
-  // --- MALİYET VE BÜTÇE ANALİZİ (Tamamen Canlı Veri) ---
-  const toplamMakineAlim = machinesList.reduce((sum, m) => sum + Number(m.satin_alma_maaliyeti || m.satin_alma_maliyeti || 0), 0);
-  const toplamServisUcreti = allHistory.reduce((sum, h) => sum + Number(h.bakim_maliyet || 0), 0);
-
-  // Parça masrafı: Bakım geçmişindeki parça değişim kayıtlarından gerçek toplamı hesapla
-  const toplamParcaMasrafi = allHistory.reduce((sum, h) => {
-    const parcaToplami = (h.parca_degisim || []).reduce((pSum, p) => pSum + (Number(p.parca?.parca_maliyeti || 0) * (p.adet || 1)), 0);
-    return sum + parcaToplami;
-  }, 0);
+  // --- MALİYET VE BÜTÇE ANALİZİ (Backend'den Gelen Tamamlanmış Veri) ---
+  const toplamMakineAlim = maliyetOzeti.toplam_makine_alim || 0;
+  const toplamServisUcreti = maliyetOzeti.toplam_servis_ucreti || 0;
+  const toplamParcaMasrafi = maliyetOzeti.toplam_parca_masrafi || 0;
 
   // Grafik ölçeklendirmesi için en yüksek maliyeti bul
   const maxMaliyet = Math.max(toplamMakineAlim, toplamServisUcreti, toplamParcaMasrafi, 1);
@@ -172,11 +190,20 @@ export default function Dashboard() {
 
   // Toplu Yoksayma İşlemi (Sadece listeden kaldırır)
   const handleBulkIgnore = () => {
-    if (selectedTaskIds.length === 0) return;
-    const confirmBulk = window.confirm(`${selectedTaskIds.length} adet görevi listeden kaldırmak istediğinize emin misiniz?`);
-    if (confirmBulk) {
-      setPendingTasks(prev => prev.filter(t => !selectedTaskIds.includes(t.id)));
-      setSelectedTaskIds([]); // Seçimleri temizle
+    if (activeDetailTab === "upcoming") {
+      if (selectedUpcomingIds.length === 0) return;
+      const confirmBulk = window.confirm(`${selectedUpcomingIds.length} adet yaklaşan bakımı yoksaymak istediğinize emin misiniz?`);
+      if (confirmBulk) {
+        setIgnoredUpcomingIds(prev => [...prev, ...selectedUpcomingIds]);
+        setSelectedUpcomingIds([]);
+      }
+    } else {
+      if (selectedTaskIds.length === 0) return;
+      const confirmBulk = window.confirm(`${selectedTaskIds.length} adet görevi listeden kaldırmak istediğinize emin misiniz?`);
+      if (confirmBulk) {
+        setPendingTasks(prev => prev.filter(t => !selectedTaskIds.includes(t.id)));
+        setSelectedTaskIds([]); // Seçimleri temizle
+      }
     }
   };
 
@@ -200,32 +227,63 @@ export default function Dashboard() {
 
   // Seçili tüm bakım görevlerini tek seferde onaylayan fonksiyon
   const handleBulkApprove = async () => {
-    if (selectedTaskIds.length === 0) return;
+    if (activeDetailTab === "upcoming") {
+      if (selectedUpcomingIds.length === 0) return;
+      try {
+        // Seçili yaklaşan bakımlar için arıza/bakım kaydı oluştur
+        for (const id of selectedUpcomingIds) {
+          await api.createEmergencyMaintenance({
+            makine_id: id,
+            aciklama: "Periyodik bakım zamanı geldi.",
+          });
+        }
+        setMachinesList(prev => prev.map(machine =>
+          selectedUpcomingIds.includes(machine.id)
+            ? { ...machine, aktiflik_durumu: "Pasif" }
+            : machine
+        ));
+        setIgnoredUpcomingIds(prev => [...prev, ...selectedUpcomingIds]);
+        setSelectedUpcomingIds([]);
+        window.alert(`${selectedUpcomingIds.length} adet makine periyodik bakıma gönderildi!`);
+        setIsApprovalModalOpen(false);
+      } catch (err) {
+        console.error("Bakıma gönderirken hata", err);
+        alert("Bakıma gönderirken bir hata oluştu!");
+      }
+    } else {
+      if (selectedTaskIds.length === 0) return;
 
-    try {
-      await api.sendTasksToTechnicalService(selectedTaskIds);
+      try {
+        await api.sendTasksToTechnicalService(selectedTaskIds);
 
-      const count = selectedTaskIds.length;
-      const selectedIdSet = new Set(selectedTaskIds);
+        const count = selectedTaskIds.length;
+        const selectedIdSet = new Set(selectedTaskIds);
 
-      // Onaylananları listeden çıkar ve seçimleri sıfırla
-      setPendingTasks(prev => prev.filter(t => !selectedIdSet.has(t.id)));
-      setPendingApprovals(prev => Math.max(0, prev - count));
-      setSelectedTaskIds([]);
-      setIsApprovalModalOpen(false);
-      window.alert(`${count} adet makine bakımı onaylandı ve teknik servise gönderildi!`);
-      navigate("/teknik-servis");
-    } catch (err) {
-      console.error("Görevler onaylanırken hata oluştu", err);
-      alert("Görevler onaylanırken bir hata oluştu!");
+        // Onaylananları listeden çıkar ve seçimleri sıfırla
+        setPendingTasks(prev => prev.filter(t => !selectedIdSet.has(t.id)));
+        setPendingApprovals(prev => Math.max(0, prev - count));
+        setSelectedTaskIds([]);
+        setIsApprovalModalOpen(false);
+        window.alert(`${count} adet makine bakımı onaylandı ve teknik servise gönderildi!`);
+        navigate("/teknik-servis");
+      } catch (err) {
+        console.error("Görevler onaylanırken hata oluştu", err);
+        alert("Görevler onaylanırken bir hata oluştu!");
+      }
     }
   };
 
   // Bir görevi onay listesine ekleme veya listeden çıkarma
   const toggleTaskSelection = (id) => {
-    setSelectedTaskIds(prev =>
-      prev.includes(id) ? prev.filter(tid => tid !== id) : [...prev, id]
-    );
+    if (activeDetailTab === "upcoming") {
+      setSelectedUpcomingIds(prev =>
+        prev.includes(id) ? prev.filter(tid => tid !== id) : [...prev, id]
+      );
+    } else {
+      setSelectedTaskIds(prev =>
+        prev.includes(id) ? prev.filter(tid => tid !== id) : [...prev, id]
+      );
+    }
   };
 
   // Bakım yönetim modalini açar ve hangi sekmenin (tab) gösterileceğini ayarlar
@@ -876,13 +934,34 @@ export default function Dashboard() {
                                   : machinesList
                           ).map(m => (
                             <div key={m.id} style={{
-                              padding: "10px 12px",
+                              padding: "12px 14px",
                               borderBottom: "1px solid #f1f5f9",
                               fontSize: "14px",
                               fontWeight: "800",
-                              color: "#000" // Premium dark black
+                              color: "#000",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center"
                             }}>
-                              {m.makine_adi || m.makine_ad}
+                              <div>
+                                <div>{m.makine_adi || m.makine_ad}</div>
+                                {/* TPM: Yaklaşan bakım detayı */}
+                                {activeDetailTab === "upcoming" && m.kalan_saat !== undefined && (
+                                  <div style={{ fontSize: "11px", color: m.aciliyet === "KRİTİK" ? "#e94560" : m.aciliyet === "GEÇMİŞ" ? "#dc2626" : "#f59e0b", fontWeight: "700", marginTop: "3px" }}>
+                                    {m.aciliyet === "GEÇMİŞ" ? "⛔ Periyodik bakım süresi aşıldı!" : `⏳ Bakıma ${m.kalan_saat} saat kaldı (${m.calisma_saati}/${m.periyodik_limit} saat)`}
+                                  </div>
+                                )}
+                              </div>
+                              {activeDetailTab === "upcoming" && m.aciliyet && (
+                                <span style={{
+                                  fontSize: "10px", fontWeight: "900", padding: "3px 8px", borderRadius: "12px",
+                                  background: m.aciliyet === "KRİTİK" ? "#fee2e2" : m.aciliyet === "GEÇMİŞ" ? "#fecaca" : "#fef3c7",
+                                  color: m.aciliyet === "KRİTİK" ? "#dc2626" : m.aciliyet === "GEÇMİŞ" ? "#991b1b" : "#d97706",
+                                  border: `1px solid ${m.aciliyet === "KRİTİK" ? "#fca5a5" : m.aciliyet === "GEÇMİŞ" ? "#f87171" : "#fcd34d"}`
+                                }}>
+                                  {m.aciliyet}
+                                </span>
+                              )}
                             </div>
                           ))}
                           {((activeDetailTab === "active" && activeMachines.length === 0) ||
@@ -896,97 +975,118 @@ export default function Dashboard() {
                     </div>
 
                     {/* RIGHT COLUMN: Actionable Approval Box */}
-                    <div style={{ flex: 1.2, background: "#fff", borderRadius: "16px", border: "2px solid #e94560", padding: "20px", boxShadow: "0 10px 25px rgba(233,69,96,0.1)" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-                        <h4 style={{ margin: 0, color: "#e94560", fontSize: "17px", fontWeight: "800" }}>Onay Bekleyen Görevler</h4>
-                        <span style={{ fontSize: "11px", background: "#e94560", color: "#fff", padding: "2px 8px", borderRadius: "20px", fontWeight: "bold" }}>{pendingApprovals} GÖREV</span>
-                      </div>
+                    {(activeDetailTab === "pending" || activeDetailTab === "upcoming") ? (
+                      <div style={{ flex: 1.2, background: "#fff", borderRadius: "16px", border: `2px solid ${activeDetailTab === "upcoming" ? "#3498db" : "#e94560"}`, padding: "20px", boxShadow: `0 10px 25px ${activeDetailTab === "upcoming" ? "rgba(52, 152, 219, 0.1)" : "rgba(233,69,96,0.1)"}` }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+                          <h4 style={{ margin: 0, color: activeDetailTab === "upcoming" ? "#3498db" : "#e94560", fontSize: "17px", fontWeight: "800" }}>
+                            {activeDetailTab === "upcoming" ? "Yaklaşan Bakım Aksiyonları" : "Onay Bekleyen Görevler"}
+                          </h4>
+                          <span style={{ fontSize: "11px", background: activeDetailTab === "upcoming" ? "#3498db" : "#e94560", color: "#fff", padding: "2px 8px", borderRadius: "20px", fontWeight: "bold" }}>
+                            {activeDetailTab === "upcoming" ? yaklasanMachines.length : pendingApprovals} GÖREV
+                          </span>
+                        </div>
 
-                      <div style={{ maxHeight: "380px", overflowY: "auto", paddingRight: "5px" }}>
-                        {pendingTasks.length === 0 ? (
-                          <div style={{ textAlign: "center", padding: "40px 20px", color: "#94a3b8", background: "#f8fafc", borderRadius: "12px", border: "1px dashed #cbd5e0" }}>
-                            <span style={{ fontSize: "24px" }}>✅</span>
-                            <div style={{ marginTop: "10px", fontSize: "13px", fontWeight: "bold" }}>Onay Bekleyen İş Yok</div>
-                          </div>
-                        ) : (
-                          pendingTasks.map(t => {
-                            const isSelected = selectedTaskIds.includes(t.id);
-                            return (
-                              <label key={t.id}
-                                style={{
-                                  padding: "12px",
-                                  background: isSelected ? "#fff1f2" : "#fff",
-                                  borderRadius: "12px",
-                                  border: isSelected ? "1px solid #e94560" : "1px solid #f1f5f9",
-                                  marginBottom: "10px",
-                                  cursor: "pointer",
-                                  transition: "all 0.2s",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "15px"
-                                }}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={() => toggleTaskSelection(t.id)}
+                        <div style={{ maxHeight: "380px", overflowY: "auto", paddingRight: "5px" }}>
+                          {(activeDetailTab === "upcoming" ? yaklasanMachines : pendingTasks).length === 0 ? (
+                            <div style={{ textAlign: "center", padding: "40px 20px", color: "#94a3b8", background: "#f8fafc", borderRadius: "12px", border: "1px dashed #cbd5e0" }}>
+                              <span style={{ fontSize: "24px" }}>✅</span>
+                              <div style={{ marginTop: "10px", fontSize: "13px", fontWeight: "bold" }}>Aksiyon Bekleyen İş Yok</div>
+                            </div>
+                          ) : (
+                            (activeDetailTab === "upcoming" ? yaklasanMachines : pendingTasks).map(t => {
+                              const isSelected = activeDetailTab === "upcoming" 
+                                ? selectedUpcomingIds.includes(t.id) 
+                                : selectedTaskIds.includes(t.id);
+                              
+                              return (
+                                <label key={t.id}
                                   style={{
-                                    width: "20px",
-                                    height: "20px",
-                                    accentColor: "#e94560",
-                                    cursor: "pointer"
+                                    padding: "12px",
+                                    background: isSelected ? (activeDetailTab === "upcoming" ? "#ebf5fb" : "#fff1f2") : "#fff",
+                                    borderRadius: "12px",
+                                    border: isSelected ? `1px solid ${activeDetailTab === "upcoming" ? "#3498db" : "#e94560"}` : "1px solid #f1f5f9",
+                                    marginBottom: "10px",
+                                    cursor: "pointer",
+                                    transition: "all 0.2s",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "15px"
                                   }}
-                                />
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontWeight: "700", color: "#1e293b", fontSize: "14px" }}>{t.makine_ad} <span style={{fontSize:"11px", color:"#94a3b8", fontWeight:"normal"}}>(ID: {t.id})</span></div>
-                                  <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>{t.ariza_notu}</div>
-                                </div>
-                              </label>
-                            );
-                          })
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => toggleTaskSelection(t.id)}
+                                    style={{
+                                      width: "20px",
+                                      height: "20px",
+                                      accentColor: activeDetailTab === "upcoming" ? "#3498db" : "#e94560",
+                                      cursor: "pointer"
+                                    }}
+                                  />
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: "700", color: "#1e293b", fontSize: "14px" }}>
+                                      {t.makine_ad || t.makine_adi} <span style={{fontSize:"11px", color:"#94a3b8", fontWeight:"normal"}}>(ID: {t.id})</span>
+                                    </div>
+                                    <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
+                                      {activeDetailTab === "upcoming" ? `Kalan Saat: ${t.kalan_saat}` : t.ariza_notu}
+                                    </div>
+                                  </div>
+                                </label>
+                              );
+                            })
+                          )}
+                        </div>
+
+                        {((activeDetailTab === "upcoming" ? selectedUpcomingIds.length : selectedTaskIds.length) > 0) && (
+                          <div style={{ marginTop: "20px", display: "flex", gap: "10px" }}>
+                            <button
+                              onClick={handleBulkApprove}
+                              style={{
+                                flex: 2,
+                                padding: "15px",
+                                background: "linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "12px",
+                                fontSize: "14px",
+                                fontWeight: "900",
+                                cursor: "pointer",
+                                boxShadow: "0 6px 15px rgba(46, 204, 113, 0.3)",
+                                transition: "all 0.2s"
+                              }}
+                            >
+                              {activeDetailTab === "upcoming" ? selectedUpcomingIds.length : selectedTaskIds.length} BAKIMA GÖNDER
+                            </button>
+                            <button
+                              onClick={handleBulkIgnore}
+                              style={{
+                                flex: 1,
+                                padding: "15px",
+                                background: "#94a3b8",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "12px",
+                                fontSize: "14px",
+                                fontWeight: "900",
+                                cursor: "pointer",
+                                transition: "all 0.2s"
+                              }}
+                            >
+                              YOKSAY
+                            </button>
+                          </div>
                         )}
                       </div>
-
-                      {selectedTaskIds.length > 0 && (
-                        <div style={{ marginTop: "20px", display: "flex", gap: "10px" }}>
-                          <button
-                            onClick={handleBulkApprove}
-                            style={{
-                              flex: 2,
-                              padding: "15px",
-                              background: "linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "12px",
-                              fontSize: "14px",
-                              fontWeight: "900",
-                              cursor: "pointer",
-                              boxShadow: "0 6px 15px rgba(46, 204, 113, 0.3)",
-                              transition: "all 0.2s"
-                            }}
-                          >
-                            {selectedTaskIds.length}  BAKIMA GÖNDER
-                          </button>
-                          <button
-                            onClick={handleBulkIgnore}
-                            style={{
-                              flex: 1,
-                              padding: "15px",
-                              background: "#94a3b8",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "12px",
-                              fontSize: "14px",
-                              fontWeight: "900",
-                              cursor: "pointer",
-                              transition: "all 0.2s"
-                            }}
-                          >
-                            YOKSAY
-                          </button>
+                    ) : (
+                      <div style={{ flex: 1.2, background: "#f8fafc", borderRadius: "16px", border: "2px dashed #cbd5e1", display: "flex", alignItems: "center", justifyContent: "center", padding: "40px", color: "#64748b" }}>
+                        <div style={{ textAlign: "center" }}>
+                          <span style={{ fontSize: "35px", display: "block", marginBottom: "12px" }}>📋</span>
+                          <h4 style={{ margin: 0, fontSize: "16px", color: "#1e293b" }}>Salt Okunur Kategori</h4>
+                          <p style={{ fontSize: "13px", marginTop: "8px", lineHeight: "1.5" }}>Bu sekmedeki makineler sadece bilgi amaçlı listelenmektedir. <br/>Toplu aksiyonlar (Bakıma Gönder / Yoksay) <b>Yaklaşan Bakımlar</b> ve <b>Onay Bekleyenler</b> sekmelerinde mevcuttur.</p>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

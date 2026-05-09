@@ -83,7 +83,18 @@ export default function Makineler() {
     servis_il_ilce: "", // Yeni: İl/İlçe
     servis_adres: "",    // Yeni: Tam Adres
     makine_ozellikleri: "", // Kapasite & Donanım Özellikleri (JSON)
+    // TPM: Yapılandırılmış teknik özellik alanları
+    kapasite: "",
+    guc_tuketimi: "",
+    max_rpm: "",
+    max_basinc_ton: "",
+    enjeksiyon_hacmi: "",
+    tabla_boyutu: "",
+    guncel_calisma_saati: "",
   });
+
+  // TPM: Seçili makine türünün adını bul
+  const selectedTypeName = machineTypes.find(t => String(t.makine_tur_id) === String(form.m_tur_id))?.makine_tur_adi || "";
 
   const handleChange = (e) => {
     let value = e.target.value;
@@ -106,61 +117,82 @@ export default function Makineler() {
       return;
     }
 
+    if (!form.satin_alma_maliyeti || Number(form.satin_alma_maliyeti) <= 0) {
+      alert("Satın alma maliyeti 0 veya boş olamaz! Lütfen geçerli bir maliyet giriniz.");
+      return;
+    }
+
     try {
       // Seri numaralarını virgülle ayrılmışsa diziye çevir
       const seriNoArray = typeof form.seri_no === "string"
         ? form.seri_no.split(",").map(s => s.trim()).filter(s => s !== "")
         : Array.isArray(form.seri_no) ? form.seri_no : [form.seri_no];
 
+      if (seriNoArray.length === 0) {
+        alert("En az bir seri numarası girmelisiniz!");
+        return;
+      }
+
       // Mevcut kullanıcının firma bilgisini al
       const userPayload = JSON.parse(localStorage.getItem("user_payload") || "{}");
       const currentFirmaId = userPayload.firma_id || 1;
 
-      // API'ye gönderilecek veri modelini oluştur
-      const payload = {
-        ...form,
-        firma_id: Number(currentFirmaId),
-        m_tur_id: Number(form.m_tur_id),
-        lokasyon_id: form.lo_id ? Number(form.lo_id) : undefined,
-        seri_no: seriNoArray,
-        satin_alma_tarihi: form.satin_alma_tarihi ? new Date(form.satin_alma_tarihi).toISOString() : new Date().toISOString(),
-        satin_alma_maliyeti: Number(form.satin_alma_maliyeti),
-        aktiflik_durumu: form.aktiflik_durumu === "Aktif",
-        top_cal_sma_saati: [],
-        makine_ozellikleri: form.makine_ozellikleri ? (() => {
-          try { return JSON.parse(form.makine_ozellikleri); } catch { return { teknik_ozellikler: form.makine_ozellikleri }; }
-        })() : [],
-        // Garanti bilgisi varsa tedarikçi objesini doldur
-        tedarikci: form.garanti_suresi ? {
-          firma_adi: form.servis_firma_adi,
-          telefon: form.servis_telefon,
-          il_ilce: form.servis_il_ilce,
-          adres: form.servis_adres
-        } : null
-      };
+      const addedMachinesList = [];
 
-      const addedMachine = await api.addMachine(payload);
+      // Her bir seri numarası için ayrı makine ekle
+      for (const sn of seriNoArray) {
+        const payload = {
+          ...form,
+          firma_id: Number(currentFirmaId),
+          m_tur_id: Number(form.m_tur_id),
+          lokasyon_id: form.lo_id || undefined,
+          seri_no: sn,
+          satin_alma_tarihi: form.satin_alma_tarihi ? new Date(form.satin_alma_tarihi).toISOString() : new Date().toISOString(),
+          satin_alma_maliyeti: Number(form.satin_alma_maliyeti),
+          aktiflik_durumu: form.aktiflik_durumu === "Aktif",
+          makine_ozellikleri: form.makine_ozellikleri ? (() => {
+            try { return JSON.parse(form.makine_ozellikleri); } catch { return { teknik_ozellikler: form.makine_ozellikleri }; }
+          })() : null,
+          tedarikci: form.garanti_suresi ? {
+            firma_adi: form.servis_firma_adi,
+            telefon: form.servis_telefon,
+            il_ilce: form.servis_il_ilce,
+            adres: form.servis_adres
+          } : null
+        };
 
-      // UI listesini anlık olarak güncelle
-      const machineForUI = {
-        ...addedMachine.makine,
-        id: addedMachine.makine.makine_id,
-        makineid: "MKN-" + addedMachine.makine.makine_id,
-        aktiflik_durumu: form.aktiflik_durumu
-      };
+        const response = await api.addMachine(payload);
+        
+        if (response && response.makine) {
+          addedMachinesList.push({
+            ...response.makine,
+            id: response.makine.makine_id,
+            makineid: "MKN-" + response.makine.makine_id,
+            aktiflik_durumu: form.aktiflik_durumu
+          });
+        }
+      }
 
-      setMachines([machineForUI, ...machines]);
+      // UI listesini topluca güncelle
+      setMachines([...addedMachinesList, ...machines]);
 
       // Formu temizle ve modali kapat
       setForm({
         makine_ad: "", m_tur_id: "", seri_no: "",
         satin_alma_tarihi: "", satin_alma_maliyeti: "", garanti_suresi: "", aktiflik_durumu: "Aktif",
         lo_id: "", servis_firma_adi: "", servis_telefon: "", servis_il_ilce: "", servis_adres: "",
-        makine_ozellikleri: ""
+        makine_ozellikleri: "",
+        kapasite: "", guc_tuketimi: "", max_rpm: "", max_basinc_ton: "", enjeksiyon_hacmi: "", tabla_boyutu: "", guncel_calisma_saati: ""
       });
       setIsModalOpen(false);
+      alert("Makine başarıyla eklendi.");
     } catch (err) {
       console.error("Makine eklenirken hata:", err);
+      if (err.message && (err.message.includes("seri_no") || err.message.includes("Unique constraint"))) {
+        alert("Hata: Girdiğiniz seri numarası sistemde zaten kayıtlı! Lütfen kontrol edip tekrar deneyiniz.");
+      } else {
+        alert("Makine eklenemedi: " + (err.message || "Bilinmeyen bir hata oluştu."));
+      }
     }
   };
 
@@ -226,7 +258,10 @@ export default function Makineler() {
               {/* Kat Filtresi */}
               <select
                 value={filterKat}
-                onChange={(e) => setFilterKat(e.target.value)}
+                onChange={(e) => {
+                  setFilterKat(e.target.value);
+                  setFilterLokasyon(""); // Kat değişince lokasyonu sıfırla
+                }}
                 style={{
                   padding: "10px 8px",
                   border: "1px solid #ddd",
@@ -261,19 +296,23 @@ export default function Makineler() {
                 }}
               >
                 <option value="">Lokasyon</option>
-                <optgroup label="Zemin Kat">
-                  <option value="BÖLGE 1">BÖLGE 1</option>
-                  <option value="BÖLGE 2">BÖLGE 2</option>
-                  <option value="BÖLGE 3">BÖLGE 3</option>
-                  <option value="DEPO">DEPO</option>
-                </optgroup>
-                <optgroup label="1. Kat">
-                  <option value="BÖLGE D">BÖLGE 4</option>
-                  <option value="TEKNİK">TEKNİK SERVİS</option>
-                  <option value="OFİS">PERSONEL ALANI</option>
-                  <option value="KALİTE">İDARİ OFİS</option>
-                  <option value="BÖLGE 5">BÖLGE 5</option>
-                </optgroup>
+                {(!filterKat || filterKat === "Zemin") && (
+                  <optgroup label="Zemin Kat">
+                    <option value="BÖLGE 1">BÖLGE 1</option>
+                    <option value="BÖLGE 2">BÖLGE 2</option>
+                    <option value="BÖLGE 3">BÖLGE 3</option>
+                    <option value="DEPO">DEPO</option>
+                  </optgroup>
+                )}
+                {(!filterKat || filterKat === "1.Kat") && (
+                  <optgroup label="1. Kat">
+                    <option value="BÖLGE D">BÖLGE 4</option>
+                    <option value="TEKNİK">TEKNİK SERVİS</option>
+                    <option value="OFİS">PERSONEL ALANI</option>
+                    <option value="KALİTE">İDARİ OFİS</option>
+                    <option value="BÖLGE 5">BÖLGE 5</option>
+                  </optgroup>
+                )}
               </select>
 
               {/* Filtreleri Sıfırla */}
@@ -636,15 +675,54 @@ export default function Makineler() {
                     <option value="Pasif">Pasif</option>
                   </select>
 
-                  {/* MAKİNE ÖZELLİKLERİ */}
+                  {/* ÇALIŞMA SAATİ */}
+                  <input name="guncel_calisma_saati" type="number" placeholder="Güncel Çalışma Saati" value={form.guncel_calisma_saati} onChange={handleChange} style={inputStyle} />
+
+                  {/* MAKİNE TÜRÜNE GÖRE DİNAMİK TEKNİK ÖZELLİK ALANLARI */}
+                  {form.m_tur_id && (
+                    <div style={{ gridColumn: "span 2", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", border: "1px dashed #3498db", padding: "15px", borderRadius: "10px", marginTop: "5px", marginBottom: "5px", background: "#f8fbff" }}>
+                      <div style={{ gridColumn: "span 2", color: "#2980b9", fontWeight: "bold", fontSize: "14px", marginBottom: "5px", display: "flex", alignItems: "center", gap: "8px" }}>
+                        ⚙️ Teknik Özellikler — {selectedTypeName}
+                      </div>
+
+                      {/* Ortak Alan: Kapasite */}
+                      <input name="kapasite" placeholder="Kapasite (örn: 50 Ton, 200 cc)" value={form.kapasite} onChange={handleChange} style={inputStyle} />
+
+                      {/* Ortak Alan: Güç Tüketimi */}
+                      <input name="guc_tuketimi" placeholder="Güç Tüketimi (kW)" value={form.guc_tuketimi} onChange={handleChange} style={inputStyle} />
+
+                      {/* CNC: Max RPM */}
+                      {selectedTypeName.toLowerCase().includes("cnc") && (
+                        <input name="max_rpm" type="number" placeholder="Max RPM (dev/dk)" value={form.max_rpm} onChange={handleChange} style={inputStyle} />
+                      )}
+
+                      {/* Pres: Max Basınç + Tabla Boyutu */}
+                      {selectedTypeName.toLowerCase().includes("pres") && (
+                        <>
+                          <input name="max_basinc_ton" type="number" placeholder="Max Basınç (Ton)" value={form.max_basinc_ton} onChange={handleChange} style={inputStyle} />
+                          <input name="tabla_boyutu" placeholder="Tabla Boyutu (mm, örn: 600x800)" value={form.tabla_boyutu} onChange={handleChange} style={inputStyle} />
+                        </>
+                      )}
+
+                      {/* Plastik Enjeksiyon: Hacim + Basınç */}
+                      {selectedTypeName.toLowerCase().includes("enjeksiyon") && (
+                        <>
+                          <input name="enjeksiyon_hacmi" placeholder="Enjeksiyon Hacmi (cc/gr)" value={form.enjeksiyon_hacmi} onChange={handleChange} style={inputStyle} />
+                          <input name="max_basinc_ton" type="number" placeholder="Kapama Kuvveti (Ton)" value={form.max_basinc_ton} onChange={handleChange} style={inputStyle} />
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Eski serbest metin alanı (geriye uyumluluk) */}
                   <div style={{ gridColumn: "span 2" }}>
-                    <label style={labelStyle}>Makine Özellikleri</label>
+                    <label style={labelStyle}>Ek Özellikler (Serbest Metin)</label>
                     <textarea
                       name="makine_ozellikleri"
-                      placeholder="Örn: 2000 RPM, 50 Ton Kapasite..."
+                      placeholder="Diğer teknik notlar, sertifikalar vb."
                       value={form.makine_ozellikleri}
                       onChange={handleChange}
-                      style={{ ...inputStyle, height: "70px", resize: "vertical" }}
+                      style={{ ...inputStyle, height: "50px", resize: "vertical" }}
                     />
                   </div>
                 </div>

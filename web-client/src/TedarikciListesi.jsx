@@ -17,6 +17,7 @@ export default function TedarikciListesi() {
   const [formData, setFormData] = useState({
     tedarikci_id: "",
     parca_adi: "",
+    kategori_adi: "",
     adet: "",
     birim_fiyat: "",
     tedarik_suresi: "",
@@ -37,18 +38,23 @@ export default function TedarikciListesi() {
   // --- GEÇMİŞ ALIMLAR STATE ---
   const [satinAlmalar, setSatinAlmalar] = useState([]);
   const [satinAlmaLoading, setSatinAlmaLoading] = useState(true);
+  const [categories, setCategories] = useState([]);
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterPartName, setFilterPartName] = useState("");
 
   // --- VERİ ÇEKME (Tedarikçiler) ---
   useEffect(() => {
     const fetchSuppliersAndTypes = async () => {
       try {
-        const [allFirms, types] = await Promise.all([
+        const [allFirms, types, cats] = await Promise.all([
           api.getFirms(),
-          api.getSystemMachineTypes()
+          api.getSystemMachineTypes(),
+          api.getPartCategories()
         ]);
         const suppliersOnly = allFirms.filter(f => f.tip === "Tedarikçi" && f.aktiflik !== false);
         setTedarikciler(suppliersOnly);
         setMachineTypes(types);
+        setCategories(cats);
       } catch (error) {
         console.error("Veriler çekilirken hata:", error);
       }
@@ -124,7 +130,7 @@ export default function TedarikciListesi() {
     try {
       await api.addPurchase(formData);
       setFormSuccess("✅ Satın alma kaydı başarıyla oluşturuldu ve stok güncellendi!");
-      setFormData({ tedarikci_id: "", parca_adi: "", adet: "", birim_fiyat: "", tedarik_suresi: "", tarih: new Date().toISOString().split("T")[0], puan: 0, makine_tur_id: "", tahmini_omur: "" });
+      setFormData({ tedarikci_id: "", parca_adi: "", kategori_adi: "", adet: "", birim_fiyat: "", tedarik_suresi: "", tarih: new Date().toISOString().split("T")[0], puan: 0, makine_tur_id: "", tahmini_omur: "" });
       setHoverPuan(0);
       setTimeout(() => setFormSuccess(""), 4000);
     } catch (error) {
@@ -268,7 +274,7 @@ export default function TedarikciListesi() {
                         </td>
                         <td style={tdStyle}>
                           <div style={{ fontSize: "13px", fontWeight: "bold" }}>{t.iletisim?.il ? `${t.iletisim.il} / ${t.iletisim.ilce}` : "-"}</div>
-                          <div style={{ fontSize: "12px", color: "#7f8c8d", maxWidth: "200px", whiteSpace: "normal" }}>{t.iletisim?.acik_adres || "-"}</div>
+                          <div style={{ fontSize: "12px", color: "#7f8c8d", maxWidth: "200px", whiteSpace: "normal" }}>{t.adres || t.iletisim?.acik_adres || "-"}</div>
                         </td>
                         <td style={tdStyle}>
                           <div style={{
@@ -377,6 +383,31 @@ export default function TedarikciListesi() {
                       onChange={(e) => handleInputChange("parca_adi", e.target.value)}
                       style={inputStyle}
                     />
+                  </div>
+
+                  {/* KATEGORİ ADI */}
+                  <div style={formGroupStyle}>
+                    <label style={labelStyle}>Kategori Seçimi <span style={{ color: "#e74c3c" }}>*</span></label>
+                    <div style={{ display: "flex", gap: "10px" }}>
+                      <select
+                        id="kategori-select"
+                        value={formData.kategori_adi}
+                        onChange={(e) => handleInputChange("kategori_adi", e.target.value)}
+                        style={{ ...selectStyle, flex: 1 }}
+                      >
+                        <option value="">— Kategori seçiniz —</option>
+                        {categories.map(c => (
+                          <option key={c.kategori_id} value={c.kategori_adi}>{c.kategori_adi}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="Veya yeni kategori yazın..."
+                        value={formData.kategori_adi}
+                        onChange={(e) => handleInputChange("kategori_adi", e.target.value)}
+                        style={{ ...inputStyle, flex: 1 }}
+                      />
+                    </div>
                   </div>
 
                   {/* TAHMİNİ ÖMÜR */}
@@ -656,14 +687,37 @@ export default function TedarikciListesi() {
                 </div>
               </div>
 
+              {/* FİLTRELER */}
+              <div style={{ display: "flex", gap: "15px", marginBottom: "20px" }}>
+                <input
+                  type="text"
+                  placeholder="🔍 Parça adına göre filtrele..."
+                  value={filterPartName}
+                  onChange={(e) => setFilterPartName(e.target.value)}
+                  style={{ ...searchInputStyle, width: "250px" }}
+                />
+                <select
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  style={{ ...searchInputStyle, width: "200px" }}
+                >
+                  <option value="">Tüm Kategoriler</option>
+                  {categories.map(c => (
+                    <option key={c.kategori_id} value={c.kategori_adi}>{c.kategori_adi}</option>
+                  ))}
+                </select>
+              </div>
+
               {satinAlmaLoading ? (
                 <div style={{ textAlign: "center", padding: "60px 0", color: "#95a5a6", fontSize: "16px" }}>
                   Veriler yükleniyor...
                 </div>
-              ) : satinAlmalar.length === 0 ? (
+              ) : satinAlmalar.filter(sa => 
+                  (!filterPartName || (sa.parca_adi || "").toLowerCase().includes(filterPartName.toLowerCase())) &&
+                  (!filterCategory || sa.kategori_adi === filterCategory)
+                ).length === 0 ? (
                 <div style={{ textAlign: "center", padding: "60px 0" }}>
-
-                  <div style={{ color: "#95a5a6", fontSize: "16px" }}>Henüz satın alma kaydı bulunmamaktadır.</div>
+                  <div style={{ color: "#95a5a6", fontSize: "16px" }}>Arama kriterlerine uygun satın alma kaydı bulunmamaktadır.</div>
                 </div>
               ) : (
                 <table style={tableStyle}>
@@ -676,16 +730,32 @@ export default function TedarikciListesi() {
                     </tr>
                   </thead>
                   <tbody>
-                    {satinAlmalar.map((sa, index) => (
-                      <tr key={`${sa.parca_adi}-${sa.stok_giris_tarihi}-${index}`} style={trStyle}>
-                        <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>{sa.parca_adi || "-"}</td>
-                        <td style={tdStyle}>{sa.kategori_adi || "-"}</td>
-                        <td style={{ ...tdStyle, fontSize: "13px", color: "#7f8c8d" }}>
-                          {sa.stok_giris_tarihi?.split('T')[0] || "-"}
-                        </td>
-                        <td style={{ ...tdStyle, fontWeight: "bold", color: "#27ae60" }}>{sa.girilen_adet ?? "-"}</td>
-                      </tr>
-                    ))}
+                    {satinAlmalar
+                      .filter(sa => 
+                        (!filterPartName || (sa.parca_adi || "").toLowerCase().includes(filterPartName.toLowerCase())) &&
+                        (!filterCategory || sa.kategori_adi === filterCategory)
+                      )
+                      .map((sa, index) => (
+                        <tr key={`${sa.parca_adi}-${sa.stok_giris_tarihi}-${index}`} style={trStyle}>
+                          <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>{sa.parca_adi || "-"}</td>
+                          <td style={tdStyle}>
+                            <span style={{ 
+                              background: "rgba(149, 165, 166, 0.1)", 
+                              color: "#7f8c8d", 
+                              padding: "4px 10px", 
+                              borderRadius: "12px", 
+                              fontSize: "12px",
+                              fontWeight: "bold"
+                            }}>
+                              {sa.kategori_adi || "Genel"}
+                            </span>
+                          </td>
+                          <td style={{ ...tdStyle, fontSize: "13px", color: "#7f8c8d" }}>
+                            {sa.stok_giris_tarihi?.split('T')[0] || "-"}
+                          </td>
+                          <td style={{ ...tdStyle, fontWeight: "bold", color: "#27ae60" }}>{sa.girilen_adet ?? "-"}</td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               )}
