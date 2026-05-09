@@ -5,6 +5,25 @@ import { tekMakineTahmin } from "./aiKontrol";
 
 //operatorlerden gelen form verilerini database'e ekler:
 
+function hesaplaFormRiskSkoru(cevaplar: Array<{ girilen_deger: string | null }>): number {
+    const sayisalCevaplar = cevaplar
+        .map(c => Number(c.girilen_deger))
+        .filter(deger => Number.isFinite(deger));
+
+    if (sayisalCevaplar.length === 0) return 0;
+
+    const maksimumPuan = sayisalCevaplar.length * 2;
+    const toplamPuan = sayisalCevaplar.reduce((toplam, deger) => toplam + Math.max(0, Math.min(2, deger)), 0);
+
+    return Number(((toplamPuan / maksimumPuan) * 100).toFixed(2));
+}
+
+function riskSeviyesiBelirle(riskSkoru: number) {
+    if (riskSkoru >= 80) return "YUKSEK";
+    if (riskSkoru >= 50) return "ORTA";
+    return "DUSUK";
+}
+
 export async function formKaydet(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
         const { makine_id, sablon_id, genel_not, cevaplar } = req.body;
@@ -41,6 +60,8 @@ export async function formKaydet(req: Request, res: Response, next: NextFunction
             return;
         }
 
+        const anlikRiskSkoru = hesaplaFormRiskSkoru(formatliCevaplar);
+
         const yeniForm = await prisma.$transaction(async (tx) => {
             const form = await tx.gunluk_kontrol_formu.create({
                 data: {
@@ -48,11 +69,12 @@ export async function formKaydet(req: Request, res: Response, next: NextFunction
                     kullanici_id: operator_id,
                     sablon_id: Number(sablon_id),
                     kontrol_tarihi: new Date(),
-                    genel_not: genel_not || null
+                    genel_not: genel_not || null,
+                    ai_on_risk_durumu: anlikRiskSkoru
                 }
             });
 
-            await tx.form_madde_cevap.createMany({
+            const cevapKayitSonucu = await tx.form_madde_cevap.createMany({
                 data: formatliCevaplar.map((cevap: any) => ({
                     form_id: form.form_id,
                     soru_referans_id: cevap.soru_referans_id,
@@ -62,13 +84,27 @@ export async function formKaydet(req: Request, res: Response, next: NextFunction
                 }))
             });
 
+            if (cevapKayitSonucu.count !== formatliCevaplar.length) {
+                throw new Error(`Form cevapları eksik kaydedildi. Beklenen: ${formatliCevaplar.length}, kaydedilen: ${cevapKayitSonucu.count}`);
+            }
+
+            await tx.risk_skoru.create({
+                data: {
+                    makine_id: Number(makine_id),
+                    risk_skoru: anlikRiskSkoru,
+                    risk_seviyesi: riskSeviyesiBelirle(anlikRiskSkoru),
+                    hesaplama_tarihi: new Date()
+                }
+            });
+
             return form;
         });
 
-        let aiSonuc = null;
         if (yeniForm) {
             console.log(`[AI-TETIKLEYICI] Makine ${makine_id} Form ${yeniForm.form_id} için AI başlatılıyor...`);
-            aiSonuc = await tekMakineTahmin(Number(makine_id), yeniForm.form_id, operator_id);
+            tekMakineTahmin(Number(makine_id), yeniForm.form_id, operator_id).catch(err => {
+                console.error("[AI-ARKA-PLAN-HATA] AI tahmin işlemi tamamlanamadı:", err);
+            });
         }
 
         res.status(201).json({
@@ -77,7 +113,7 @@ export async function formKaydet(req: Request, res: Response, next: NextFunction
             data: {
                 form_id: yeniForm.form_id,
                 cevap_sayisi: formatliCevaplar.length,
-                ai: aiSonuc?.data ?? null
+                risk_skoru: anlikRiskSkoru
             }
         });
 
