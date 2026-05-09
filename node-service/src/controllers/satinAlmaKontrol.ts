@@ -241,6 +241,56 @@ export const getStokDurumu = async (req: Request, res: Response): Promise<void> 
     }
 };
 
+// DELETE /api/satin-alma/stok/:id
+export const parcaSil = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const parcaId = Number(req.params.id);
+
+        if (!Number.isInteger(parcaId) || parcaId <= 0) {
+            res.status(400).json({ hata: "Geçersiz parça ID." });
+            return;
+        }
+
+        const parca = await prisma.parca.findUnique({
+            where: { parca_id: parcaId },
+            select: { parca_id: true, parca_adi: true }
+        });
+
+        if (!parca) {
+            res.status(404).json({ hata: "Silinecek parça bulunamadı." });
+            return;
+        }
+
+        await prisma.$transaction(async (tx) => {
+            await tx.parca_stok_hareketleri.deleteMany({
+                where: { parca_id: parcaId }
+            });
+
+            await tx.tedarikci_parca.deleteMany({
+                where: { parca_id: parcaId }
+            });
+
+            await tx.parca_degisim.updateMany({
+                where: { parca_id: parcaId },
+                data: { parca_id: null }
+            });
+
+            await tx.parca.delete({
+                where: { parca_id: parcaId }
+            });
+        });
+
+        res.json({
+            success: true,
+            message: `${parca.parca_adi} stoktan silindi.`,
+            data: { parca_id: parcaId }
+        });
+    } catch (error: any) {
+        console.error("Parça silme hatası:", error);
+        res.status(500).json({ hata: error.message || "Parça silinirken bir hata oluştu." });
+    }
+};
+
 export const getParcaKategorileri = async (req: Request, res: Response): Promise<void> => {
     try {
         const kategoriler = await prisma.parca_kategori.findMany({

@@ -147,7 +147,6 @@ async function aiTahminIstegiGonder(payload: AITahminPayload): Promise<IAiTahmin
             if (axiosError.response) {
                 const status = axiosError.response.status;
                 console.error(`AI servisi hata yanıtı: ${status}`);
-                throw new Error(`AI servisi hata yanıtı: ${status}`);
             }
         }
     }
@@ -239,9 +238,16 @@ export async function tekMakineTahmin(makineId: number, formId: number, kullanic
 
         console.log(`[AI-TAHMİN] Sonuç alındı. Risk Skoru: ${riskPuani}`);
 
-        // 5. DB'ye risk skorunu ve tahmin detaylarını kaydet
-        // MaddeId olarak formun ana referans maddesini verebiliriz (şimdilik 1)
-        const maddeId = 1;
+        const ilkCevap = await prisma.form_madde_cevap.findFirst({
+            where: { form_id: formId },
+            select: { soru_referans_id: true },
+            orderBy: { cevap_id: "asc" }
+        });
+        const maddeId = ilkCevap?.soru_referans_id;
+
+        if (!maddeId) {
+            throw new Error(`Form ${formId} için risk tespitine bağlanacak cevap maddesi bulunamadı.`);
+        }
 
         await riskSkoruKaydet(
             makine.makine_id,

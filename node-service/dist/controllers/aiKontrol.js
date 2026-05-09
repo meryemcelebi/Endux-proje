@@ -111,7 +111,6 @@ async function aiTahminIstegiGonder(payload) {
             if (axiosError.response) {
                 const status = axiosError.response.status;
                 console.error(`AI servisi hata yanıtı: ${status}`);
-                throw new Error(`AI servisi hata yanıtı: ${status}`);
             }
         }
     }
@@ -182,9 +181,15 @@ async function tekMakineTahmin(makineId, formId, kullaniciId) {
         const tahminSonucu = await aiTahminIstegiGonder(payload);
         const riskPuani = riskSkorunuYuzeCevir(tahminSonucu.risk_skoru);
         console.log(`[AI-TAHMİN] Sonuç alındı. Risk Skoru: ${riskPuani}`);
-        // 5. DB'ye risk skorunu ve tahmin detaylarını kaydet
-        // MaddeId olarak formun ana referans maddesini verebiliriz (şimdilik 1)
-        const maddeId = 1;
+        const ilkCevap = await prisma_1.default.form_madde_cevap.findFirst({
+            where: { form_id: formId },
+            select: { soru_referans_id: true },
+            orderBy: { cevap_id: "asc" }
+        });
+        const maddeId = ilkCevap?.soru_referans_id;
+        if (!maddeId) {
+            throw new Error(`Form ${formId} için risk tespitine bağlanacak cevap maddesi bulunamadı.`);
+        }
         await riskSkoruKaydet(makine.makine_id, formId, kullaniciId, tahminSonucu, maddeId);
         return {
             success: true,

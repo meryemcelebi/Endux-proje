@@ -5,6 +5,8 @@ const satinAlmaKontrol_1 = require("../controllers/satinAlmaKontrol");
 const yetki_1 = require("../middlewares/yetki");
 const router = (0, express_1.Router)();
 router.get('/', yetki_1.oturumKontrol, satinAlmaKontrol_1.getAlimGecmisi);
+router.get('/kategoriler', yetki_1.oturumKontrol, satinAlmaKontrol_1.getParcaKategorileri);
 router.post('/', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)("YONETICI", "TEKNISYEN"), satinAlmaKontrol_1.satinAlmaKaydet);
 router.get('/stok', yetki_1.oturumKontrol, satinAlmaKontrol_1.getStokDurumu);
+router.delete('/stok/:id', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)("YONETICI", "TEKNISYEN"), satinAlmaKontrol_1.parcaSil);
 exports.default = router;

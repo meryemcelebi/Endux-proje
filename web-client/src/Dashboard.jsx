@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [, setIsLoading] = useState(true); // Veriler yüklenirken gösterilen yükleme durumu
   const [pendingApprovals, setPendingApprovals] = useState(0); // Servis firması tarafından tamamlanmış, kullanıcı puanı bekleyen kayıtlar
   const [pendingTasks, setPendingTasks] = useState([]); // Arıza kaydı açılmış ancak henüz teknisyen ataması bekleyen görevler
+  const [lowStockParts, setLowStockParts] = useState([]);
   const [allHistory] = useState([]); // Grafikler için kullanılan geçmiş servis verileri
   const [isOeeModalOpen, setIsOeeModalOpen] = useState(false); // Verimlilik (OEE) detaylarını gösteren pencerenin durumu
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false); // Bakım/Onay detaylarını yöneten ana modalin durumu
@@ -27,6 +28,7 @@ export default function Dashboard() {
   const [activeDetailTab, setActiveDetailTab] = useState(null); // Modalde hangi sekmenin (Bakımda, Bekleyen vs.) aktif olduğunu tutar
   //const [firmsMetadata, setFirmsMetadata] = useState([]); // Servis firmalarının değerlendirme ve iletişim bilgileri
   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
+  const [alertModalType, setAlertModalType] = useState("risk");
   const [activeBreakdownId, setActiveBreakdownId] = useState(null);
   const [breakdownDesc, setBreakdownDesc] = useState("");
   const [emergencySubmitId, setEmergencySubmitId] = useState(null);
@@ -41,6 +43,11 @@ export default function Dashboard() {
   // --- OEE ANALİZ VERİLERİ (Haftalık Verimlilik Değerleri) ---
   //const [oeeWeeklyData, setOeeWeeklyData] = useState([]); // Sabit dizi yerine state
   const [fabrikaOee, setFabrikaOee] = useState(0); // Ana OEE skorunu tutmak için
+  const [oeeComponents, setOeeComponents] = useState({
+    kullanilabilirlik: 0,
+    performans: 0,
+    kalite: 0,
+  });
   const [maliyetOzeti, setMaliyetOzeti] = useState({ toplam_makine_alim: 0, toplam_servis_ucreti: 0, toplam_parca_masrafi: 0 }); // Maliyet analiz özeti
 
   const getMachineStatus = (machine) => String(machine?.aktiflik_durumu || "").trim().toLowerCase();
@@ -85,27 +92,35 @@ export default function Dashboard() {
 
         // Backend'den gelen hazır özetleri state'lere dağıt
         setFabrikaOee(Number(operasyonelPerformans.ortalama_oee ?? 0));
+        setOeeComponents({
+          kullanilabilirlik: Number(operasyonelPerformans.kullanilabilirlik ?? 0),
+          performans: Number(operasyonelPerformans.performans ?? 0),
+          kalite: Number(operasyonelPerformans.kalite ?? 0),
+        });
         setPendingApprovals(Number(acilAksiyonlar.onay_bekleyen_is ?? 0));
-        
+
         // Yeni Backend Formatından Onay Bekleyen Makineleri (Görevleri) Al
         if (acilAksiyonlar.onay_bekleyen_makineler) {
-           setPendingTasks(acilAksiyonlar.onay_bekleyen_makineler);
+          setPendingTasks(acilAksiyonlar.onay_bekleyen_makineler);
         }
 
         // TPM: Bakımı yaklaşan makineleri al
         const bakimiYaklasan = gercekOzet?.bakimi_yaklasan ?? {};
         if (bakimiYaklasan.makineler) {
-           setBakimiYaklasanList(bakimiYaklasan.makineler);
+          setBakimiYaklasanList(bakimiYaklasan.makineler);
         }
 
         // Maliyet Özeti
         if (gercekOzet?.maliyet_ozeti) {
-           setMaliyetOzeti(gercekOzet.maliyet_ozeti);
+          setMaliyetOzeti(gercekOzet.maliyet_ozeti);
         }
 
         // 2. ADIM: Sadece liste için gereken veriyi çek
         const machinesData = await api.getMachines();
         setMachinesList(machinesData || []);
+
+        const inventoryData = await api.getInventory();
+        setLowStockParts((inventoryData || []).filter(part => Number(part.miktar || 0) < 5));
 
       } catch (err) {
         console.error("Dashboard yükleme hatası:", err);
@@ -128,6 +143,7 @@ export default function Dashboard() {
 
   // Sayısal özet verileri
   const yRCount = riskyMachines.length;
+  const lowStockCount = lowStockParts.length;
 
 
   // --- MALİYET VE BÜTÇE ANALİZİ (Backend'den Gelen Tamamlanmış Veri) ---
@@ -246,6 +262,7 @@ export default function Dashboard() {
         setSelectedUpcomingIds([]);
         window.alert(`${selectedUpcomingIds.length} adet makine periyodik bakıma gönderildi!`);
         setIsApprovalModalOpen(false);
+        navigate("/teknik-servis");
       } catch (err) {
         console.error("Bakıma gönderirken hata", err);
         alert("Bakıma gönderirken bir hata oluştu!");
@@ -304,15 +321,12 @@ export default function Dashboard() {
   // Grafik paydası: Tüm kalemlerin toplamı (Grafiğin %100 tam daire görünmesi için)
   const chartTotal = (onayBekleyenCount + bakimdaMakineCount + bakimiYaklasanCount + activeMachinesCount) || 1;
 
-  // Fabrika OEE Hesaplaması (Availability temelli)
-  const factoryOee = totalMachinesCount > 0 ? ((activeMachinesCount / totalMachinesCount) * 100).toFixed(1) : 0;
-
   // 8 Haftalık OEE Geçmişi Hazırlığı (7 Hafta Boş + Mevcut Hafta)
   const oeeHistory = [
     { week: "H-7", oee: 0 }, { week: "H-6", oee: 0 }, { week: "H-5", oee: 0 },
     { week: "H-4", oee: 0 }, { week: "H-3", oee: 0 }, { week: "H-2", oee: 0 },
     { week: "Geçen H.", oee: 0 },
-    { week: "Bu Hafta", oee: Number(factoryOee) }
+    { week: "Bu Hafta", oee: Number(fabrikaOee) }
   ];
 
   // Doughnut grafiği dilimlerinin yüzde (%) oranları
@@ -345,10 +359,12 @@ export default function Dashboard() {
       if (!acc[targetKat]) acc[targetKat] = {};
       if (!acc[targetKat][targetBlock]) acc[targetKat][targetBlock] = [];
 
-      const displayNo = index + 1;
+      const displayNo = m.id || index + 1;
+      const riskSkoru = m.mevcut_risk_skoru || 0;
       acc[targetKat][targetBlock].push({
         ...m,
         gercekMaliyetYuzdesi,
+        riskSkoru,
         renkCode,
         kRit,
         displayNo,
@@ -419,7 +435,7 @@ export default function Dashboard() {
                 }}
                 onMouseOver={(e) => { e.currentTarget.style.transform = 'scale(1.3) rotate(5deg)'; e.currentTarget.style.zIndex = 20; }}
                 onMouseOut={(e) => { e.currentTarget.style.transform = 'scale(1) rotate(0deg)'; e.currentTarget.style.zIndex = 5; }}
-                title={`${m.makine_adi || m.ad}\nRisk: %${m.gercekMaliyetYuzdesi}`}
+                title={`${m.makine_adi || m.ad}\nRisk Skoru: ${m.riskSkoru} (AI)\nMaliyet Riski: %${m.gercekMaliyetYuzdesi}`}
               >
                 {m.displayNo}
               </div>
@@ -520,9 +536,9 @@ export default function Dashboard() {
               </div>
             </div>
             <div style={{ display: "flex", gap: "10px", fontSize: "10px", fontWeight: "950" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "5px", color: "#22c55e" }}>● İDEAL (%0-5)</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "5px", color: "#f59e0b" }}>● UYARI (%5-10)</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#ef4444" }}>● KRİTİK (%10+)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "5px", color: "#22c55e" }}>● İDEAL (%0-5) (Maliyete Göre)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "5px", color: "#f59e0b" }}>● UYARI (%5-10) (Maliyete Göre)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#ef4444" }}>● KRİTİK (%10+) (Maliyete Göre)</div>
             </div>
           </div>
         </div>
@@ -625,7 +641,10 @@ export default function Dashboard() {
 
                 {/* Yüksek Riskli Rozeti: Risk skoru yüksek makineleri açar */}
                 <div
-                  onClick={() => setIsAlertModalOpen(true)}
+                  onClick={() => {
+                    setAlertModalType("risk");
+                    setIsAlertModalOpen(true);
+                  }}
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
@@ -648,6 +667,35 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <strong style={{ fontSize: "18px", color: "#e74c3c", fontWeight: "900" }}>{yRCount}</strong>
+                </div>
+
+                <div
+                  onClick={() => {
+                    setAlertModalType("stock");
+                    setIsAlertModalOpen(true);
+                  }}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    cursor: "pointer",
+                    padding: "8px 12px",
+                    background: "#fff7ed",
+                    borderRadius: "8px",
+                    border: "1px solid #fed7aa",
+                    transition: "all 0.2s"
+                  }}
+                  onMouseOver={(e) => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = "#fb923c"; }}
+                  onMouseOut={(e) => { e.currentTarget.style.background = "#fff7ed"; e.currentTarget.style.borderColor = "#fed7aa"; }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "16px" }}>⚠️</span>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <span style={{ fontSize: "11px", fontWeight: "700", color: "#334155", textTransform: "uppercase" }}>Stok Uyarısı</span>
+                      <span style={{ fontSize: "10px", color: "#64748b" }}>5 adetin altında</span>
+                    </div>
+                  </div>
+                  <strong style={{ fontSize: "18px", color: "#f97316", fontWeight: "900" }}>{lowStockCount}</strong>
                 </div>
 
 
@@ -994,10 +1042,10 @@ export default function Dashboard() {
                             </div>
                           ) : (
                             (activeDetailTab === "upcoming" ? yaklasanMachines : pendingTasks).map(t => {
-                              const isSelected = activeDetailTab === "upcoming" 
-                                ? selectedUpcomingIds.includes(t.id) 
+                              const isSelected = activeDetailTab === "upcoming"
+                                ? selectedUpcomingIds.includes(t.id)
                                 : selectedTaskIds.includes(t.id);
-                              
+
                               return (
                                 <label key={t.id}
                                   style={{
@@ -1026,7 +1074,7 @@ export default function Dashboard() {
                                   />
                                   <div style={{ flex: 1 }}>
                                     <div style={{ fontWeight: "700", color: "#1e293b", fontSize: "14px" }}>
-                                      {t.makine_ad || t.makine_adi} <span style={{fontSize:"11px", color:"#94a3b8", fontWeight:"normal"}}>(ID: {t.id})</span>
+                                      {t.makine_ad || t.makine_adi} <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: "normal" }}>(ID: {t.id})</span>
                                     </div>
                                     <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
                                       {activeDetailTab === "upcoming" ? `Kalan Saat: ${t.kalan_saat}` : t.ariza_notu}
@@ -1083,7 +1131,7 @@ export default function Dashboard() {
                         <div style={{ textAlign: "center" }}>
                           <span style={{ fontSize: "35px", display: "block", marginBottom: "12px" }}>📋</span>
                           <h4 style={{ margin: 0, fontSize: "16px", color: "#1e293b" }}>Salt Okunur Kategori</h4>
-                          <p style={{ fontSize: "13px", marginTop: "8px", lineHeight: "1.5" }}>Bu sekmedeki makineler sadece bilgi amaçlı listelenmektedir. <br/>Toplu aksiyonlar (Bakıma Gönder / Yoksay) <b>Yaklaşan Bakımlar</b> ve <b>Onay Bekleyenler</b> sekmelerinde mevcuttur.</p>
+                          <p style={{ fontSize: "13px", marginTop: "8px", lineHeight: "1.5" }}>Bu sekmedeki makineler sadece bilgi amaçlı listelenmektedir. <br />Toplu aksiyonlar (Bakıma Gönder / Yoksay) <b>Yaklaşan Bakımlar</b> ve <b>Onay Bekleyenler</b> sekmelerinde mevcuttur.</p>
                         </div>
                       </div>
                     )}
@@ -1099,16 +1147,45 @@ export default function Dashboard() {
               <div style={modalOverlayStyle}>
                 <div style={modalContentStyle}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", borderBottom: "1px solid #eee", paddingBottom: "15px" }}>
-                    <h3 style={{ margin: 0, color: "#0f3460", fontSize: "20px" }}>Riskli Makineler Tablosu</h3>
+                    <h3 style={{ margin: 0, color: "#0f3460", fontSize: "20px" }}>
+                      {alertModalType === "stock" ? "Stok Uyarıları" : "Riskli Makineler"}
+                    </h3>
                     <button onClick={() => { setIsAlertModalOpen(false); setActiveBreakdownId(null); }} style={closeBtnStyle}>✕</button>
                   </div>
 
                   <div style={{ maxHeight: "60vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: "10px", paddingRight: "10px" }}>
-                    {riskyMachines.length === 0 ? (
+                    {alertModalType === "stock" && lowStockParts.length === 0 ? (
+                      <div style={{ textAlign: "center", padding: "35px 20px", color: "#64748b", background: "#f8fafc", borderRadius: "12px", border: "1px dashed #cbd5e1", fontWeight: "700" }}>
+                        Kritik stok uyarısı bulunmuyor.
+                      </div>
+                    ) : alertModalType === "stock" ? (
+                      <>
+                        {lowStockParts.map(part => (
+                          <div key={`stock-${part.stok_id}`} style={{ padding: "16px", background: "white", borderRadius: "12px", border: "1px solid #fed7aa", borderLeft: "6px solid #f97316", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px" }}>
+                              <div style={{ minWidth: 0 }}>
+                                <strong style={{ display: "block", fontSize: "17px", color: "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{part.parca_adi}</strong>
+                                <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
+                                  <span style={{ fontSize: "11px", fontWeight: "800", color: "#c2410c", background: "#ffedd5", padding: "4px 10px", borderRadius: "20px", border: "1px solid #fed7aa" }}>
+                                    Kritik Stok
+                                  </span>
+                                  <span style={{ fontSize: "11px", fontWeight: "800", color: "#334155", background: "#f1f5f9", padding: "4px 10px", borderRadius: "20px", border: "1px solid #e2e8f0" }}>
+                                    Mevcut: {Number(part.miktar || 0)} adet
+                                  </span>
+                                </div>
+                              </div>
+                              <button onClick={() => navigate("/tedarikciler")} style={{ ...btnStyle, background: "#f97316", minWidth: "140px" }}>Stoka Git</button>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    ) : riskyMachines.length === 0 ? (
                       <div style={{ textAlign: "center", padding: "35px 20px", color: "#64748b", background: "#f8fafc", borderRadius: "12px", border: "1px dashed #cbd5e1", fontWeight: "700" }}>
                         Yüksek riskli makine bulunmuyor.
                       </div>
-                    ) : riskyMachines
+                    ) : (
+                      <>
+                        {riskyMachines
                       .sort((a, b) => {
                         const priority = { "Yüksek Riskli": 3, "Bakımı Yaklaşan": 2, "Bakımda Olan": 1 };
                         return (priority[b.kategori] || 0) - (priority[a.kategori] || 0);
@@ -1162,6 +1239,8 @@ export default function Dashboard() {
                           </div>
                         );
                       })}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1229,17 +1308,17 @@ export default function Dashboard() {
                     <div style={{ display: "flex", gap: "20px" }}>
                       <div style={{ flex: 1, padding: "15px", background: "#f8f9fa", borderRadius: "10px", textAlign: "center", border: "1px solid #e1e5eb" }}>
                         <div style={{ fontSize: "12px", color: "#7f8c8d", fontWeight: "bold", textTransform: "uppercase" }}>Kullanılabilirlik</div>
-                        <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%{fabrikaOee}</div>
-                        <div style={{ fontSize: "11px", color: "#95a5a6", marginTop: "4px" }}>Aktif Makine Oranı</div>
+                        <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%{oeeComponents.kullanilabilirlik}</div>
+                        <div style={{ fontSize: "11px", color: "#95a5a6", marginTop: "4px" }}>Çalışabilir süre oranı</div>
                       </div>
                       <div style={{ flex: 1, padding: "15px", background: "#f8f9fa", borderRadius: "10px", textAlign: "center", border: "1px solid #e1e5eb" }}>
                         <div style={{ fontSize: "12px", color: "#7f8c8d", fontWeight: "bold", textTransform: "uppercase" }}>Performans</div>
-                        <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%{fabrikaOee}</div>
+                        <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%{oeeComponents.performans}</div>
                         <div style={{ fontSize: "11px", color: "#95a5a6", marginTop: "4px" }}>Nominal hıza oranı</div>
                       </div>
                       <div style={{ flex: 1, padding: "15px", background: "#f8f9fa", borderRadius: "10px", textAlign: "center", border: "1px solid #e1e5eb" }}>
                         <div style={{ fontSize: "12px", color: "#7f8c8d", fontWeight: "bold", textTransform: "uppercase" }}>Kalite</div>
-                        <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%{fabrikaOee}</div>
+                        <div style={{ fontSize: "24px", fontWeight: "800", color: "#3498db", marginTop: "5px" }}>%{oeeComponents.kalite}</div>
                         <div style={{ fontSize: "11px", color: "#95a5a6", marginTop: "4px" }}>Sağlam ürün oranı</div>
                       </div>
                     </div>

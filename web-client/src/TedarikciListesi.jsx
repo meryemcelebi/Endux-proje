@@ -118,6 +118,20 @@ export default function TedarikciListesi() {
     }
   };
 
+  const handleDeletePart = async (part) => {
+    const confirmMsg = `${part.parca_adi} parçasını stok listesinden silmek istediğinize emin misiniz? Bu işlem stok hareketlerini de kaldırır.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await api.deleteInventoryPart(part.stok_id);
+      setStoklar(prev => prev.filter(s => s.stok_id !== part.stok_id));
+      alert("Parça stok listesinden silindi.");
+    } catch (err) {
+      console.error("Parça silme hatası:", err);
+      alert("Hata: " + err.message);
+    }
+  };
+
   // --- SATIN ALMA FORMU SUBMIT ---
   const handlePurchaseSubmit = async (e) => {
     e.preventDefault();
@@ -603,6 +617,7 @@ export default function TedarikciListesi() {
                       <th style={thStyle}>Stok Seviyesi</th>
                       <th style={thStyle}>Son Güncelleme</th>
                       <th style={thStyle}>Durum</th>
+                      <th style={thStyle}>İşlem</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -666,6 +681,23 @@ export default function TedarikciListesi() {
                             }}>
                               {isKritik ? "Kritik" : isDusuk ? "Düşük" : "Yeterli"}
                             </span>
+                          </td>
+                          <td style={tdStyle}>
+                            <button
+                              onClick={() => handleDeletePart(s)}
+                              style={{
+                                background: "rgba(231, 76, 60, 0.1)",
+                                color: "#e74c3c",
+                                border: "1px solid rgba(231, 76, 60, 0.3)",
+                                borderRadius: "8px",
+                                padding: "8px 12px",
+                                fontWeight: "bold",
+                                cursor: "pointer",
+                                whiteSpace: "nowrap"
+                              }}
+                            >
+                              Parça Sil
+                            </button>
                           </td>
                         </tr>
                       );

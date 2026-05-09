@@ -16,9 +16,11 @@ const databaseUnavailableMessage = "Veritabanına ulaşılamıyor. Yerel gelişt
 // Makine Ekle — POST /api/makineler/makine-ekle
 const makineEkle = async (req, res) => {
     try {
-        const { makine_adi, firma_id, makine_tur_id, seri_no, satin_alma_tarihi, satin_alma_maliyeti, aktiflik_durumu, makine_ozellikleri, garanti_firma_id, garanti_suresi, lokasyon_id } = req.body;
+        const { makine_adi, firma_id, makine_tur_id, seri_no, satin_alma_tarihi, satin_alma_maliyeti, aktiflik_durumu, makine_ozellikleri, garanti_firma_id, garanti_suresi, lokasyon_id, 
+        // TPM: Yapılandırılmış teknik özellik alanları
+        kapasite, guc_tuketimi, max_rpm, max_basinc_ton, enjeksiyon_hacmi, tabla_boyutu, guncel_calisma_saati, tedarikci } = req.body;
         const ozellikler = makine_ozellikleri;
-        if (!makine_adi || !firma_id || !makine_tur_id || !seri_no || !satin_alma_tarihi || !satin_alma_maliyeti || aktiflik_durumu === undefined) {
+        if (!makine_adi || !firma_id || !makine_tur_id || !seri_no || !satin_alma_tarihi || satin_alma_maliyeti === undefined || satin_alma_maliyeti === null || aktiflik_durumu === undefined) {
             return res.status(400).json({ hata: "Tüm alanlar zorunludur." });
         }
         if (typeof satin_alma_maliyeti !== "number") {
@@ -30,55 +32,120 @@ const makineEkle = async (req, res) => {
         if (typeof seri_no !== "string" || seri_no.trim().length === 0) {
             return res.status(400).json({ hata: "Geçerli bir seri numarası girilmelidir." });
         }
-        const yeniMakine = await prisma_1.default.$transaction(async (tx) => {
-            // 1. Rastgele 4 haneli PIN üret
-            const pin = Math.floor(1000 + Math.random() * 9000);
-            // 2. Makineyi oluştur (QR UUID + PIN dahil)
-            const makine = await tx.makine.create({
-                data: {
-                    makine_adi: makine_adi,
-                    firma_id: Number(firma_id),
-                    makine_tur_id: Number(makine_tur_id),
-                    seri_no: String(seri_no),
-                    satin_alma_tarihi: new Date(satin_alma_tarihi),
-                    satin_alma_maliyeti: Number(satin_alma_maliyeti),
-                    aktiflik_durumu: Boolean(aktiflik_durumu),
-                    makine_qr: (0, uuid_1.v4)(),
-                    servis_pin: pin,
-                    toplam_calisma_saati: 0,
-                    garanti_firma_id: garanti_firma_id ? Number(garanti_firma_id) : undefined,
-                    garanti_suresi: garanti_suresi ? Number(garanti_suresi) : undefined,
+        // 1. Rastgele 4 haneli PIN üret
+        const pin = Math.floor(1000 + Math.random() * 9000);
+        // 2. Makineyi oluştur (QR UUID + PIN dahil)
+        const yeniMakine = await prisma_1.default.makine.create({
+            data: {
+                makine_adi: makine_adi,
+                firma_id: Number(firma_id),
+                makine_tur_id: Number(makine_tur_id),
+                seri_no: String(seri_no),
+                satin_alma_tarihi: new Date(satin_alma_tarihi),
+                satin_alma_maliyeti: Number(satin_alma_maliyeti),
+                aktiflik_durumu: Boolean(aktiflik_durumu),
+                makine_qr: (0, uuid_1.v4)(),
+                servis_pin: pin,
+                toplam_calisma_saati: guncel_calisma_saati ? Number(guncel_calisma_saati) : 0,
+                garanti_firma_id: garanti_firma_id ? Number(garanti_firma_id) : undefined,
+                garanti_suresi: garanti_suresi ? Number(garanti_suresi) : undefined,
+            }
+        });
+        // 2.5 Garanti Firması (Tedarikçi) — Eğer ID yoksa ama isim varsa oluştur/bul
+        if (!garanti_firma_id && tedarikci && tedarikci.firma_adi) {
+            try {
+                let s_firma = await prisma_1.default.servis_firma.findFirst({
+                    where: { firma_adi: tedarikci.firma_adi }
+                });
+                if (!s_firma) {
+                    const newIletisim = await prisma_1.default.iletisim.create({
+                        data: {
+                            telefon: tedarikci.telefon || null,
+                            mail: tedarikci.email || null,
+                            acik_adres: tedarikci.adres || null,
+                            il: tedarikci.il_ilce?.split('/')[0]?.trim() || null,
+                            ilce: tedarikci.il_ilce?.split('/')[1]?.trim() || null
+                        }
+                    });
+                    s_firma = await prisma_1.default.servis_firma.create({
+                        data: {
+                            firma_adi: tedarikci.firma_adi,
+                            aktiflik: true,
+                            iletisim_id: newIletisim.iletisim_id
+                        }
+                    });
                 }
-            });
-            // 3. makine_ozellikleri varsa ayrı tabloya ekle
-            if (ozellikler) {
-                await tx.makine_ozellikleri.create({
-                    data: {
-                        makine_id: makine.makine_id,
-                        teknik_ozellikler: ozellikler,
-                    }
+                await prisma_1.default.makine.update({
+                    where: { makine_id: yeniMakine.makine_id },
+                    data: { garanti_firma_id: s_firma.servis_firma_id }
                 });
             }
-            // 4. Lokasyon bağlantısı varsa güncelle
-            if (lokasyon_id) {
-                await tx.lokasyon.update({
-                    where: { lokasyon_id: Number(lokasyon_id) },
-                    data: { makine_id: makine.makine_id }
+            catch (err) {
+                console.error("Garanti firması oluşturma/atama hatası:", err);
+            }
+        }
+        // 3. makine_ozellikleri: Yapılandırılmış alanlar + eski JSON desteği
+        let teknik_json = ozellikler ? { ...ozellikler } : {};
+        if (kapasite)
+            teknik_json.kapasite = String(kapasite);
+        if (guc_tuketimi)
+            teknik_json.guc_tuketimi = String(guc_tuketimi);
+        if (max_rpm)
+            teknik_json.max_rpm = Number(max_rpm);
+        if (max_basinc_ton)
+            teknik_json.max_basinc_ton = Number(max_basinc_ton);
+        if (enjeksiyon_hacmi)
+            teknik_json.enjeksiyon_hacmi = String(enjeksiyon_hacmi);
+        if (tabla_boyutu)
+            teknik_json.tabla_boyutu = String(tabla_boyutu);
+        const ozellikData = {
+            makine_id: yeniMakine.makine_id,
+            teknik_ozellikler: Object.keys(teknik_json).length > 0 ? teknik_json : null,
+        };
+        await prisma_1.default.makine_ozellikleri.create({ data: ozellikData });
+        // 4. Lokasyon bağlantısı varsa güncelle
+        if (lokasyon_id) {
+            let actual_lo_id = null;
+            if (isNaN(Number(lokasyon_id))) {
+                const foundLo = await prisma_1.default.lokasyon.findFirst({
+                    where: { fabrika_alani: String(lokasyon_id) }
+                });
+                if (foundLo)
+                    actual_lo_id = foundLo.lokasyon_id;
+            }
+            else {
+                actual_lo_id = Number(lokasyon_id);
+            }
+            if (actual_lo_id) {
+                await prisma_1.default.lokasyon.update({
+                    where: { lokasyon_id: actual_lo_id },
+                    data: { makine_id: yeniMakine.makine_id }
                 });
             }
-            return makine;
+        }
+        // Tüm ilişkileriyle makineyi tekrar çek
+        const finalMachine = await prisma_1.default.makine.findUnique({
+            where: { makine_id: yeniMakine.makine_id },
+            include: {
+                firma: true,
+                makine_turu: true,
+                lokasyon: true,
+                makine_ozellikleri: true,
+                garanti_firma: { include: { iletisim: true } }
+            }
         });
         res.status(201).json({
             success: true,
             message: "Makine başarıyla eklendi.",
-            makine: yeniMakine
+            makine: finalMachine
         });
     }
     catch (error) {
         console.error("Makine ekleme hatası:", error);
         res.status(500).json({
             success: false,
-            message: "Makine eklenirken bir hata oluştu."
+            message: "Makine eklenirken bir hata oluştu.",
+            hata_detayi: error instanceof Error ? error.message : JSON.stringify(error)
         });
     }
 };

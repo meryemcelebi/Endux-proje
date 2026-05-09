@@ -678,6 +678,14 @@ export const api = {
     return json.data || [];
   },
 
+  deleteInventoryPart: async (partId) => {
+    const res = await fetch(`${API_BASE}/satin-alma/stok/${partId}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    return handleResponse(res);
+  },
+
   // ═══════════════ 27. TEDARİKÇİ SATIN ALMA PUAN ORTALAMASI ═══════════════
   // GET /api/satin-alma/:id/ortalama-puan
   getSupplierAvgScore: async (tedarikciId) => {

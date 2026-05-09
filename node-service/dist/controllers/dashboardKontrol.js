@@ -5,10 +5,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getDashboardOzet = void 0;
 const prisma_1 = __importDefault(require("../config/prisma"));
+const oee_1 = require("../utils/oee");
 const ONAY_BEKLEYEN_DURUMLAR = ['BEKLEYEN', 'Onay Bekliyor'];
 const getDashboardOzet = async (req, res) => {
     try {
-        const [makineDurumlari, onayBekleyenMakineler, ortalamaOee, kritikRiskliMakineler,] = await Promise.all([
+        const [makineDurumlari, onayBekleyenMakineler, ortalamaOee, kritikRiskliMakineler, bakimiYaklasanAdaylar, maliyetAdaylari] = await Promise.all([
             prisma_1.default.makine.groupBy({
                 by: ['aktiflik_durumu'],
                 _count: {
@@ -45,7 +46,9 @@ const getDashboardOzet = async (req, res) => {
             }),
             prisma_1.default.oee_raporlari.aggregate({
                 _avg: {
-                    oee_skoru: true,
+                    kullanilabilirlik_orani: true,
+                    performans_orani: true,
+                    kalite_orani: true,
                 },
             }),
             prisma_1.default.risk_skoru.findMany({
@@ -66,11 +69,70 @@ const getDashboardOzet = async (req, res) => {
                         }
                     }
                 }
-            })
+            }),
+            // TPM: Bakımı yaklaşan makine adaylarını çek
+            prisma_1.default.makine.findMany({
+                where: {
+                    aktiflik_durumu: true,
+                    makine_turu: {
+                        periyodik_bakim_saati: { not: null }
+                    }
+                },
+                include: {
+                    makine_turu: {
+                        select: {
+                            makine_tur_adi: true,
+                            periyodik_bakim_saati: true
+                        }
+                    }
+                }
+            }),
+            // Maliyet Analizi Toplamları (Fabrika Geneli)
+            prisma_1.default.$queryRawUnsafe(`
+                SELECT 
+                    (SELECT COALESCE(SUM(satin_alma_maliyeti), 0)::FLOAT FROM makine) as toplam_makine_alim,
+                    (SELECT COALESCE(SUM(bakim_maliyet), 0)::FLOAT FROM bakim_kaydi) as toplam_servis_ucreti,
+                    (SELECT COALESCE(SUM(p.parca_maliyeti * COALESCE(pd.adet, 1)), 0)::FLOAT 
+                     FROM parca_degisim pd 
+                     JOIN parca p ON pd.parca_id = p.parca_id) as toplam_parca_masrafi
+            `)
         ]);
+        // Maliyet Özeti Ayarları
+        const maliyetOzetData = maliyetAdaylari && maliyetAdaylari[0] ? maliyetAdaylari[0] : {
+            toplam_makine_alim: 0,
+            toplam_servis_ucreti: 0,
+            toplam_parca_masrafi: 0
+        };
+        // TPM: %90 eşik algoritması — bakımı yaklaşan makineleri filtrele
+        const bakimiYaklasanMakineler = bakimiYaklasanAdaylar
+            .filter(m => {
+            const calismaSaati = Number(m.toplam_calisma_saati || 0);
+            const periyodik = m.makine_turu?.periyodik_bakim_saati || 3000;
+            const esikDeger = periyodik * 0.9; // %90 eşik
+            return calismaSaati >= esikDeger;
+        })
+            .map(m => {
+            const calismaSaati = Number(m.toplam_calisma_saati || 0);
+            const periyodik = m.makine_turu?.periyodik_bakim_saati || 3000;
+            const kalanSaat = Math.max(0, periyodik - calismaSaati);
+            return {
+                makine_id: m.makine_id,
+                makine_adi: m.makine_adi || "İsimsiz Makine",
+                makine_turu: m.makine_turu?.makine_tur_adi || "Bilinmeyen Tür",
+                calisma_saati: calismaSaati,
+                periyodik_limit: periyodik,
+                kalan_saat: kalanSaat,
+                aciliyet: kalanSaat <= 0 ? "GEÇMİŞ" : kalanSaat <= 100 ? "KRİTİK" : "UYARI"
+            };
+        })
+            .sort((a, b) => a.kalan_saat - b.kalan_saat); // En acil olan önce
         const toplamMakine = makineDurumlari.reduce((toplam, durum) => toplam + durum._count._all, 0);
         const toplamAktifMAkine = makineDurumlari.find(durum => durum.aktiflik_durumu === true)?._count._all ?? 0;
         const toplamPasifMakine = makineDurumlari.find(durum => durum.aktiflik_durumu === false)?._count._all ?? 0;
+        const ortalamaKullanilabilirlik = (0, oee_1.roundOeeValue)(ortalamaOee._avg.kullanilabilirlik_orani ?? 0);
+        const ortalamaPerformans = (0, oee_1.roundOeeValue)(ortalamaOee._avg.performans_orani ?? 0);
+        const ortalamaKalite = (0, oee_1.roundOeeValue)(ortalamaOee._avg.kalite_orani ?? 0);
+        const hesaplananOee = (0, oee_1.calculateOeeScore)(ortalamaKullanilabilirlik, ortalamaPerformans, ortalamaKalite) ?? 0;
         return res.status(200).json({
             success: true,
             data: {
@@ -80,7 +142,10 @@ const getDashboardOzet = async (req, res) => {
                     bakimda: toplamPasifMakine
                 },
                 operasyonel_performans: {
-                    ortalama_oee: Number((ortalamaOee._avg.oee_skoru ?? 0).toFixed(2))
+                    ortalama_oee: hesaplananOee,
+                    kullanilabilirlik: ortalamaKullanilabilirlik,
+                    performans: ortalamaPerformans,
+                    kalite: ortalamaKalite
                 },
                 acil_aksiyonlar: {
                     onay_bekleyen_is: onayBekleyenMakineler.length,
@@ -90,16 +155,27 @@ const getDashboardOzet = async (req, res) => {
                             id: bekleyenBakim?.bakim_id ?? m.makine_id,
                             bakim_id: bekleyenBakim?.bakim_id ?? null,
                             makine_id: m.makine_id,
-                            makine_ad: m.makine_adi,
+                            makine_ad: m.makine_adi || "İsimsiz Makine",
                             ariza_notu: bekleyenBakim?.aciklama || "Makine pasife alınmış, arıza notu yok.",
                             bakim_durum: bekleyenBakim?.durum || "Bekliyor"
                         };
                     }),
                     kritik_riskli_makineler: kritikRiskliMakineler.map((risk) => ({
                         makine_id: risk.makine_id,
-                        makine_adi: risk.makine.makine_adi ?? 'Makine Adı yok',
+                        makine_adi: risk.makine.makine_adi || 'Makine Adı yok',
                         risk_skoru: Number(risk.risk_skoru ?? 0)
                     }))
+                },
+                // Maliyet Özeti
+                maliyet_ozeti: {
+                    toplam_makine_alim: Number(maliyetOzetData?.toplam_makine_alim || 0),
+                    toplam_servis_ucreti: Number(maliyetOzetData?.toplam_servis_ucreti || 0),
+                    toplam_parca_masrafi: Number(maliyetOzetData?.toplam_parca_masrafi || 0)
+                },
+                // TPM: Bakımı yaklaşan makineler
+                bakimi_yaklasan: {
+                    sayi: bakimiYaklasanMakineler.length,
+                    makineler: bakimiYaklasanMakineler
                 }
             }
         });

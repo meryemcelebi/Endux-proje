@@ -28,48 +28,57 @@ export async function formKaydet(req: Request, res: Response, next: NextFunction
         }
 
 
-        // jsonb_to_recordset beklentisine göre isimlendiriyoruz
-        // res_id, s_tipi, s_durum, s_deger, s_not
         const formatliCevaplar = cevaplar.map((c: any) => ({
-            res_id: Number(c.madde_id),
-            s_durum: c.durum,
-            // PostgreSQL NUMERIC beklediği için sayıya çeviriyoruz (veya null bırakıyoruz)
-            s_deger: c.girilen_deger ? Number(c.girilen_deger) : null,
-            s_tipi: c.soru_tipi || 'Bilinmiyor', // Eğer frontend göndermiyorsa varsayılan
-            s_not: c.aciklama || null
+            soru_referans_id: Number(c.madde_id),
+            durum: c.durum || null,
+            girilen_deger: c.girilen_deger == null ? null : String(c.girilen_deger),
+            aciklama: c.aciklama || null
         }));
 
-        // 2. Prisma için JSON dizisini string'e çeviriyoruz
-        const cevaplarJson = JSON.stringify(formatliCevaplar);
+        const gecersizCevap = formatliCevaplar.find((c: any) => !Number.isInteger(c.soru_referans_id) || c.soru_referans_id <= 0);
+        if (gecersizCevap) {
+            res.status(400).json({ success: false, hata: "Cevap listesinde geçersiz kontrol maddesi var." });
+            return;
+        }
 
-        // 3. Transaction ve createMany yerine doğrudan Prosedür çağırıyoruz
-        await prisma.$executeRaw`
-            CALL public.pr_kontrol_kaydet(
-                ${Number(makine_id)}::integer, 
-                ${operator_id}::integer, 
-                ${Number(sablon_id)}::integer, 
-                ${genel_not || null}::text, 
-                ${cevaplarJson}::jsonb
-            )
-        `;
+        const yeniForm = await prisma.$transaction(async (tx) => {
+            const form = await tx.gunluk_kontrol_formu.create({
+                data: {
+                    makine_id: Number(makine_id),
+                    kullanici_id: operator_id,
+                    sablon_id: Number(sablon_id),
+                    kontrol_tarihi: new Date(),
+                    genel_not: genel_not || null
+                }
+            });
 
-        // SEÇENEK B: Arka Planda AI Risk Analizini Başlat!
-        // Prosedür ID dönmediği için, yeni oluşan formu son eklenen olarak buluyoruz
-        const yeniForm = await prisma.gunluk_kontrol_formu.findFirst({
-            where: { makine_id: Number(makine_id), kullanici_id: operator_id },
-            orderBy: { form_id: 'desc' }
+            await tx.form_madde_cevap.createMany({
+                data: formatliCevaplar.map((cevap: any) => ({
+                    form_id: form.form_id,
+                    soru_referans_id: cevap.soru_referans_id,
+                    durum: cevap.durum,
+                    girilen_deger: cevap.girilen_deger,
+                    aciklama: cevap.aciklama
+                }))
+            });
+
+            return form;
         });
 
+        let aiSonuc = null;
         if (yeniForm) {
             console.log(`[AI-TETIKLEYICI] Makine ${makine_id} Form ${yeniForm.form_id} için AI başlatılıyor...`);
-            tekMakineTahmin(Number(makine_id), yeniForm.form_id, operator_id).catch(err => {
-                console.error("[AI-ARKA-PLAN-HATA] AI tahmin işlemi tamamlanamadı:", err);
-            });
+            aiSonuc = await tekMakineTahmin(Number(makine_id), yeniForm.form_id, operator_id);
         }
 
         res.status(201).json({
             success: true,
-            message: "Form başarıyla kaydedildi."
+            message: "Form başarıyla kaydedildi.",
+            data: {
+                form_id: yeniForm.form_id,
+                cevap_sayisi: formatliCevaplar.length,
+                ai: aiSonuc?.data ?? null
+            }
         });
 
 

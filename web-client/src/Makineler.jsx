@@ -164,8 +164,12 @@ export default function Makineler() {
         const response = await api.addMachine(payload);
         
         if (response && response.makine) {
+          const rawLokasyon = response.makine.lokasyon;
+          const normalizedLokasyon = Array.isArray(rawLokasyon) ? rawLokasyon[0] || null : rawLokasyon || null;
+          
           addedMachinesList.push({
             ...response.makine,
+            lokasyon: normalizedLokasyon,
             id: response.makine.makine_id,
             makineid: "MKN-" + response.makine.makine_id,
             aktiflik_durumu: form.aktiflik_durumu
@@ -226,6 +230,13 @@ export default function Makineler() {
 
   return (
     <div style={{ display: "flex", background: "#f5f6fa", minHeight: "100vh" }}>
+      <style>{`
+        @keyframes warningBlink {
+          0% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(1.1); color: #c0392b; }
+          100% { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
       <Sidebar />
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
@@ -405,14 +416,27 @@ export default function Makineler() {
                 return true;
               })
               .sort((a, b) => (b.mevcut_risk_skoru || 0) - (a.mevcut_risk_skoru || 0))
-              .map((m) => (
+              .map((m) => {
+                const riskSkoru = Number(m.mevcut_risk_skoru || 0);
+                const isMaxRisk = riskSkoru >= 100;
+
+                return (
                 <div
                   key={m.id}
                   style={{
                     ...cardStyle,
                     cursor: "pointer",
-                    border: expandedMachineId === m.id ? "2px solid #3498db" : "2px solid transparent",
-                    background: "white",
+                    border: expandedMachineId === m.id
+                      ? "2px solid #3498db"
+                      : isMaxRisk
+                        ? "2px solid rgba(231, 76, 60, 0.55)"
+                        : "2px solid transparent",
+                    background: isMaxRisk
+                      ? "linear-gradient(180deg, #fff5f5 0%, #ffffff 42%)"
+                      : "white",
+                    boxShadow: isMaxRisk
+                      ? "0 10px 24px rgba(231, 76, 60, 0.16)"
+                      : cardStyle.boxShadow,
                     display: "flex",
                     flexDirection: "column",
                     justifyContent: "space-between",
@@ -462,7 +486,27 @@ export default function Makineler() {
                       <div><strong>ID:</strong> {m.makineid}</div>
 
                       {m.satin_alma_tarihi && <div><strong>Satın Alma:</strong> {m.satin_alma_tarihi?.split('T')[0]}</div>}
-                      <div><strong>Risk Skoru:</strong> {m.mevcut_risk_skoru}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <strong>Risk Skoru:</strong> {m.mevcut_risk_skoru}
+                        {m.mevcut_risk_skoru > 75 && (
+                          <span style={{ 
+                            color: "#e74c3c", 
+                            fontWeight: "bold", 
+                            fontSize: "14px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: "24px",
+                            height: "24px",
+                            background: "rgba(231, 76, 60, 0.1)",
+                            borderRadius: "50%",
+                            border: "1px solid rgba(231, 76, 60, 0.3)",
+                            animation: "warningBlink 1.5s infinite ease-in-out" 
+                          }} title="Kritik Risk Seviyesi">
+                            ⚠️
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {expandedMachineId === m.id && (
@@ -589,7 +633,8 @@ export default function Makineler() {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
           </div>
 
           {/* MAKİNE EKLE MODAL */}
