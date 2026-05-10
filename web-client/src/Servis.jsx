@@ -16,13 +16,18 @@ export default function Servis() {
   const [tamamlandiMi, setTamamlandiMi] = useState(false); // Başarılı tamamlama mesajı
   const [kaydetYukleniyor, setKaydetYukleniyor] = useState(false); // Kaydet butonu loading durumu
 
+  const [stoklar, setStoklar] = useState([]);
+  const [selectedPartId, setSelectedPartId] = useState("");
+
+
   // Bakım formu state'leri
   const [form, setForm] = useState({
     bakim_maliyet: "",
     durus_suresi: "",
     aciklama: "",
     ariza_sebebi: "",
-    bakim_turu: ""
+    bakim_turu: "",
+    degisen_parcalar: []
   });
 
   // Giriş yapmış kullanıcı bilgisini al
@@ -33,12 +38,14 @@ export default function Servis() {
     const fetchData = async () => {
       try {
         // Makineye özel servis geçmişini ve genel firma listesini çek (Paralel istek)
-        const [histData, firmData] = await Promise.all([
+        const [histData, firmData, stokData] = await Promise.all([
           api.getServiceHistory(id),
-          api.getFirms()
+          api.getFirms(),
+          api.getInventory()
         ]);
         setHistory(histData);
         setFirms(firmData);
+        setStoklar(stokData);
 
         // Bu makine için bekleyen (ONAYLANDI) iş var mı kontrol et
         try {
@@ -99,7 +106,7 @@ export default function Servis() {
         bakim_maliyet: Number(form.bakim_maliyet),
         aciklama: String(form.aciklama || form.ariza_sebebi || "").trim(),
         durus_suresi: form.durus_suresi ? Number(form.durus_suresi) : null,
-        degisen_parcalar: []
+        degisen_parcalar: form.degisen_parcalar
       };
 
       console.log("Gönderilen veriler:", gonderilecekVeri);
@@ -108,7 +115,7 @@ export default function Servis() {
 
       setTamamlandiMi(true);
       setBekleyenIs(null);
-      setForm({ bakim_maliyet: "", durus_suresi: "", aciklama: "", ariza_sebebi: "", bakim_turu: "" });
+      setForm({ bakim_maliyet: "", durus_suresi: "", aciklama: "", ariza_sebebi: "", bakim_turu: "", degisen_parcalar: [] });
 
       // Geçmişi yenile
       try {
@@ -150,13 +157,14 @@ export default function Servis() {
         durus_suresi: Number(form.durus_suresi) || 0,
         bakim_tarihi: new Date().toISOString(),
         aciklama: form.aciklama,
-        bakim_turu: form.bakim_turu || "Planlı Bakım"
+        bakim_turu: form.bakim_turu || "Planlı Bakım",
+        degisen_Parcalar: form.degisen_parcalar
       };
 
       try {
         const savedRecord = await api.addServiceRecord(payload);
         setHistory([savedRecord, ...history]);
-        setForm({ ariza_sebebi: "", bakim_maliyet: "", durus_suresi: "", aciklama: "", bakim_turu: "" });
+        setForm({ ariza_sebebi: "", bakim_maliyet: "", durus_suresi: "", aciklama: "", bakim_turu: "", degisen_parcalar: [] });
         setTamamlandiMi(true); // Formu kapat ve başarı mesajını göster
       } catch (err) {
         console.error("Kayıt eklenemedi:", err);
@@ -181,11 +189,90 @@ export default function Servis() {
       setIsModalOpen(true);
     };
 
+  const handleAddPart = () => {
+    if (!selectedPartId) return;
+    const parca = stoklar.find(s => String(s.stok_id) === String(selectedPartId));
+    if (!parca) return;
+    
+    const varMi = form.degisen_parcalar.find(p => p.parca_id === selectedPartId);
+    if (varMi) {
+      setForm(prev => ({
+        ...prev,
+        degisen_parcalar: prev.degisen_parcalar.map(p => 
+          p.parca_id === selectedPartId ? { ...p, adet: p.adet + 1 } : p
+        )
+      }));
+    } else {
+      setForm(prev => ({
+        ...prev,
+        degisen_parcalar: [...prev.degisen_parcalar, { parca_id: selectedPartId, parca_adi: parca.parca_adi, adet: 1 }]
+      }));
+    }
+    setSelectedPartId("");
+  };
+
+  const handleRemovePart = (id) => {
+    setForm(prev => ({
+      ...prev,
+      degisen_parcalar: prev.degisen_parcalar.filter(p => p.parca_id !== id)
+    }));
+  };
+
+  const renderPartSelection = () => (
+    <div style={{ marginBottom: "20px", padding: "15px", background: "#f8f9fa", borderRadius: "10px", border: "1px solid #ddd" }}>
+      <label style={labelStil}>Değişen Parçalar (Opsiyonel)</label>
+      <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+        <select
+          value={selectedPartId}
+          onChange={(e) => setSelectedPartId(e.target.value)}
+          style={{ ...inputStil, flex: 1, marginBottom: 0 }}
+        >
+          <option value="">— Parça Seçin —</option>
+          {stoklar.map(s => (
+            <option key={s.stok_id} value={s.stok_id} disabled={s.miktar <= 0}>
+              {s.parca_adi} (Stok: {s.miktar})
+            </option>
+          ))}
+        </select>
+        <button type="button" onClick={handleAddPart} style={{ padding: "0 20px", background: "#3498db", color: "white", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>
+          Ekle
+        </button>
+      </div>
+      
+      {form.degisen_parcalar.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "10px" }}>
+          {form.degisen_parcalar.map((p, idx) => (
+            <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "white", padding: "8px 12px", borderRadius: "6px", border: "1px solid #eee" }}>
+              <span style={{ fontSize: "13px", fontWeight: "bold", color: "#2c3e50" }}>{p.parca_adi}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <input 
+                  type="number" 
+                  min="1" 
+                  value={p.adet}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 1;
+                    setForm(prev => ({
+                      ...prev,
+                      degisen_parcalar: prev.degisen_parcalar.map(item => item.parca_id === p.parca_id ? { ...item, adet: val } : item)
+                    }));
+                  }}
+                  style={{ width: "50px", padding: "4px", textAlign: "center", border: "1px solid #ddd", borderRadius: "4px" }}
+                />
+                <span style={{ fontSize: "12px", color: "#7f8c8d" }}>Adet</span>
+                <button type="button" onClick={() => handleRemovePart(p.parca_id)} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: "16px" }}>✖</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
     return (
-      <div style={sayfaStil}>
-        <div style={containerStil}>
+      <div className="app-container" style={sayfaStil}>
+        <div className="app-content-wrapper app-content" style={containerStil}>
           {/* BAŞLIK */}
-          <div style={headerStil}>
+          <div className="responsive-flex-col" style={{ ...headerStil, flexWrap: "wrap", gap: "10px" }}>
             <h2 style={{ margin: 0, color: "white", fontSize: "22px" }}>Bakım Kaydı</h2>
             <div style={badgeStil}>Makine ID: {id}</div>
           </div>
@@ -209,7 +296,7 @@ export default function Servis() {
               boxShadow: "0 8px 30px rgba(0,0,0,0.15)", marginBottom: "25px",
               border: "2px solid #e94560"
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
+              <div className="responsive-flex-col" style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
                 <span style={{ fontSize: "24px" }}>📱</span>
                 <div>
                   <h3 style={{ margin: 0, color: "#e94560", fontSize: "18px" }}>Bakımı Tamamla</h3>
@@ -276,6 +363,8 @@ export default function Servis() {
                 />
               </div>
 
+              {renderPartSelection()}
+
               {/* KAYDET BUTONU */}
               <button
                 onClick={handleBakimiTamamla}
@@ -298,7 +387,7 @@ export default function Servis() {
           )}
 
           {!tamamlandiMi && (
-            <div style={icerikStil}>
+            <div className="responsive-flex-col" style={icerikStil}>
               {/* SOL - GEÇMİŞ KAYITLAR */}
               <div style={{ flex: 1 }}>
                 <h3 style={{ ...baslikStil, color: "white" }}>Geçmiş İşlemler</h3>
@@ -438,6 +527,8 @@ export default function Servis() {
                     />
                   </div>
 
+                  {renderPartSelection()}
+
                   <button onClick={addRecord} style={butonStil}>Kaydı Ekle</button>
                 </div>
               )}
@@ -531,13 +622,15 @@ const tarihStil = {
 };
 
 const yeniKayitAlaniStil = {
-  width: "380px",
+  width: "100%",
+  maxWidth: "380px",
   flexShrink: 0,
   background: "white",
   padding: "25px",
   borderRadius: "12px",
   boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
   alignSelf: "flex-start",
+  boxSizing: "border-box",
 };
 
 const labelStil = {
