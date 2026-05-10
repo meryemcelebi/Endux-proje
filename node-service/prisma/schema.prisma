@@ -56,7 +56,6 @@ model ariza_kaydi {
   bitis_zamani            DateTime?                 @db.Timestamptz(6)
   olusturma_tarihi        DateTime?                 @db.Timestamptz(6)
   ariza_tur_id            Int
-  makine_adi              String?                   @db.VarChar(50)
   ariza_turu              ariza_turu                @relation(fields: [ariza_tur_id], references: [ariza_tur_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ariza_tur")
   makine                  makine                    @relation(fields: [makine_id], references: [makine_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_makine")
   arizayi_tetikleyen_form arizayi_tetikleyen_form[]
@@ -67,9 +66,11 @@ model ariza_kaydi {
 }
 
 model ariza_turu {
-  ariza_tur_id Int           @id @default(autoincrement())
-  ariza_tur    String        @db.VarChar(150)
-  ariza_kaydi  ariza_kaydi[]
+  ariza_tur_id  Int           @id @default(autoincrement())
+  ariza_tur     String        @db.VarChar(150)
+  makine_tur_id Int?
+  ariza_kaydi   ariza_kaydi[]
+  makine_turu   makine_turu?  @relation(fields: [makine_tur_id], references: [makine_tur_id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model arizayi_tetikleyen_form {
@@ -122,7 +123,9 @@ model bakim_kaydi {
 model bakim_turu {
   bakim_tur_id  Int           @id @default(autoincrement())
   bakim_tur_adi String        @db.VarChar(55)
+  makine_tur_id Int?
   bakim_kaydi   bakim_kaydi[]
+  makine_turu   makine_turu?  @relation(fields: [makine_tur_id], references: [makine_tur_id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model durus_kaydi {
@@ -354,6 +357,8 @@ model makine_turu {
   makine_tur_adi        String            @db.VarChar(50)
   risk_katsayisi        Decimal?          @db.Decimal(5, 2)
   periyodik_bakim_saati Int?
+  ariza_turu            ariza_turu[]
+  bakim_turu            bakim_turu[]
   kontrol_sablonu       kontrol_sablonu[]
   makine                makine[]
 }
@@ -392,7 +397,6 @@ model parca_degisim {
   bakim_id         Int
   parca_id         Int?
   adet             Int?
-  bakim_kaydi_id   Int?
   bakim_kaydi      bakim_kaydi @relation("parca_degisim_bakim_idTobakim_kaydi", fields: [bakim_id], references: [bakim_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_bakim")
   parca            parca?      @relation(fields: [parca_id], references: [parca_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_parca")
 
@@ -430,21 +434,24 @@ model sektor {
 }
 
 model servis_firma {
-  servis_firma_id       Int                    @id @default(autoincrement())
-  firma_adi             String                 @db.VarChar(100)
-  aktiflik              Boolean
-  iletisim_id           Int?
-  bakim_kaydi           bakim_kaydi[]
-  iletisim              iletisim?              @relation(fields: [iletisim_id], references: [iletisim_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_iletisim")
-  servis_firma_uzmanlik servis_firma_uzmanlik?
-  servis_puan           servis_puan[]
-  servis_sorumlusu      servis_sorumlusu[]
+  servis_firma_id                                                       Int                    @id @default(autoincrement())
+  firma_adi                                                             String                 @db.VarChar(100)
+  aktiflik                                                              Boolean
+  iletisim_id                                                           Int?
+  uzmanlik_id                                                           Int?
+  bakim_kaydi                                                           bakim_kaydi[]
+  iletisim                                                              iletisim?              @relation(fields: [iletisim_id], references: [iletisim_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_iletisim")
+  servis_firma_uzmanlik_servis_firma_uzmanlik_idToservis_firma_uzmanlik servis_firma_uzmanlik? @relation("servis_firma_uzmanlik_idToservis_firma_uzmanlik", fields: [uzmanlik_id], references: [servis_firma_id], onDelete: NoAction, onUpdate: NoAction)
+  servis_firma_uzmanlik                                                 servis_firma_uzmanlik?
+  servis_puan                                                           servis_puan[]
+  servis_sorumlusu                                                      servis_sorumlusu[]
 }
 
 model servis_firma_uzmanlik {
-  servis_firma_id Int          @id
-  uzmanlik_adi    String       @db.VarChar
-  servis_firma    servis_firma @relation(fields: [servis_firma_id], references: [servis_firma_id], onDelete: NoAction, onUpdate: NoAction)
+  servis_firma_id                                              Int            @id
+  uzmanlik_adi                                                 String         @db.VarChar
+  servis_firma_servis_firma_uzmanlik_idToservis_firma_uzmanlik servis_firma[] @relation("servis_firma_uzmanlik_idToservis_firma_uzmanlik")
+  servis_firma                                                 servis_firma   @relation(fields: [servis_firma_id], references: [servis_firma_id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model servis_puan {
