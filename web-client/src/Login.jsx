@@ -56,7 +56,7 @@ export default function Login() {
       <div style={kartStil}>
         {/* LOGO / BAŞLIK */}
         <div style={{ textAlign: "center", marginBottom: "30px" }}>
-          <h1 style={{ color: "navy", margin: 0, fontSize: "28px" }}>MAİNTFY</h1>
+          <h1 style={{ color: "navy", margin: 0, fontSize: "28px" }}>MAINTFIY</h1>
           <p style={{ color: "gray", marginTop: "5px" }}>Yönetici Giriş Paneli</p>
         </div>
 

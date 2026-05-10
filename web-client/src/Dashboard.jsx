@@ -612,20 +612,20 @@ export default function Dashboard() {
 
   // --- ANA RENDER SÜRECİ (Görünüm) ---
   return (
-    <div style={{ display: "flex", background: "#f5f6fa", minHeight: "100vh" }}>
+    <div className="app-container" style={{ display: "flex", background: "#f5f6fa", minHeight: "100vh" }}>
       {/* SOL MENÜ (Sidebar): Tüm sayfalara erişim sağlayan sabit yan panel */}
       <Sidebar />
 
       {/* SAĞ TARAF (Navigasyon ve İçerik): Sayfanın üst barı ve ana panel verilerini içerir */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <div className="app-content-wrapper" style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
         {/* ÜST BİLGİ ÇUBUĞU (Navbar): Kullanıcı bilgileri ve sayfa başlığını barındırır */}
         <Navbar />
 
         {/* ANA PANEL İÇERİK YÜZEYİ: Tüm KPI kartları ve grafiklerin listelendiği kaydırılabilir alan */}
-        <div style={{ padding: "30px", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "25px" }}>
+        <div className="app-content" style={{ padding: "30px", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "25px" }}>
 
           {/* KPI KUTULARI (DİNAMİK + SADE BAŞLIKLAR) */}
-          <div style={{ display: "flex", gap: "20px", width: "100%", flex: "0 0 160px" }}>
+          <div className="responsive-flex-col" style={{ display: "flex", gap: "20px", width: "100%", flex: "0 0 auto", flexWrap: "wrap" }}>
             {/* KPI 1: TEKNİK UYARILAR */}
             {/* KPI 1: GÜNLÜK KRİTİK UYARILAR (Riskli Makineler ve Garanti Sorunları) */}
             <div
@@ -786,8 +786,7 @@ export default function Dashboard() {
           </div >
 
           {/* ALT ALAN (Geniş Kaplama) */}
-          < div style={{ display: "flex", gap: "20px", width: "100%", flex: 1, minHeight: "450px" }
-          }>
+          <div className="responsive-flex-col" style={{ display: "flex", gap: "20px", width: "100%", flex: 1, minHeight: "auto", flexWrap: "wrap" }}>
             {/* FABRİKA HARİTASI (Dinamik) */}
             < div
               onClick={() => setIsMapExpanded(true)}

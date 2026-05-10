@@ -404,7 +404,7 @@ export const api = {
           id: sf.servis_firma_id, ad: sf.firma_adi, tip: "Servis",
           telefon: sf.iletisim?.telefon || null,
           email: sf.iletisim?.email || null,
-        adres: sf.iletisim?.acik_adres || null,
+          adres: sf.iletisim?.acik_adres || null,
           uzmanlik_alani: Array.isArray(sf.servis_firma_uzmanlik)
             ? sf.servis_firma_uzmanlik?.[0]?.uzmanlik_adi || null
             : sf.servis_firma_uzmanlik?.uzmanlik_adi || null,
