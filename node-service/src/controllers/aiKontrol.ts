@@ -147,7 +147,6 @@ async function aiTahminIstegiGonder(payload: AITahminPayload): Promise<IAiTahmin
             if (axiosError.response) {
                 const status = axiosError.response.status;
                 console.error(`AI servisi hata yanıtı: ${status}`);
-                throw new Error(`AI servisi hata yanıtı: ${status}`);
             }
         }
     }

@@ -350,11 +350,12 @@ model makine_ozellikleri {
 }
 
 model makine_turu {
-  makine_tur_id   Int               @id @default(autoincrement())
-  makine_tur_adi  String            @db.VarChar(50)
-  risk_katsayisi  Decimal?          @db.Decimal(5, 2)
-  kontrol_sablonu kontrol_sablonu[]
-  makine          makine[]
+  makine_tur_id         Int               @id @default(autoincrement())
+  makine_tur_adi        String            @db.VarChar(50)
+  risk_katsayisi        Decimal?          @db.Decimal(5, 2)
+  periyodik_bakim_saati Int?
+  kontrol_sablonu       kontrol_sablonu[]
+  makine                makine[]
 }
 
 model oee_raporlari {

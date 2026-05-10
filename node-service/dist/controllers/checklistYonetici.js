@@ -9,6 +9,23 @@ exports.qrIleSablonGetir = qrIleSablonGetir;
 const prisma_1 = __importDefault(require("../config/prisma"));
 const aiKontrol_1 = require("./aiKontrol");
 //operatorlerden gelen form verilerini database'e ekler:
+function hesaplaFormRiskSkoru(cevaplar) {
+    const sayisalCevaplar = cevaplar
+        .map(c => Number(c.girilen_deger))
+        .filter(deger => Number.isFinite(deger));
+    if (sayisalCevaplar.length === 0)
+        return 0;
+    const maksimumPuan = sayisalCevaplar.length * 2;
+    const toplamPuan = sayisalCevaplar.reduce((toplam, deger) => toplam + Math.max(0, Math.min(2, deger)), 0);
+    return Number(((toplamPuan / maksimumPuan) * 100).toFixed(2));
+}
+function riskSeviyesiBelirle(riskSkoru) {
+    if (riskSkoru >= 80)
+        return "YUKSEK";
+    if (riskSkoru >= 50)
+        return "ORTA";
+    return "DUSUK";
+}
 async function formKaydet(req, res, next) {
     try {
         const { makine_id, sablon_id, genel_not, cevaplar } = req.body;
@@ -26,33 +43,50 @@ async function formKaydet(req, res, next) {
             res.status(401).json({ success: false, message: "Kullanıcı kimliği bulunamadı." });
             return;
         }
-        // jsonb_to_recordset beklentisine göre isimlendiriyoruz
-        // res_id, s_tipi, s_durum, s_deger, s_not
         const formatliCevaplar = cevaplar.map((c) => ({
-            res_id: Number(c.madde_id),
-            s_durum: c.durum,
-            // PostgreSQL NUMERIC beklediği için sayıya çeviriyoruz (veya null bırakıyoruz)
-            s_deger: c.girilen_deger ? Number(c.girilen_deger) : null,
-            s_tipi: c.soru_tipi || 'Bilinmiyor', // Eğer frontend göndermiyorsa varsayılan
-            s_not: c.aciklama || null
+            soru_referans_id: Number(c.madde_id),
+            durum: c.durum || null,
+            girilen_deger: c.girilen_deger == null ? null : String(c.girilen_deger),
+            aciklama: c.aciklama || null
         }));
-        // 2. Prisma için JSON dizisini string'e çeviriyoruz
-        const cevaplarJson = JSON.stringify(formatliCevaplar);
-        // 3. Transaction ve createMany yerine doğrudan Prosedür çağırıyoruz
-        await prisma_1.default.$executeRaw `
-            CALL public.pr_kontrol_kaydet(
-                ${Number(makine_id)}::integer, 
-                ${operator_id}::integer, 
-                ${Number(sablon_id)}::integer, 
-                ${genel_not || null}::text, 
-                ${cevaplarJson}::jsonb
-            )
-        `;
-        // SEÇENEK B: Arka Planda AI Risk Analizini Başlat!
-        // Prosedür ID dönmediği için, yeni oluşan formu son eklenen olarak buluyoruz
-        const yeniForm = await prisma_1.default.gunluk_kontrol_formu.findFirst({
-            where: { makine_id: Number(makine_id), kullanici_id: operator_id },
-            orderBy: { form_id: 'desc' }
+        const gecersizCevap = formatliCevaplar.find((c) => !Number.isInteger(c.soru_referans_id) || c.soru_referans_id <= 0);
+        if (gecersizCevap) {
+            res.status(400).json({ success: false, hata: "Cevap listesinde geçersiz kontrol maddesi var." });
+            return;
+        }
+        const anlikRiskSkoru = hesaplaFormRiskSkoru(formatliCevaplar);
+        const yeniForm = await prisma_1.default.$transaction(async (tx) => {
+            const form = await tx.gunluk_kontrol_formu.create({
+                data: {
+                    makine_id: Number(makine_id),
+                    kullanici_id: operator_id,
+                    sablon_id: Number(sablon_id),
+                    kontrol_tarihi: new Date(),
+                    genel_not: genel_not || null,
+                    ai_on_risk_durumu: anlikRiskSkoru
+                }
+            });
+            const cevapKayitSonucu = await tx.form_madde_cevap.createMany({
+                data: formatliCevaplar.map((cevap) => ({
+                    form_id: form.form_id,
+                    soru_referans_id: cevap.soru_referans_id,
+                    durum: cevap.durum,
+                    girilen_deger: cevap.girilen_deger,
+                    aciklama: cevap.aciklama
+                }))
+            });
+            if (cevapKayitSonucu.count !== formatliCevaplar.length) {
+                throw new Error(`Form cevapları eksik kaydedildi. Beklenen: ${formatliCevaplar.length}, kaydedilen: ${cevapKayitSonucu.count}`);
+            }
+            await tx.risk_skoru.create({
+                data: {
+                    makine_id: Number(makine_id),
+                    risk_skoru: anlikRiskSkoru,
+                    risk_seviyesi: riskSeviyesiBelirle(anlikRiskSkoru),
+                    hesaplama_tarihi: new Date()
+                }
+            });
+            return form;
         });
         if (yeniForm) {
             console.log(`[AI-TETIKLEYICI] Makine ${makine_id} Form ${yeniForm.form_id} için AI başlatılıyor...`);
@@ -62,7 +96,12 @@ async function formKaydet(req, res, next) {
         }
         res.status(201).json({
             success: true,
-            message: "Form başarıyla kaydedildi."
+            message: "Form başarıyla kaydedildi.",
+            data: {
+                form_id: yeniForm.form_id,
+                cevap_sayisi: formatliCevaplar.length,
+                risk_skoru: anlikRiskSkoru
+            }
         });
     }
     catch (error) {

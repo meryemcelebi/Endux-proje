@@ -30,7 +30,7 @@ exports.siralaRoller = siralaRoller;
 //makine türleri listesi API
 const siralaMakineTurleri = async (req, res) => {
     try {
-        const makineTurleri = await prisma_1.default.makine_turu.findMany({ select: { makine_tur_id: true, makine_tur_adi: true } });
+        const makineTurleri = await prisma_1.default.makine_turu.findMany({ select: { makine_tur_id: true, makine_tur_adi: true, periyodik_bakim_saati: true } });
         res.json({ success: true, makineTurleri });
     }
     catch (error) {

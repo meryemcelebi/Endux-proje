@@ -7,7 +7,7 @@ const getHeaders = () => ({
 
 const handleResponse = async (res) => {
   const json = await res.json();
-  if (!res.ok) throw new Error(json.message || json.hata || json.error || "İstek başarısız");
+  if (!res.ok) throw new Error(json.hata_detayi || json.message || json.hata || json.error || "İstek başarısız");
   return json;
 };
 
@@ -152,7 +152,17 @@ export const api = {
         satin_alma_maliyeti: Number(machineData.satin_alma_maliyeti),
         aktiflik_durumu: machineData.aktiflik_durumu === "Aktif" || machineData.aktiflik_durumu === true,
         garanti_firma_id: machineData.garanti_firma_id ? Number(machineData.garanti_firma_id) : undefined,
-        lokasyon_id: machineData.lokasyon_id ? Number(machineData.lokasyon_id) : undefined,
+        garanti_suresi: machineData.garanti_suresi ? Number(machineData.garanti_suresi) : undefined,
+        tedarikci: machineData.tedarikci || null,
+        lokasyon_id: machineData.lokasyon_id || undefined,
+        // TPM: Yapılandırılmış teknik özellik alanları
+        kapasite: machineData.kapasite || undefined,
+        guc_tuketimi: machineData.guc_tuketimi || undefined,
+        max_rpm: machineData.max_rpm ? Number(machineData.max_rpm) : undefined,
+        max_basinc_ton: machineData.max_basinc_ton ? Number(machineData.max_basinc_ton) : undefined,
+        enjeksiyon_hacmi: machineData.enjeksiyon_hacmi || undefined,
+        tabla_boyutu: machineData.tabla_boyutu || undefined,
+        guncel_calisma_saati: machineData.guncel_calisma_saati ? Number(machineData.guncel_calisma_saati) : 0,
       }),
     });
     return handleResponse(res);
@@ -654,12 +664,26 @@ export const api = {
     return json.data || [];
   },
 
+  getPartCategories: async () => {
+    const res = await fetch(`${API_BASE}/satin-alma/kategoriler`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json.data || [];
+  },
+
   // ═══════════════ 26. STOK ═══════════════
   // GET /api/satin-alma/stok
   getInventory: async () => {
     const res = await fetch(`${API_BASE}/satin-alma/stok`, { headers: getHeaders() });
     const json = await handleResponse(res);
     return json.data || [];
+  },
+
+  deleteInventoryPart: async (partId) => {
+    const res = await fetch(`${API_BASE}/satin-alma/stok/${partId}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    return handleResponse(res);
   },
 
   // ═══════════════ 27. TEDARİKÇİ SATIN ALMA PUAN ORTALAMASI ═══════════════

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
+import { averageOeeComponents, calculateOeeScore } from '../utils/oee';
 
 export async function getMakineOee(makineId: number, baslangicTarihi: Date, bitisTarihi: Date) {
     const makine = await prisma.makine.findUnique({
@@ -65,7 +66,11 @@ export async function getMakineOee(makineId: number, baslangicTarihi: Date, biti
             kullanilabilirlik: t.kullanilabilirlik_orani,
             performans: t.performans_orani,
             kalite: t.kalite_orani,
-            oee_skoru: t.oee_skoru
+            oee_skoru: calculateOeeScore(
+                t.kullanilabilirlik_orani,
+                t.performans_orani,
+                t.kalite_orani
+            ) ?? t.oee_skoru
         })),
         durus_nedenleri: durusPastaGrafik
     };
@@ -138,32 +143,32 @@ export async function topluOeeGetir(req: Request, res: Response) {
             try {
                 const oee = await getMakineOee(makine.makine_id, baslangicTarihi, bitisTarihi);
                 
-                // Ortalama OEE hesapla (trend üzerinden)
                 let avgOee = 0;
                 let avgKull = 0;
                 let avgPerf = 0;
                 let avgKalite = 0;
 
                 if (oee.oee_trend.length > 0) {
-                    const totalOee = oee.oee_trend.reduce((acc, val) => acc + (val.oee_skoru || 0), 0);
-                    const totalKull = oee.oee_trend.reduce((acc, val) => acc + (val.kullanilabilirlik || 0), 0);
-                    const totalPerf = oee.oee_trend.reduce((acc, val) => acc + (val.performans || 0), 0);
-                    const totalKalite = oee.oee_trend.reduce((acc, val) => acc + (val.kalite || 0), 0);
-                    
-                    avgOee = totalOee / oee.oee_trend.length;
-                    avgKull = totalKull / oee.oee_trend.length;
-                    avgPerf = totalPerf / oee.oee_trend.length;
-                    avgKalite = totalKalite / oee.oee_trend.length;
+                    const averages = averageOeeComponents(oee.oee_trend, {
+                        availability: val => val.kullanilabilirlik,
+                        performance: val => val.performans,
+                        quality: val => val.kalite,
+                    });
+
+                    avgOee = averages.oee;
+                    avgKull = averages.availability;
+                    avgPerf = averages.performance;
+                    avgKalite = averages.quality;
                 }
 
                 sonuclar.push({
                     makine_id: oee.makine_id,
                     makine_adi: oee.makine_adi,
                     makine_turu: oee.makine_turu,
-                    oee_skoru: parseFloat(avgOee.toFixed(2)),
-                    kullanabilirlik: parseFloat(avgKull.toFixed(2)),
-                    performans: parseFloat(avgPerf.toFixed(2)),
-                    kalite: parseFloat(avgKalite.toFixed(2)),
+                    oee_skoru: avgOee,
+                    kullanabilirlik: avgKull,
+                    performans: avgPerf,
+                    kalite: avgKalite,
                 });
             } catch (err: any) {
                 hatalar.push({
@@ -174,9 +179,11 @@ export async function topluOeeGetir(req: Request, res: Response) {
             }
         }
 
-        const ortalamaOee = sonuclar.length > 0
-            ? parseFloat((sonuclar.reduce((acc, s) => acc + s.oee_skoru, 0) / sonuclar.length).toFixed(2))
-            : 0;
+        const fabrikaOrtalamalari = averageOeeComponents(sonuclar, {
+            availability: s => s.kullanabilirlik,
+            performance: s => s.performans,
+            quality: s => s.kalite,
+        });
             
         // Tüm raporları çekip haftalık trend oluştur
         const tumOeeKayitlari = await prisma.oee_raporlari.findMany({
@@ -185,7 +192,7 @@ export async function topluOeeGetir(req: Request, res: Response) {
         });
 
         // Verileri haftalara grupla
-        const haftalikGruplar: Record<string, { oee: number[], a: number[], p: number[], q: number[] }> = {};
+        const haftalikGruplar: Record<string, { a: number[], p: number[], q: number[] }> = {};
         
         tumOeeKayitlari.forEach(kayit => {
             if (!kayit.tarih) return;
@@ -197,23 +204,25 @@ export async function topluOeeGetir(req: Request, res: Response) {
             if (haftaIndex === 1) weekLabel = "Geçen H.";
             else if (haftaIndex > 1) weekLabel = `${haftaIndex + 1}. Hafta`;
 
-            if (!haftalikGruplar[weekLabel]) haftalikGruplar[weekLabel] = { oee: [], a: [], p: [], q: [] };
+            if (!haftalikGruplar[weekLabel]) haftalikGruplar[weekLabel] = { a: [], p: [], q: [] };
             
-            if (kayit.oee_skoru) haftalikGruplar[weekLabel].oee.push(kayit.oee_skoru);
-            if (kayit.kullanilabilirlik_orani) haftalikGruplar[weekLabel].a.push(kayit.kullanilabilirlik_orani);
-            if (kayit.performans_orani) haftalikGruplar[weekLabel].p.push(kayit.performans_orani);
-            if (kayit.kalite_orani) haftalikGruplar[weekLabel].q.push(kayit.kalite_orani);
+            if (kayit.kullanilabilirlik_orani != null) haftalikGruplar[weekLabel].a.push(kayit.kullanilabilirlik_orani);
+            if (kayit.performans_orani != null) haftalikGruplar[weekLabel].p.push(kayit.performans_orani);
+            if (kayit.kalite_orani != null) haftalikGruplar[weekLabel].q.push(kayit.kalite_orani);
         });
 
         const fabrika_trend = Object.keys(haftalikGruplar).map(week => {
             const getAvg = (arr: number[]) => arr.length ? parseFloat((arr.reduce((a,b) => a+b, 0) / arr.length).toFixed(1)) : 0;
             const g = haftalikGruplar[week];
+            const a = getAvg(g.a);
+            const p = getAvg(g.p);
+            const q = getAvg(g.q);
             return {
                 week,
-                oee: getAvg(g.oee),
-                a: getAvg(g.a),
-                p: getAvg(g.p),
-                q: getAvg(g.q)
+                oee: calculateOeeScore(a, p, q, 1) ?? 0,
+                a,
+                p,
+                q
             };
         }).reverse(); // Eskiden yeniye sıralamak için reverse()
             
@@ -221,7 +230,12 @@ export async function topluOeeGetir(req: Request, res: Response) {
             success: true,
             message: 'OEE skorları hesaplandı.',
             data: {
-                fabrika_ortalama_oee: ortalamaOee,
+                fabrika_ortalama_oee: fabrikaOrtalamalari.oee,
+                fabrika_bilesenleri: {
+                    kullanilabilirlik: fabrikaOrtalamalari.availability,
+                    performans: fabrikaOrtalamalari.performance,
+                    kalite: fabrikaOrtalamalari.quality,
+                },
                 donem: { baslangic, bitis },
                 fabrika_trend,
                 makineler: sonuclar,

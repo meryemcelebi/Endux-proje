@@ -136,8 +136,8 @@ export default function Servis() {
         makine_id: Number(id),
 
         // Kural 1: Eğer kullanıcı/teknisyen ID yoksa 0 (Sıfır) GÖNDERME! null veya undefined gönder ki Prisma çökmek yerine boş geçsin.
-        kullanici_id: currentUser?.kullanici_id ? Number(currentUser.kullanici_id) : null,
-        teknisyen_id: currentUser?.kullanici_id ? Number(currentUser.kullanici_id) : null,
+        kullanici_id: currentUser?.userId || currentUser?.kullanici_id ? Number(currentUser.userId || currentUser.kullanici_id) : null,
+        teknisyen_id: currentUser?.userId || currentUser?.kullanici_id ? Number(currentUser.userId || currentUser.kullanici_id) : null,
 
         // Kural 2: Formdan seçilmiş bir firma varsa onu al, yoksa veritabanındaki GÜVENLİ bir ID'yi (13 - Güvenilir Servis A.Ş) varsayılan yap. 1 gönderme!
         servis_firma_id: form.servis_firma_id ? Number(form.servis_firma_id) : 13,
@@ -146,8 +146,8 @@ export default function Servis() {
         ariza_id: form.ariza_id ? Number(form.ariza_id) : 3,
 
         ariza_sebebi: form.ariza_sebebi,
-        bakim_maliyet: parseFloat(form.bakim_maliyet),
-        durus_suresi: Number(form.durus_suresi) || null,
+        bakim_maliyet: Number(form.bakim_maliyet) || 0,
+        durus_suresi: Number(form.durus_suresi) || 0,
         bakim_tarihi: new Date().toISOString(),
         aciklama: form.aciklama,
         bakim_turu: form.bakim_turu || "Planlı Bakım"
@@ -260,7 +260,7 @@ export default function Servis() {
                   placeholder="Kaç saat sürdü?"
                   value={form.durus_suresi}
                   onChange={handleChange}
-                  style={{ ...inputStil, border: "2px solid #e74c3c" }}
+                  style={inputStil}
                 />
               </div>
 
@@ -316,7 +316,7 @@ export default function Servis() {
                           <div>
                             <div style={tarihStil}>{formatTarih}</div>
                             <div style={{ fontWeight: "bold", color: "navy", fontSize: "16px", marginTop: "10px" }}>
-                              İşlem: {item.bakim_turu?.[0] || "Bakım"}
+                              İşlem: {item.bakim_turu?.bakim_tur_adi || "Bakım"}
                             </div>
                             <div style={{ color: "#34495e", fontSize: "14px", marginTop: "4px" }}>
                               Duruş Süresi: <span style={{ color: "#e74c3c", fontWeight: "bold" }}>{item.durus_suresi || 0} Saat</span> | Maliyet: {formatMaliyet} ₺
@@ -409,7 +409,7 @@ export default function Servis() {
                       placeholder="Kaç saat sürdü?"
                       value={form.durus_suresi}
                       onChange={handleChange}
-                      style={{ ...inputStil, border: "2px solid #e74c3c" }}
+                      style={inputStil}
                     />
                   </div>
 

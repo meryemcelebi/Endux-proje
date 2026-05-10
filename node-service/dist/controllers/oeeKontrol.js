@@ -7,6 +7,7 @@ exports.getMakineOee = getMakineOee;
 exports.oeeGetir = oeeGetir;
 exports.topluOeeGetir = topluOeeGetir;
 const prisma_1 = __importDefault(require("../config/prisma"));
+const oee_1 = require("../utils/oee");
 async function getMakineOee(makineId, baslangicTarihi, bitisTarihi) {
     const makine = await prisma_1.default.makine.findUnique({
         where: { makine_id: makineId },
@@ -66,7 +67,7 @@ async function getMakineOee(makineId, baslangicTarihi, bitisTarihi) {
             kullanilabilirlik: t.kullanilabilirlik_orani,
             performans: t.performans_orani,
             kalite: t.kalite_orani,
-            oee_skoru: t.oee_skoru
+            oee_skoru: (0, oee_1.calculateOeeScore)(t.kullanilabilirlik_orani, t.performans_orani, t.kalite_orani) ?? t.oee_skoru
         })),
         durus_nedenleri: durusPastaGrafik
     };
@@ -125,29 +126,29 @@ async function topluOeeGetir(req, res) {
         for (const makine of makineler) {
             try {
                 const oee = await getMakineOee(makine.makine_id, baslangicTarihi, bitisTarihi);
-                // Ortalama OEE hesapla (trend üzerinden)
                 let avgOee = 0;
                 let avgKull = 0;
                 let avgPerf = 0;
                 let avgKalite = 0;
                 if (oee.oee_trend.length > 0) {
-                    const totalOee = oee.oee_trend.reduce((acc, val) => acc + (val.oee_skoru || 0), 0);
-                    const totalKull = oee.oee_trend.reduce((acc, val) => acc + (val.kullanilabilirlik || 0), 0);
-                    const totalPerf = oee.oee_trend.reduce((acc, val) => acc + (val.performans || 0), 0);
-                    const totalKalite = oee.oee_trend.reduce((acc, val) => acc + (val.kalite || 0), 0);
-                    avgOee = totalOee / oee.oee_trend.length;
-                    avgKull = totalKull / oee.oee_trend.length;
-                    avgPerf = totalPerf / oee.oee_trend.length;
-                    avgKalite = totalKalite / oee.oee_trend.length;
+                    const averages = (0, oee_1.averageOeeComponents)(oee.oee_trend, {
+                        availability: val => val.kullanilabilirlik,
+                        performance: val => val.performans,
+                        quality: val => val.kalite,
+                    });
+                    avgOee = averages.oee;
+                    avgKull = averages.availability;
+                    avgPerf = averages.performance;
+                    avgKalite = averages.quality;
                 }
                 sonuclar.push({
                     makine_id: oee.makine_id,
                     makine_adi: oee.makine_adi,
                     makine_turu: oee.makine_turu,
-                    oee_skoru: parseFloat(avgOee.toFixed(2)),
-                    kullanabilirlik: parseFloat(avgKull.toFixed(2)),
-                    performans: parseFloat(avgPerf.toFixed(2)),
-                    kalite: parseFloat(avgKalite.toFixed(2)),
+                    oee_skoru: avgOee,
+                    kullanabilirlik: avgKull,
+                    performans: avgPerf,
+                    kalite: avgKalite,
                 });
             }
             catch (err) {
@@ -158,9 +159,11 @@ async function topluOeeGetir(req, res) {
                 });
             }
         }
-        const ortalamaOee = sonuclar.length > 0
-            ? parseFloat((sonuclar.reduce((acc, s) => acc + s.oee_skoru, 0) / sonuclar.length).toFixed(2))
-            : 0;
+        const fabrikaOrtalamalari = (0, oee_1.averageOeeComponents)(sonuclar, {
+            availability: s => s.kullanabilirlik,
+            performance: s => s.performans,
+            quality: s => s.kalite,
+        });
         // Tüm raporları çekip haftalık trend oluştur
         const tumOeeKayitlari = await prisma_1.default.oee_raporlari.findMany({
             where: { tarih: { gte: baslangicTarihi, lte: bitisTarihi } },
@@ -180,32 +183,38 @@ async function topluOeeGetir(req, res) {
             else if (haftaIndex > 1)
                 weekLabel = `${haftaIndex + 1}. Hafta`;
             if (!haftalikGruplar[weekLabel])
-                haftalikGruplar[weekLabel] = { oee: [], a: [], p: [], q: [] };
-            if (kayit.oee_skoru)
-                haftalikGruplar[weekLabel].oee.push(kayit.oee_skoru);
-            if (kayit.kullanilabilirlik_orani)
+                haftalikGruplar[weekLabel] = { a: [], p: [], q: [] };
+            if (kayit.kullanilabilirlik_orani != null)
                 haftalikGruplar[weekLabel].a.push(kayit.kullanilabilirlik_orani);
-            if (kayit.performans_orani)
+            if (kayit.performans_orani != null)
                 haftalikGruplar[weekLabel].p.push(kayit.performans_orani);
-            if (kayit.kalite_orani)
+            if (kayit.kalite_orani != null)
                 haftalikGruplar[weekLabel].q.push(kayit.kalite_orani);
         });
         const fabrika_trend = Object.keys(haftalikGruplar).map(week => {
             const getAvg = (arr) => arr.length ? parseFloat((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1)) : 0;
             const g = haftalikGruplar[week];
+            const a = getAvg(g.a);
+            const p = getAvg(g.p);
+            const q = getAvg(g.q);
             return {
                 week,
-                oee: getAvg(g.oee),
-                a: getAvg(g.a),
-                p: getAvg(g.p),
-                q: getAvg(g.q)
+                oee: (0, oee_1.calculateOeeScore)(a, p, q, 1) ?? 0,
+                a,
+                p,
+                q
             };
         }).reverse(); // Eskiden yeniye sıralamak için reverse()
         res.status(200).json({
             success: true,
             message: 'OEE skorları hesaplandı.',
             data: {
-                fabrika_ortalama_oee: ortalamaOee,
+                fabrika_ortalama_oee: fabrikaOrtalamalari.oee,
+                fabrika_bilesenleri: {
+                    kullanilabilirlik: fabrikaOrtalamalari.availability,
+                    performans: fabrikaOrtalamalari.performance,
+                    kalite: fabrikaOrtalamalari.quality,
+                },
                 donem: { baslangic, bitis },
                 fabrika_trend,
                 makineler: sonuclar,
