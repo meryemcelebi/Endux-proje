@@ -56,7 +56,6 @@ model ariza_kaydi {
   bitis_zamani            DateTime?                 @db.Timestamptz(6)
   olusturma_tarihi        DateTime?                 @db.Timestamptz(6)
   ariza_tur_id            Int
-  makine_adi              String?                   @db.VarChar(50)
   ariza_turu              ariza_turu                @relation(fields: [ariza_tur_id], references: [ariza_tur_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_ariza_tur")
   makine                  makine                    @relation(fields: [makine_id], references: [makine_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_makine")
   arizayi_tetikleyen_form arizayi_tetikleyen_form[]
@@ -534,7 +533,7 @@ model uretim_kaydi {
   @@index([vardiya_tarihi], map: "idx_uretim_tarih")
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+
 model parca_stok_hareketleri {
   hareket_id     Int       @id @default(autoincrement())
   parca_id       Int?
