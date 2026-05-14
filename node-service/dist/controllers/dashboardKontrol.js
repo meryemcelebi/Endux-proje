@@ -9,7 +9,11 @@ const oee_1 = require("../utils/oee");
 const ONAY_BEKLEYEN_DURUMLAR = ['BEKLEYEN', 'Onay Bekliyor'];
 const getDashboardOzet = async (req, res) => {
     try {
-        const [makineDurumlari, onayBekleyenMakineler, ortalamaOee, kritikRiskliMakineler, bakimiYaklasanAdaylar, maliyetAdaylari] = await Promise.all([
+        await prisma_1.default.$executeRawUnsafe(`
+            ALTER TABLE "makine_turu"
+            ADD COLUMN IF NOT EXISTS "saatlik_durus_maliyeti" DOUBLE PRECISION DEFAULT 0
+        `);
+        const [makineDurumlari, onayBekleyenMakineler, ortalamaOee, kritikRiskliMakineler, bakimiYaklasanAdaylar, maliyetAnalizi, makineBazliMaliyetler, parcaKategoriMaliyetleri] = await Promise.all([
             prisma_1.default.makine.groupBy({
                 by: ['aktiflik_durumu'],
                 _count: {
@@ -87,21 +91,88 @@ const getDashboardOzet = async (req, res) => {
                     }
                 }
             }),
-            // Maliyet Analizi Toplamları (Fabrika Geneli)
+            // Maliyet Analizi Toplamları (TPM Kategorileri)
             prisma_1.default.$queryRawUnsafe(`
                 SELECT 
-                    (SELECT COALESCE(SUM(satin_alma_maliyeti), 0)::FLOAT FROM makine) as toplam_makine_alim,
-                    (SELECT COALESCE(SUM(bakim_maliyet), 0)::FLOAT FROM bakim_kaydi) as toplam_servis_ucreti,
+                    -- 1. Planlı Bakım Maliyeti (Bakım türü tam olarak 'Planlı Bakım' veya 'Önleyici Bakım' olanlar)
+                    (SELECT COALESCE(SUM(bakim_maliyet), 0)::FLOAT FROM bakim_kaydi bk 
+                     JOIN bakim_turu bt ON bk.bakim_tur_id = bt.bakim_tur_id 
+                     WHERE bt.bakim_tur_adi IN ('Planlı Bakım', 'Önleyici Bakım')) as planli_bakim_maliyeti,
+                    
+                    -- 2. Arızi Bakım Maliyeti (Geriye kalan tüm bakım maliyetleri)
+                    (SELECT COALESCE(SUM(bakim_maliyet), 0)::FLOAT FROM bakim_kaydi bk 
+                     JOIN bakim_turu bt ON bk.bakim_tur_id = bt.bakim_tur_id 
+                     WHERE bt.bakim_tur_adi NOT IN ('Planlı Bakım', 'Önleyici Bakım')) as arizi_bakim_maliyeti,
+                    
+                    -- 3. Yedek Parça Giderleri (Parça değişim tablosundan)
                     (SELECT COALESCE(SUM(p.parca_maliyeti * COALESCE(pd.adet, 1)), 0)::FLOAT 
                      FROM parca_degisim pd 
-                     JOIN parca p ON pd.parca_id = p.parca_id) as toplam_parca_masrafi
+                     JOIN parca p ON pd.parca_id = p.parca_id) as toplam_parca_masrafi,
+                    
+                    -- 4. Dış Servis Ücretleri (Sorumlu ID kolu dolu olan tüm bakımların maliyeti)
+                    (SELECT COALESCE(SUM(bakim_maliyet), 0)::FLOAT FROM bakim_kaydi WHERE sorumlu_id IS NOT NULL) as dis_servis_maliyeti,
+                    
+                    -- 5. Duruş Maliyeti (Hesaplama mantığı: Arıza açılış - Bakım açılış deltası)
+                    -- Not: Vardiya saatleri entegrasyonu için ham veriler çekilecek
+                    (SELECT COALESCE(SUM((EXTRACT(EPOCH FROM (bk.bakim_tarihi - ak.olusturma_tarihi))/3600) * COALESCE(mt.saatlik_durus_maliyeti, 0)), 0)::FLOAT 
+                     FROM bakim_kaydi bk 
+                     JOIN ariza_kaydi ak ON bk.ariza_id = ak.ariza_id
+                     JOIN makine m ON bk.makine_id = m.makine_id
+                     JOIN makine_turu mt ON m.makine_tur_id = mt.makine_tur_id) as durus_maliyeti,
+
+                    (SELECT COALESCE(SUM(satin_alma_maliyeti), 0)::FLOAT FROM makine) as toplam_makine_alim
+            `),
+            // Makine Bazlı Maliyet Dağılımı (Detay Sayfası İçin)
+            prisma_1.default.$queryRawUnsafe(`
+                SELECT 
+                    m.makine_id,
+                    m.makine_adi,
+                    l.fabrika_alani,
+                    -- Planlı Bakım
+                    COALESCE(SUM(CASE WHEN bt.bakim_tur_adi IN ('Planlı Bakım', 'Önleyici Bakım') THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as planli_maliyet,
+                    -- Arızi Bakım
+                    COALESCE(SUM(CASE WHEN bt.bakim_tur_adi NOT IN ('Planlı Bakım', 'Önleyici Bakım') THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as arizi_maliyet,
+                    -- Dış Servis (Sorumlu ID olanlar)
+                    COALESCE(SUM(CASE WHEN bk.sorumlu_id IS NOT NULL THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as dis_servis_maliyet,
+                    -- Yedek Parça (Makineye ait parça değişimleri)
+                    COALESCE((SELECT SUM(p.parca_maliyeti * COALESCE(pd.adet, 1)) FROM parca_degisim pd JOIN parca p ON pd.parca_id = p.parca_id WHERE pd.bakim_id IN (SELECT bakim_id FROM bakim_kaydi WHERE makine_id = m.makine_id)), 0)::FLOAT as parca_maliyeti,
+                    -- Duruş
+                    COALESCE(SUM(EXTRACT(EPOCH FROM (bk.bakim_tarihi - ak.olusturma_tarihi))/3600), 0)::FLOAT as toplam_durus_suresi,
+                    COALESCE(SUM((EXTRACT(EPOCH FROM (bk.bakim_tarihi - ak.olusturma_tarihi))/3600) * COALESCE(mt.saatlik_durus_maliyeti, 0)), 0)::FLOAT as durus_kaybi_maliyeti
+                FROM makine m
+                LEFT JOIN makine_turu mt ON m.makine_tur_id = mt.makine_tur_id
+                LEFT JOIN lokasyon l ON m.makine_id = l.makine_id
+                LEFT JOIN bakim_kaydi bk ON m.makine_id = bk.makine_id
+                LEFT JOIN bakim_turu bt ON bk.bakim_tur_id = bt.bakim_tur_id
+                LEFT JOIN ariza_kaydi ak ON bk.ariza_id = ak.ariza_id
+                GROUP BY m.makine_id, m.makine_adi, l.fabrika_alani
+                ORDER BY (COALESCE(SUM(bk.bakim_maliyet), 0) + COALESCE(SUM((EXTRACT(EPOCH FROM (bk.bakim_tarihi - ak.olusturma_tarihi))/3600) * COALESCE(mt.saatlik_durus_maliyeti, 0)), 0)) DESC
+                LIMIT 20
+            `),
+            // 7. Yedek Parça Kategori Bazlı Maliyetler (YENİ)
+            prisma_1.default.$queryRawUnsafe(`
+                SELECT 
+                    pk.kategori_adi as kategori,
+                    l.fabrika_alani as lokasyon,
+                    SUM(p.parca_maliyeti * COALESCE(pd.adet, 1))::FLOAT as maliyet
+                FROM parca_degisim pd
+                JOIN parca p ON pd.parca_id = p.parca_id
+                JOIN parca_kategori pk ON p.kategori_id = pk.kategori_id
+                JOIN bakim_kaydi bk ON pd.bakim_id = bk.bakim_id
+                JOIN makine m ON bk.makine_id = m.makine_id
+                LEFT JOIN lokasyon l ON m.makine_id = l.makine_id
+                GROUP BY pk.kategori_adi, l.fabrika_alani
+                ORDER BY SUM(p.parca_maliyeti * COALESCE(pd.adet, 1)) DESC
             `)
         ]);
-        // Maliyet Özeti Ayarları
-        const maliyetOzetData = maliyetAdaylari && maliyetAdaylari[0] ? maliyetAdaylari[0] : {
-            toplam_makine_alim: 0,
-            toplam_servis_ucreti: 0,
-            toplam_parca_masrafi: 0
+        // Maliyet Özeti Ayarları (TPM Uyumlu)
+        const maliyetOzetData = maliyetAnalizi && maliyetAnalizi[0] ? maliyetAnalizi[0] : {
+            planli_bakim_maliyeti: 0,
+            arizi_bakim_maliyeti: 0,
+            toplam_parca_masrafi: 0,
+            dis_servis_maliyeti: 0,
+            durus_maliyeti: 0,
+            toplam_makine_alim: 0
         };
         // TPM: %90 eşik algoritması — bakımı yaklaşan makineleri filtrele
         const bakimiYaklasanMakineler = bakimiYaklasanAdaylar
@@ -166,11 +237,16 @@ const getDashboardOzet = async (req, res) => {
                         risk_skoru: Number(risk.risk_skoru ?? 0)
                     }))
                 },
-                // Maliyet Özeti
+                // Maliyet Özeti (TPM Kurumsal Standart)
                 maliyet_ozeti: {
-                    toplam_makine_alim: Number(maliyetOzetData?.toplam_makine_alim || 0),
-                    toplam_servis_ucreti: Number(maliyetOzetData?.toplam_servis_ucreti || 0),
-                    toplam_parca_masrafi: Number(maliyetOzetData?.toplam_parca_masrafi || 0)
+                    planli_bakim: Number(maliyetOzetData?.planli_bakim_maliyeti || 0),
+                    arizi_bakim: Number(maliyetOzetData?.arizi_bakim_maliyeti || 0),
+                    parca_gideri: Number(maliyetOzetData?.toplam_parca_masrafi || 0),
+                    dis_servis: Number(maliyetOzetData?.dis_servis_maliyeti || 0),
+                    durus_maliyeti: Number(maliyetOzetData?.durus_maliyeti || 0),
+                    toplam_alim: Number(maliyetOzetData?.toplam_makine_alim || 0),
+                    makine_detaylari: makineBazliMaliyetler || [],
+                    parca_kategori_detaylari: parcaKategoriMaliyetleri || []
                 },
                 // TPM: Bakımı yaklaşan makineler
                 bakimi_yaklasan: {

@@ -303,6 +303,7 @@ export const api = {
         sifre: userData.sifre,
         telefon: userData.telefon,
         eposta: userData.eposta || null,
+        baslama_tarihi: userData.baslama_tarihi || null,
         firma_id: Number(userData.firma_id),
       }),
     });
@@ -338,6 +339,20 @@ export const api = {
     const res = await fetch(`${API_BASE}/sistem/makine-turleri`, { headers: getHeaders() });
     return (await handleResponse(res)).makineTurleri || [];
   },
+  getSystemArizaTurleri: async (makine_tur_id) => {
+    let url = `${API_BASE}/sistem/ariza-turleri`;
+    if (makine_tur_id) {
+      url += `?makine_tur_id=${makine_tur_id}`;
+    }
+    const res = await fetch(url, { headers: getHeaders() });
+    return (await handleResponse(res)).arizaTurleri || [];
+  },
+
+  // RCA: Arıza türleri/kategorileri (Elektriksel, Mekanik, Hidrolik vb.)
+  getArizaTurleri: async () => {
+    const res = await fetch(`${API_BASE}/sistem/ariza-turleri`, { headers: getHeaders() });
+    return (await handleResponse(res)).arizaTurleri || [];
+  },
 
   // ═══════════════ 13. TEDARİKÇİLER ═══════════════
   // GET /api/tedarikciler
@@ -364,11 +379,29 @@ export const api = {
     });
     return handleResponse(res);
   },
+  // PUT /api/tedarikciler/:id
+  updateSupplier: async (id, supplierData) => {
+    const res = await fetch(`${API_BASE}/tedarikciler/${id}`, {
+      method: "PUT", headers: getHeaders(),
+      body: JSON.stringify({
+        firma_adi: supplierData.firma_adi || supplierData.ad,
+        yetkili_kisi: supplierData.yetkili_kisi || null,
+        vergi_no: supplierData.vergi_no || null,
+        telefon: supplierData.telefon || null,
+        email: supplierData.email || null,
+        adres: supplierData.adres || null,
+        il: supplierData.il || null,
+        ilce: supplierData.ilce || null,
+      }),
+    });
+    return handleResponse(res);
+  },
 
-  // ═══════════════ 14. SERVİS FİRMALARI ═══════════════
-  // GET /api/servis-firmalari
+  // GET /api/servis-firmalari (token gerektirmez — misafir girişi için herkese açık)
   getServiceFirms: async () => {
-    const res = await fetch(`${API_BASE}/servis-firmalari`, { headers: getHeaders() });
+    const res = await fetch(`${API_BASE}/servis-firmalari`, {
+      headers: { "Content-Type": "application/json" } // Authorization header yok — token gerekmez
+    });
     const json = await handleResponse(res);
     return json.data || [];
   },
@@ -376,6 +409,24 @@ export const api = {
   addServiceFirm: async (firmData) => {
     const res = await fetch(`${API_BASE}/servis-firmalari`, {
       method: "POST", headers: getHeaders(),
+      body: JSON.stringify({
+        firma_adi: firmData.firma_adi || firmData.ad,
+        telefon: firmData.telefon || null,
+        email: firmData.email || null,
+        adres: firmData.adres || null,
+        il: firmData.il || null,
+        ilce: firmData.ilce || null,
+        uzmanlik_alani: firmData.uzmanlik_alani || null,
+        sorumlu_ad: firmData.sorumlu_ad || null,
+        sorumlu_telefon: firmData.sorumlu_telefon || firmData.telefon || null,
+      }),
+    });
+    return handleResponse(res);
+  },
+  // PUT /api/servis-firmalari/:id
+  updateServiceFirm: async (id, firmData) => {
+    const res = await fetch(`${API_BASE}/servis-firmalari/${id}`, {
+      method: "PUT", headers: getHeaders(),
       body: JSON.stringify({
         firma_adi: firmData.firma_adi || firmData.ad,
         telefon: firmData.telefon || null,
@@ -450,10 +501,18 @@ export const api = {
 
   // ═══════════════ 16. FİRMA EKLE (TİP BAZLI) ═══════════════
   addFirm: async (firmData) => {
+    const isUpdate = !!firmData.id;
     if (firmData.tip === "Tedarikçi" || firmData.tip === "tedarikci") {
-      return api.addSupplier(firmData);
+      return isUpdate ? api.updateSupplier(firmData.id, firmData) : api.addSupplier(firmData);
     } else {
-      return api.addServiceFirm(firmData);
+      return isUpdate ? api.updateServiceFirm(firmData.id, firmData) : api.addServiceFirm(firmData);
+    }
+  },
+  updateFirm: async (id, firmData) => {
+    if (firmData.tip === "Tedarikçi" || firmData.tip === "tedarikci") {
+      return api.updateSupplier(id, firmData);
+    } else {
+      return api.updateServiceFirm(id, firmData);
     }
   },
 
@@ -770,5 +829,38 @@ export const api = {
     return json.data || [];
   },
 
+
+  // ═══════════════ 32. VARDİYA SAATLERİ (SİSTEM) ═══════════════
+  // GET /api/sistem/vardiya-saatleri
+  getVardiyaSaatleri: async () => {
+    const res = await fetch(`${API_BASE}/sistem/vardiya-saatleri`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json.vardiyalar || [];
+  },
+
+  // POST /api/sistem/vardiya-saatleri
+  updateVardiyaSaatleri: async (vardiyalar) => {
+    const res = await fetch(`${API_BASE}/sistem/vardiya-saatleri`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ vardiyalar }),
+    });
+    return handleResponse(res);
+  },
+
+  getMakineTuruDurusMaliyetleri: async () => {
+    const res = await fetch(`${API_BASE}/sistem/makine-turu-durus-maliyetleri`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json.makineTurleri || [];
+  },
+
+  updateMakineTuruDurusMaliyetleri: async (makineTurleri) => {
+    const res = await fetch(`${API_BASE}/sistem/makine-turu-durus-maliyetleri`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ makineTurleri }),
+    });
+    return handleResponse(res);
+  },
 
 };

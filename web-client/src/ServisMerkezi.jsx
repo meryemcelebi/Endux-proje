@@ -14,6 +14,8 @@ export default function ServisMerkezi() {
   const [searchTerm, setSearchTerm] = useState(""); // Firma arama terimi
   const [modalType, setModalType] = useState("Servis"); // Modal tipi (Servis Firması mı yoksa Parça Tedarikçisi mi?)
   const [allHistory, setAllHistory] = useState([]); // Tüm servis geçmişi (Onay merkezi puanlamaları için)
+  const [editingFirm, setEditingFirm] = useState(null);
+  const [selectedFirmId, setSelectedFirmId] = useState(null);
 
   // --- DIŞ SERVİS PUANLAMA STATE'LERİ ---
   const [disRatingId, setDisRatingId] = useState(null); // Puanlanan bakım (işlem) ID'si
@@ -52,12 +54,25 @@ export default function ServisMerkezi() {
           durum: t.durum || "ONAYLANDI"
         }));
 
-        setTasks(formattedTasks);
+        // FIX #2: Aynı makineye ait birden fazla kayıt varsa sadece en son olanı göster
+        const tekil = new Map();
+        formattedTasks.forEach(t => {
+          const mevcut = tekil.get(t.makine_id);
+          if (!mevcut || t.bakim_id > mevcut.bakim_id) {
+            tekil.set(t.makine_id, t);
+          }
+        });
+
+        setTasks([...tekil.values()]);
         setFirms(firmData);
         setAllHistory(historyData);
 
-        // Dış servis işlemleri (Backend verileri - Onaylanmamış olanlar)
-        const liveHistory = historyData.filter(h => h.servis_firma_id && h.durum !== "TAMAMLANDI");
+        // FIX #2: Dış servis puan listesi — TAMAMLANDI olan DİŞ servis bakımlarını göster
+        // Daha önce "!== TAMAMLANDI" filtresi vardı, bu yüzden tamamlanan işler hiç görünmuyordu
+        const liveHistory = historyData.filter(h =>
+          h.servis_firma_id &&             // Dış servis firması atanmış olmalı
+          h.durum === "TAMAMLANDI"          // Sadece tamamlananlar
+        );
 
         setDisServisler(liveHistory);
       } catch (err) {
@@ -136,14 +151,16 @@ export default function ServisMerkezi() {
 
   const handleSaveFirm = async (firmData) => {
     try {
+      const isUpdate = !!firmData.id;
       await api.addFirm(firmData);
       setIsModalOpen(false);
+      setEditingFirm(null);
       const updatedFirms = await api.getFirms();
       setFirms(updatedFirms);
-      alert(`${firmData.tip} başarıyla eklendi!`);
+      alert(`${firmData.tip} başarıyla ${isUpdate ? "güncellendi" : "eklendi"}!`);
     } catch (error) {
-      console.error("Firma eklenirken hata:", error);
-      alert("Firma eklenirken hata oluştu!");
+      console.error("Firma işlemi sırasında hata:", error);
+      alert(`Firma ${firmData.id ? "güncellenirken" : "eklenirken"} hata oluştu!`);
     }
   };
 
@@ -424,7 +441,14 @@ export default function ServisMerkezi() {
             {filteredFirms.length > 0 ? (
               filteredFirms.map((f) => (
                 <React.Fragment key={f.id}>
-                  <tr style={trStyle}>
+                  <tr 
+                    style={{
+                      ...trStyle,
+                      background: selectedFirmId === (f.servis_firma_id || f.id) ? "rgba(233, 69, 96, 0.05)" : "transparent",
+                      cursor: "pointer"
+                    }}
+                    onClick={() => setSelectedFirmId(selectedFirmId === (f.servis_firma_id || f.id) ? null : (f.servis_firma_id || f.id))}
+                  >
                     <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>
                       {f.ad || f.firma_adi}
                       <div style={{ fontSize: "11px", color: "#95a5a6", fontWeight: "normal", marginTop: "4px" }}>{f.tip}</div>
@@ -459,24 +483,53 @@ export default function ServisMerkezi() {
                       </span>
                     </td>
                     <td style={tdStyle}>
-                      <button
-                        onClick={() => handleDeleteFirm(f)}
-                        style={{
-                          background: "rgba(231, 76, 60, 0.1)",
-                          color: "#e74c3c",
-                          border: "1px solid rgba(231, 76, 60, 0.3)",
-                          padding: "8px 12px",
-                          borderRadius: "8px",
-                          fontSize: "12px",
-                          fontWeight: "bold",
-                          cursor: "pointer",
-                          transition: "0.2s"
-                        }}
-                        onMouseOver={(e) => { e.target.style.background = "#e74c3c"; e.target.style.color = "white"; }}
-                        onMouseOut={(e) => { e.target.style.background = "rgba(231, 76, 60, 0.1)"; e.target.style.color = "#e74c3c"; }}
-                      >
-                        Sözleşmeyi İptal Et
-                      </button>
+                      {selectedFirmId === (f.servis_firma_id || f.id) && (
+                        <div style={{ display: "flex", gap: "8px", animation: "fadeIn 0.3s ease" }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingFirm(f);
+                              setModalType(f.tip);
+                              setIsModalOpen(true);
+                            }}
+                            style={{
+                              background: "#3498db",
+                              color: "white",
+                              border: "none",
+                              padding: "8px 16px",
+                              borderRadius: "8px",
+                              fontSize: "12px",
+                              fontWeight: "bold",
+                              cursor: "pointer",
+                              boxShadow: "0 4px 10px rgba(52, 152, 219, 0.3)"
+                            }}
+                          >
+                            Güncelle
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteFirm(f);
+                            }}
+                            style={{
+                              background: "#e74c3c",
+                              color: "white",
+                              border: "none",
+                              padding: "8px 16px",
+                              borderRadius: "8px",
+                              fontSize: "12px",
+                              fontWeight: "bold",
+                              cursor: "pointer",
+                              boxShadow: "0 4px 10px rgba(231, 76, 60, 0.3)"
+                            }}
+                          >
+                            İptal Et
+                          </button>
+                        </div>
+                      )}
+                      {selectedFirmId !== (f.servis_firma_id || f.id) && (
+                        <span style={{ color: "#95a5a6", fontSize: "12px", fontStyle: "italic" }}>İşlem için tıkla</span>
+                      )}
                     </td>
                   </tr>
                 </React.Fragment>
@@ -709,9 +762,13 @@ export default function ServisMerkezi() {
       </div>
       <FirmModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingFirm(null);
+        }}
         onSave={handleSaveFirm}
         initialType={modalType}
+        initialData={editingFirm}
       />
     </div>
   );

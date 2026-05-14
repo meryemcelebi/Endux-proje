@@ -100,6 +100,10 @@ const Sidebar = () => {
             <Link to="/kisi-ekle" style={getLinkStyle("/kisi-ekle")}>
               Personel Ekle
             </Link>
+
+            <Link to="/sistem-ayarlari" style={getLinkStyle("/sistem-ayarlari")}>
+              Operasyonel Ayarlar
+            </Link>
           </>
         )}
 
