@@ -771,4 +771,37 @@ export const api = {
   },
 
 
+  // ═══════════════ 32. VARDİYA SAATLERİ (SİSTEM) ═══════════════
+  // GET /api/sistem/vardiya-saatleri
+  getVardiyaSaatleri: async () => {
+    const res = await fetch(`${API_BASE}/sistem/vardiya-saatleri`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json.vardiyalar || [];
+  },
+
+  // POST /api/sistem/vardiya-saatleri
+  updateVardiyaSaatleri: async (vardiyalar) => {
+    const res = await fetch(`${API_BASE}/sistem/vardiya-saatleri`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ vardiyalar }),
+    });
+    return handleResponse(res);
+  },
+
+  getMakineTuruDurusMaliyetleri: async () => {
+    const res = await fetch(`${API_BASE}/sistem/makine-turu-durus-maliyetleri`, { headers: getHeaders() });
+    const json = await handleResponse(res);
+    return json.makineTurleri || [];
+  },
+
+  updateMakineTuruDurusMaliyetleri: async (makineTurleri) => {
+    const res = await fetch(`${API_BASE}/sistem/makine-turu-durus-maliyetleri`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ makineTurleri }),
+    });
+    return handleResponse(res);
+  },
+
 };

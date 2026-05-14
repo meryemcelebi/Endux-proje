@@ -6,4 +6,8 @@ const router = (0, express_1.Router)();
 router.get('/firmalar', sistemKontrol_1.siralaFirmalar);
 router.get('/roller', sistemKontrol_1.siralaRoller);
 router.get('/makine-turleri', sistemKontrol_1.siralaMakineTurleri);
+router.get('/vardiya-saatleri', sistemKontrol_1.getVardiyaSaatleri);
+router.post('/vardiya-saatleri', sistemKontrol_1.setVardiyaSaatleri);
+router.get('/makine-turu-durus-maliyetleri', sistemKontrol_1.getMakineTuruDurusMaliyetleri);
+router.post('/makine-turu-durus-maliyetleri', sistemKontrol_1.setMakineTuruDurusMaliyetleri);
 exports.default = router;
