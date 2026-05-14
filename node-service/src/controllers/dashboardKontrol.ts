@@ -123,13 +123,12 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
                     -- 4. Dış Servis Ücretleri (Sorumlu ID kolu dolu olan tüm bakımların maliyeti)
                     (SELECT COALESCE(SUM(bakim_maliyet), 0)::FLOAT FROM bakim_kaydi WHERE sorumlu_id IS NOT NULL) as dis_servis_maliyeti,
                     
-                    -- 5. Duruş Maliyeti (Hesaplama mantığı: Arıza açılış - Bakım açılış deltası)
-                    -- Not: Vardiya saatleri entegrasyonu için ham veriler çekilecek
-                    (SELECT COALESCE(SUM((EXTRACT(EPOCH FROM (bk.bakim_tarihi - ak.olusturma_tarihi))/3600) * COALESCE(mt.saatlik_durus_maliyeti, 0)), 0)::FLOAT 
+                    -- 5. Duruş Maliyeti (durus_suresi * saatlik_durus_maliyeti)
+                    (SELECT COALESCE(SUM(bk.durus_suresi * COALESCE(mt.saatlik_durus_maliyeti, 0)), 0)::FLOAT 
                      FROM bakim_kaydi bk 
-                     JOIN ariza_kaydi ak ON bk.ariza_id = ak.ariza_id
                      JOIN makine m ON bk.makine_id = m.makine_id
-                     JOIN makine_turu mt ON m.makine_tur_id = mt.makine_tur_id) as durus_maliyeti,
+                     JOIN makine_turu mt ON m.makine_tur_id = mt.makine_tur_id
+                     WHERE bk.durus_suresi IS NOT NULL) as durus_maliyeti,
 
                     (SELECT COALESCE(SUM(satin_alma_maliyeti), 0)::FLOAT FROM makine) as toplam_makine_alim
             `),
@@ -149,16 +148,15 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
                     -- Yedek Parça (Makineye ait parça değişimleri)
                     COALESCE((SELECT SUM(p.parca_maliyeti * COALESCE(pd.adet, 1)) FROM parca_degisim pd JOIN parca p ON pd.parca_id = p.parca_id WHERE pd.bakim_id IN (SELECT bakim_id FROM bakim_kaydi WHERE makine_id = m.makine_id)), 0)::FLOAT as parca_maliyeti,
                     -- Duruş
-                    COALESCE(SUM(EXTRACT(EPOCH FROM (bk.bakim_tarihi - ak.olusturma_tarihi))/3600), 0)::FLOAT as toplam_durus_suresi,
-                    COALESCE(SUM((EXTRACT(EPOCH FROM (bk.bakim_tarihi - ak.olusturma_tarihi))/3600) * COALESCE(mt.saatlik_durus_maliyeti, 0)), 0)::FLOAT as durus_kaybi_maliyeti
+                    COALESCE(SUM(bk.durus_suresi), 0)::FLOAT as toplam_durus_suresi,
+                    COALESCE(SUM(bk.durus_suresi * COALESCE(mt.saatlik_durus_maliyeti, 0)), 0)::FLOAT as durus_kaybi_maliyeti
                 FROM makine m
                 LEFT JOIN makine_turu mt ON m.makine_tur_id = mt.makine_tur_id
                 LEFT JOIN lokasyon l ON m.makine_id = l.makine_id
                 LEFT JOIN bakim_kaydi bk ON m.makine_id = bk.makine_id
                 LEFT JOIN bakim_turu bt ON bk.bakim_tur_id = bt.bakim_tur_id
-                LEFT JOIN ariza_kaydi ak ON bk.ariza_id = ak.ariza_id
                 GROUP BY m.makine_id, m.makine_adi, l.fabrika_alani
-                ORDER BY (COALESCE(SUM(bk.bakim_maliyet), 0) + COALESCE(SUM((EXTRACT(EPOCH FROM (bk.bakim_tarihi - ak.olusturma_tarihi))/3600) * COALESCE(mt.saatlik_durus_maliyeti, 0)), 0)) DESC
+                ORDER BY (COALESCE(SUM(bk.bakim_maliyet), 0) + COALESCE(SUM(bk.durus_suresi * COALESCE(mt.saatlik_durus_maliyeti, 0)), 0)) DESC
                 LIMIT 20
             `),
 
@@ -182,7 +180,7 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
             prisma.$queryRawUnsafe<any[]>(`
                 WITH aylar AS (
                     SELECT generate_series(
-                        date_trunc('month', CURRENT_DATE - interval '1 month'),
+                        date_trunc('month', CURRENT_DATE - interval '5 months'),
                         date_trunc('month', CURRENT_DATE),
                         '1 month'::interval
                     )::DATE as ay_baslangic
@@ -195,7 +193,7 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
                         COALESCE(SUM(CASE WHEN bk.sorumlu_id IS NOT NULL THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as dis_servis
                     FROM bakim_kaydi bk
                     LEFT JOIN bakim_turu bt ON bk.bakim_tur_id = bt.bakim_tur_id
-                    WHERE bk.bakim_tarihi >= date_trunc('month', CURRENT_DATE - interval '1 month')
+                    WHERE bk.bakim_tarihi >= date_trunc('month', CURRENT_DATE - interval '5 months')
                     GROUP BY date_trunc('month', bk.bakim_tarihi)::DATE
                 ),
                 parca_maliyetleri AS (
@@ -205,7 +203,7 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
                     FROM parca_degisim pd
                     JOIN parca p ON pd.parca_id = p.parca_id
                     JOIN bakim_kaydi bk ON pd.bakim_id = bk.bakim_id
-                    WHERE bk.bakim_tarihi >= date_trunc('month', CURRENT_DATE - interval '1 month')
+                    WHERE bk.bakim_tarihi >= date_trunc('month', CURRENT_DATE - interval '5 months')
                     GROUP BY date_trunc('month', bk.bakim_tarihi)::DATE
                 )
                 SELECT 

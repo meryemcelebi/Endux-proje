@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
 
@@ -13,11 +13,28 @@ import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
 export default function TPMCostAnalysis({ data }) {
   const navigate = useNavigate();
 
+  // Ay seçici dropdown için son 6 ayın listesini oluştur
+  const months = useMemo(() => {
+    const list = [];
+    const now = new Date();
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const label = d.toLocaleDateString("tr-TR", { month: "long", year: "numeric" });
+      list.push({
+        label: label.charAt(0).toUpperCase() + label.slice(1),
+        value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      });
+    }
+    return list;
+  }, []);
+  const [selectedMonth, setSelectedMonth] = useState(months[0]?.value || "");
+
   const {
     planli_bakim = 0,
     arizi_bakim = 0,
     parca_gideri = 0,
     dis_servis = 0,
+    durus_maliyeti = 0,
     aylik_trend = [],
   } = data || {};
 
@@ -55,13 +72,19 @@ export default function TPMCostAnalysis({ data }) {
         value: Number(parca_gideri || 0),
         color: "#f97316",
       },
+      {
+        id: "downtime",
+        name: "Duruş Maliyeti",
+        value: Number(durus_maliyeti || 0),
+        color: "#06b6d4",
+      },
     ],
-    [planli_bakim, arizi_bakim, dis_servis, parca_gideri]
+    [planli_bakim, arizi_bakim, dis_servis, parca_gideri, durus_maliyeti]
   );
 
   const totalCost = costItems.reduce((sum, item) => sum + item.value, 0);
 
-  // Backend'den gelen gerçek 3 aylık trend verisini grafik formatına dönüştür
+  // Backend'den gelen gerçek 6 aylık trend verisini grafik formatına dönüştür
   const trendData = useMemo(() => {
     if (!aylik_trend || aylik_trend.length === 0) {
       return [];
@@ -76,16 +99,24 @@ export default function TPMCostAnalysis({ data }) {
     });
   }, [aylik_trend]);
 
-  // Mevcut ay adını bul
-  const currentMonthLabel = new Date().toLocaleDateString("tr-TR", { month: "long", year: "numeric" });
-  const capitalizedMonth = currentMonthLabel.charAt(0).toUpperCase() + currentMonthLabel.slice(1);
+
 
   return (
     <div style={containerStyle}>
-      {/* --- 1. BAŞLIK + AY ETIKETI + TOPLAM TUTAR --- */}
+      {/* --- 1. BAŞLIK + AY SEÇİCİ + TOPLAM TUTAR --- */}
       <div style={headerStyle}>
         <span style={titleStyle}>MALİYET ANALİZİ</span>
-        <span style={monthBadgeStyle}>{capitalizedMonth}</span>
+        <select
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(e.target.value)}
+          style={dropdownStyle}
+        >
+          {months.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <div
@@ -154,7 +185,7 @@ export default function TPMCostAnalysis({ data }) {
 
       {/* --- 4. 3 AYLIK GERÇEK TREND GRAFİĞİ --- */}
       <div style={trendContainer}>
-        <span style={trendTitle}>2 Aylık Maliyet Trendi</span>
+        <span style={trendTitle}>6 Aylık Bakım Trendi</span>
         <div style={{ width: "100%", height: 80 }}>
           {trendData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
@@ -247,7 +278,7 @@ const titleStyle = {
   textTransform: "uppercase",
 };
 
-const monthBadgeStyle = {
+const dropdownStyle = {
   fontSize: "11px",
   fontWeight: "700",
   color: "#475569",
@@ -255,6 +286,8 @@ const monthBadgeStyle = {
   border: "1px solid #e2e8f0",
   borderRadius: "8px",
   padding: "5px 10px",
+  cursor: "pointer",
+  outline: "none",
 };
 
 const totalStyle = {

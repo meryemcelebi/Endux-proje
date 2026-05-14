@@ -347,6 +347,10 @@ export const api = {
     const res = await fetch(url, { headers: getHeaders() });
     return (await handleResponse(res)).arizaTurleri || [];
   },
+  getSystemBakimTurleri: async () => {
+    const res = await fetch(`${API_BASE}/sistem/bakim-turleri`, { headers: getHeaders() });
+    return (await handleResponse(res)).bakimTurleri || [];
+  },
 
   // RCA: Arıza türleri/kategorileri (Elektriksel, Mekanik, Hidrolik vb.)
   getArizaTurleri: async () => {

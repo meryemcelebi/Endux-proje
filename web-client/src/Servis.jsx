@@ -9,6 +9,7 @@ export default function Servis() {
   const [arizaSecenekleri, setArizaSecenekleri] = useState([]);
   const [history, setHistory] = useState([]); // Makineye ait eski servis kayıtları
   const [firms, setFirms] = useState([]); // Sistemdeki tüm kayıtlı firmalar (Servis/Tedarikçi)
+  const [bakimTurleri, setBakimTurleri] = useState([]); // Sistemdeki bakım türleri
   const [isModalOpen, setIsModalOpen] = useState(false); // Yeni firma ekleme modalı durumu
   const [modalType, setModalType] = useState("Servis"); // Eklenecek firmanın türü
 
@@ -27,7 +28,7 @@ export default function Servis() {
     aciklama: "",
     ariza_sebebi: "",
     ariza_id: "",
-    bakim_turu: "",
+    bakim_tur_id: "",
     degisen_parcalar: []
   });
 
@@ -39,15 +40,17 @@ export default function Servis() {
     const fetchData = async () => {
       try {
         // Makineye özel servis geçmişini ve genel firma listesini çek (Paralel istek)
-        const [histData, firmData, stokData, makineData] = await Promise.all([
+        const [histData, firmData, stokData, makineData, bakimData] = await Promise.all([
           api.getServiceHistory(id),
           api.getFirms(),
           api.getInventory(),
-          api.getMachineDetails(id)
+          api.getMachineDetails(id),
+          api.getSystemBakimTurleri()
         ]);
         setHistory(histData);
         setFirms(firmData);
         setStoklar(stokData);
+        setBakimTurleri(bakimData);
         if (makineData && makineData.makine_tur_id) {
           try {
             const arizalar = await api.getSystemArizaTurleri(makineData.makine_tur_id);
@@ -122,7 +125,7 @@ export default function Servis() {
 
       setTamamlandiMi(true);
       setBekleyenIs(null);
-      setForm({ bakim_maliyet: "", aciklama: "", ariza_sebebi: "", bakim_turu: "", degisen_parcalar: [] });
+      setForm({ bakim_maliyet: "", aciklama: "", ariza_sebebi: "", bakim_tur_id: "", degisen_parcalar: [] });
 
       // Geçmişi yenile
       try {
@@ -153,8 +156,8 @@ export default function Servis() {
       kullanici_id: currentUser?.userId || currentUser?.kullanici_id ? Number(currentUser.userId || currentUser.kullanici_id) : null,
       teknisyen_id: currentUser?.userId || currentUser?.kullanici_id ? Number(currentUser.userId || currentUser.kullanici_id) : null,
 
-      // Kural 2: Formdan seçilmiş bir firma varsa onu al, yoksa kullanıcının kendi firma ID'sini kullan, ikisi de yoksa 13 (varsayılan) yap.
-      servis_firma_id: form.servis_firma_id ? Number(form.servis_firma_id) : (currentUser.firma_id ? Number(currentUser.firma_id) : 13),
+      // Kural 2: Formdan seçilmiş bir servis firması varsa onu al, yoksa null gönder (farklı tablolar!)
+      servis_firma_id: form.servis_firma_id ? Number(form.servis_firma_id) : null,
 
       // Kural 3: Sabit 1 gönderme. Formda arıza türü seçildiyse onu al, seçilmediyse veritabanındaki (3 - Donanım Arızası) ID'sini kullan.
       ariza_id: form.ariza_id ? Number(form.ariza_id) : 3,
@@ -163,14 +166,14 @@ export default function Servis() {
       bakim_maliyet: Number(form.bakim_maliyet) || 0,
       bakim_tarihi: new Date().toISOString(),
       aciklama: form.aciklama,
-      bakim_turu: form.bakim_turu || "Planlı Bakım",
+      bakim_tur_id: form.bakim_tur_id ? Number(form.bakim_tur_id) : undefined,
       degisen_Parcalar: form.degisen_parcalar
     };
 
     try {
       const savedRecord = await api.addServiceRecord(payload);
       setHistory([savedRecord, ...history]);
-      setForm({ ariza_sebebi: "", bakim_maliyet: "", aciklama: "", bakim_turu: "", degisen_parcalar: [] });
+      setForm({ ariza_sebebi: "", bakim_maliyet: "", aciklama: "", bakim_tur_id: "", degisen_parcalar: [] });
       setTamamlandiMi(true); // Formu kapat ve başarı mesajını göster
     } catch (err) {
       console.error("Kayıt eklenemedi:", err);
@@ -464,14 +467,17 @@ export default function Servis() {
                 {/* Bakım Türü (bakim_turu) */}
                 <div style={{ marginBottom: "15px" }}>
                   <label style={labelStil}>Bakım Türü</label>
-                  <input
-                    type="text"
-                    name="bakim_turu"
-                    placeholder="Örn: Rutin, Planlı"
-                    value={form.bakim_turu}
+                  <select
+                    name="bakim_tur_id"
+                    value={form.bakim_tur_id}
                     onChange={handleChange}
                     style={inputStil}
-                  />
+                  >
+                    <option value="">— Bakım Türü Seçin —</option>
+                    {bakimTurleri.map((tur) => (
+                      <option key={tur.bakim_tur_id} value={tur.bakim_tur_id}>{tur.bakim_tur_adi}</option>
+                    ))}
+                  </select>
                 </div>
 
 
