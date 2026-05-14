@@ -70,7 +70,6 @@ model ariza_turu {
   ariza_tur     String        @db.VarChar(150)
   makine_tur_id Int?
   ariza_kaydi   ariza_kaydi[]
-  makine_turu   makine_turu?  @relation(fields: [makine_tur_id], references: [makine_tur_id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model arizayi_tetikleyen_form {
@@ -351,15 +350,13 @@ model makine_ozellikleri {
 }
 
 model makine_turu {
-  makine_tur_id         Int               @id @default(autoincrement())
-  makine_tur_adi        String            @db.VarChar(50)
-  risk_katsayisi        Decimal?          @db.Decimal(5, 2)
-  periyodik_bakim_saati Int?
-  ariza_turu            ariza_turu[]
-  ariza_turu            ariza_turu[]
+  makine_tur_id          Int               @id @default(autoincrement())
+  makine_tur_adi         String            @db.VarChar(50)
+  risk_katsayisi         Decimal?          @db.Decimal(5, 2)
+  periyodik_bakim_saati  Int?
   saatlik_durus_maliyeti Float?            @default(0)
-  kontrol_sablonu       kontrol_sablonu[]
-  makine                makine[]
+  kontrol_sablonu        kontrol_sablonu[]
+  makine                 makine[]
 }
 
 model oee_raporlari {
@@ -546,10 +543,10 @@ model parca_stok_hareketleri {
 }
 
 model vardiya_saatleri {
-  vardiya_id       Int      @id @default(autoincrement())
-  vardiya_adi      String   @db.VarChar(50)
-  baslangic_saati  String   @db.VarChar(5) // HH:mm format
-  bitis_saati      String   @db.VarChar(5) // HH:mm format
+  vardiya_id        Int      @id @default(autoincrement())
+  vardiya_adi       String   @db.VarChar(50)
+  baslangic_saati   String   @db.VarChar(5)
+  bitis_saati       String   @db.VarChar(5)
   guncelleme_tarihi DateTime @default(now()) @db.Timestamptz(6)
 }
 
