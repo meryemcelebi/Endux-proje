@@ -1409,7 +1409,9 @@ ALTER SEQUENCE public.makine_ozellikleri_ozellik_id_seq OWNED BY public.makine_o
 CREATE TABLE public.makine_turu (
     makine_tur_id integer NOT NULL,
     makine_tur_adi character varying(50) NOT NULL,
-    risk_katsayisi numeric(5,2)
+    risk_katsayisi numeric(5,2),
+    periyodik_bakim_saati integer,
+    saatlik_durus_maliyeti double precision DEFAULT 0
 );
 
 

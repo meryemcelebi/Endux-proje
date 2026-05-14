@@ -13,6 +13,8 @@ import KisiEkle from "./KisiEkle";
 import Bakim from "./Bakim";
 import TedarikciListesi from "./TedarikciListesi";
 import ServisMerkezi from "./ServisMerkezi";
+import MaliyetDetay from "./MaliyetDetay";
+import SistemAyarlari from "./SistemAyarlari";
 
 /**
  * Giriş Yapılmayan Kullanıcıları Login Ekranına Yönlendiren Component (Korumalı Rota)
@@ -71,6 +73,12 @@ export default function App() {
 
         {/* Teknik Servis Merkezi: Tüm bakım ve onarım süreçlerinin tek bir yerden yönetildiği pano */}
         <Route path="/teknik-servis" element={<KorumaliRoute><ServisMerkezi /></KorumaliRoute>} />
+
+        {/* Maliyet Detay Sayfası: Makine bazlı maliyet ve duruş kayıpları analizi */}
+        <Route path="/maliyet-detay" element={<KorumaliRoute><MaliyetDetay /></KorumaliRoute>} />
+
+        {/* Sistem Ayarları: Vardiya saatleri ve genel sistem parametreleri */}
+        <Route path="/sistem-ayarlari" element={<KorumaliRoute><SistemAyarlari /></KorumaliRoute>} />
 
         {/* Tanımsız veya hatalı yazılmış rotalar için kullanıcıyı otomatik olarak ana sayfaya yönlendir */}
         <Route path="*" element={<Navigate to="/" replace />} />

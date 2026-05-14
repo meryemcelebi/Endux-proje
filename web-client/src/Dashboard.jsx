@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
 import { api } from "./services/api";
+import TPMCostAnalysis from "./components/TPMCostAnalysis";
 
 
 
@@ -48,7 +49,15 @@ export default function Dashboard() {
     performans: 0,
     kalite: 0,
   });
-  const [maliyetOzeti, setMaliyetOzeti] = useState({ toplam_makine_alim: 0, toplam_servis_ucreti: 0, toplam_parca_masrafi: 0 }); // Maliyet analiz özeti
+  const [maliyetOzeti, setMaliyetOzeti] = useState({
+    planli_bakim: 0,
+    arizi_bakim: 0,
+    parca_gideri: 0,
+    dis_servis: 0,
+    durus_maliyeti: 0,
+    toplam_alim: 0,
+    makine_detaylari: []
+  }); // Maliyet analiz özeti
 
   const getMachineStatus = (machine) => String(machine?.aktiflik_durumu || "").trim().toLowerCase();
   const pendingMachines = pendingTasks.map((task) => ({
@@ -146,20 +155,9 @@ export default function Dashboard() {
   const lowStockCount = lowStockParts.length;
 
 
-  // --- MALİYET VE BÜTÇE ANALİZİ (Backend'den Gelen Tamamlanmış Veri) ---
-  const toplamMakineAlim = maliyetOzeti.toplam_makine_alim || 0;
-  const toplamServisUcreti = maliyetOzeti.toplam_servis_ucreti || 0;
-  const toplamParcaMasrafi = maliyetOzeti.toplam_parca_masrafi || 0;
-
-  // Grafik ölçeklendirmesi için en yüksek maliyeti bul
-  const maxMaliyet = Math.max(toplamMakineAlim, toplamServisUcreti, toplamParcaMasrafi, 1);
-
-  // Maliyet Grafiği (Bar Chart) için veri objesi
-  const maliyetVerileri = [
-    { label: "Makine Alımı", value: toplamMakineAlim, color: "#3498db", gradient: "linear-gradient(to top, #2980b9, #3498db)" },
-    { label: "Parça Masrafı", value: toplamParcaMasrafi, color: "#e67e22", gradient: "linear-gradient(to top, #d35400, #e67e22)" },
-    { label: "Servis Ücreti", value: toplamServisUcreti, color: "#9b59b6", gradient: "linear-gradient(to top, #8e44ad, #9b59b6)" },
-  ];
+  // --- MALİYET ANALİZİ (TPM SİSTEMİ) ---
+  // Eski basit grafik verileri artık kullanılmıyor, yeni bileşen doğrudan maliyetOzeti state'ini kullanıyor.
+  <TPMCostAnalysis data={maliyetOzeti} />
 
   // --- HANDLERS (Olay Yakalayıcılar) ---
 
@@ -622,7 +620,7 @@ export default function Dashboard() {
         <Navbar />
 
         {/* ANA PANEL İÇERİK YÜZEYİ: Tüm KPI kartları ve grafiklerin listelendiği kaydırılabilir alan */}
-        <div style={{ padding: "30px", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "25px" }}>
+        <div style={{ padding: "30px 30px 10px 30px", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "25px" }}>
 
           {/* KPI KUTULARI (DİNAMİK + SADE BAŞLIKLAR) */}
           <div style={{ display: "flex", gap: "20px", width: "100%", flex: "0 0 160px" }}>
@@ -786,12 +784,11 @@ export default function Dashboard() {
           </div >
 
           {/* ALT ALAN (Geniş Kaplama) */}
-          < div style={{ display: "flex", gap: "20px", width: "100%", flex: 1, minHeight: "450px" }
-          }>
+          <div style={{ display: "flex", gap: "20px", width: "100%", alignItems: "stretch", marginBottom: "0", flex: 1 }}>
             {/* FABRİKA HARİTASI (Dinamik) */}
             < div
               onClick={() => setIsMapExpanded(true)}
-              style={{ ...mapBox, flex: 1.8, position: "relative", padding: "20px", cursor: "zoom-in", transition: "transform 0.2s" }}
+              style={{ ...mapBox, flex: 1.4, position: "relative", padding: "20px", cursor: "zoom-in", transition: "transform 0.2s" }}
               onMouseOver={(e) => e.currentTarget.style.transform = "scale(1.005)"}
               onMouseOut={(e) => e.currentTarget.style.transform = "scale(1)"}
             >
@@ -810,60 +807,12 @@ export default function Dashboard() {
                 </button>
               </div>
               {renderFloorPlan(false)}
-            </div >
+            </div>
 
-            {/* MAKİNE BAKIM YÖNETİMİ (Maliyet Grafiği) */}
-            < div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "20px" }}>
-              <div style={{ ...analizKartStil, flex: 1 }}>
-                <div style={analizBaslikStil}>Maliyet Analizi</div>
-
-                {/* Bar Chart */}
-                <div style={{ flex: 1, display: "flex", alignItems: "flex-end", justifyContent: "space-around", padding: "15px 10px 0 10px", gap: "20px" }}>
-                  {maliyetVerileri.map((item, i) => {
-                    const heightPct = Math.max((item.value / maxMaliyet) * 100, 5);
-                    return (
-                      <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1, height: "100%", justifyContent: "flex-end" }}>
-                        {/* Değer */}
-                        <div style={{ fontSize: "13px", fontWeight: "bold", color: item.color, marginBottom: "6px" }}>
-                          {(item.value / 1000).toFixed(0)}K ₺
-                        </div>
-                        {/* Bar */}
-                        <div style={{
-                          width: "45px",
-                          height: `${heightPct}%`,
-                          minHeight: "20px",
-                          background: item.gradient,
-                          borderRadius: "6px 6px 0 0",
-                          transition: "height 1.2s ease-out",
-                          boxShadow: `0 4px 12px ${item.color}33`,
-                          position: "relative"
-                        }}>
-                        </div>
-                        {/* Label */}
-                        <div style={{ fontSize: "11px", color: "#7f8c8d", marginTop: "8px", textAlign: "center", fontWeight: "600", lineHeight: "1.3" }}>
-                          {item.label}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Alt legend */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "15px", padding: "12px 15px", background: "#f8f9fa", borderRadius: "10px", border: "1px solid #f1f2f6" }}>
-                  <div style={{ display: "flex", gap: "15px" }}>
-                    {maliyetVerileri.map((item, i) => (
-                      <div key={i} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "11px", color: "#555" }}>
-                        <div style={{ width: "8px", height: "8px", borderRadius: "2px", background: item.color }}></div>
-                        {item.label}
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: "12px", fontWeight: "bold", color: "#0f3460" }}>
-                    Toplam: {((toplamMakineAlim + toplamParcaMasrafi + toplamServisUcreti) / 1000).toFixed(0)}K ₺
-                  </div>
-                </div>
-              </div>
-            </div >
+            {/* KURUMSAL TPM MALİYET ANALİZİ (GELİŞMİŞ) */}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+              <TPMCostAnalysis data={maliyetOzeti} />
+            </div>
           </div >
 
           {/* TAM EKRAN HARİTA MODAL */}
