@@ -156,8 +156,7 @@ export default function Dashboard() {
 
 
   // --- MALİYET ANALİZİ (TPM SİSTEMİ) ---
-  // Eski basit grafik verileri artık kullanılmıyor, yeni bileşen doğrudan maliyetOzeti state'ini kullanıyor.
-  <TPMCostAnalysis data={maliyetOzeti} />
+  // Maliyet bileşeni render bölümünde <TPMCostAnalysis data={maliyetOzeti} /> olarak kullanılıyor.
 
   // --- HANDLERS (Olay Yakalayıcılar) ---
 

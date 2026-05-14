@@ -19,7 +19,8 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
             bakimiYaklasanAdaylar,
             maliyetAnalizi,
             makineBazliMaliyetler,
-            parcaKategoriMaliyetleri
+            parcaKategoriMaliyetleri,
+            aylikMaliyetTrend
         ] = await Promise.all([
             prisma.makine.groupBy({
                 by: ['aktiflik_durumu'],
@@ -175,6 +176,48 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
                 LEFT JOIN lokasyon l ON m.makine_id = l.makine_id
                 GROUP BY pk.kategori_adi, l.fabrika_alani
                 ORDER BY SUM(p.parca_maliyeti * COALESCE(pd.adet, 1)) DESC
+            `),
+
+            // 8. Aylık Maliyet Trendi (Son 3 Ay)
+            prisma.$queryRawUnsafe<any[]>(`
+                WITH aylar AS (
+                    SELECT generate_series(
+                        date_trunc('month', CURRENT_DATE - interval '1 month'),
+                        date_trunc('month', CURRENT_DATE),
+                        '1 month'::interval
+                    )::DATE as ay_baslangic
+                ),
+                bakim_maliyetleri AS (
+                    SELECT 
+                        date_trunc('month', bk.bakim_tarihi)::DATE as ay,
+                        COALESCE(SUM(CASE WHEN bt.bakim_tur_adi IN ('Planlı Bakım', 'Önleyici Bakım') THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as planli,
+                        COALESCE(SUM(CASE WHEN bt.bakim_tur_adi NOT IN ('Planlı Bakım', 'Önleyici Bakım') THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as arizi,
+                        COALESCE(SUM(CASE WHEN bk.sorumlu_id IS NOT NULL THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as dis_servis
+                    FROM bakim_kaydi bk
+                    LEFT JOIN bakim_turu bt ON bk.bakim_tur_id = bt.bakim_tur_id
+                    WHERE bk.bakim_tarihi >= date_trunc('month', CURRENT_DATE - interval '1 month')
+                    GROUP BY date_trunc('month', bk.bakim_tarihi)::DATE
+                ),
+                parca_maliyetleri AS (
+                    SELECT 
+                        date_trunc('month', bk.bakim_tarihi)::DATE as ay,
+                        COALESCE(SUM(p.parca_maliyeti * COALESCE(pd.adet, 1)), 0)::FLOAT as parca
+                    FROM parca_degisim pd
+                    JOIN parca p ON pd.parca_id = p.parca_id
+                    JOIN bakim_kaydi bk ON pd.bakim_id = bk.bakim_id
+                    WHERE bk.bakim_tarihi >= date_trunc('month', CURRENT_DATE - interval '1 month')
+                    GROUP BY date_trunc('month', bk.bakim_tarihi)::DATE
+                )
+                SELECT 
+                    a.ay_baslangic as ay,
+                    COALESCE(bm.planli, 0) as planli,
+                    COALESCE(bm.arizi, 0) as arizi,
+                    COALESCE(bm.dis_servis, 0) as dis_servis,
+                    COALESCE(pm.parca, 0) as parca
+                FROM aylar a
+                LEFT JOIN bakim_maliyetleri bm ON a.ay_baslangic = bm.ay
+                LEFT JOIN parca_maliyetleri pm ON a.ay_baslangic = pm.ay
+                ORDER BY a.ay_baslangic ASC
             `)
         ]);
 
@@ -269,7 +312,15 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
                     durus_maliyeti: Number(maliyetOzetData?.durus_maliyeti || 0),
                     toplam_alim: Number(maliyetOzetData?.toplam_makine_alim || 0),
                     makine_detaylari: makineBazliMaliyetler || [],
-                    parca_kategori_detaylari: parcaKategoriMaliyetleri || []
+                    parca_kategori_detaylari: parcaKategoriMaliyetleri || [],
+                    aylik_trend: (aylikMaliyetTrend || []).map((row: any) => ({
+                        ay: row.ay,
+                        planli: Number(row.planli || 0),
+                        arizi: Number(row.arizi || 0),
+                        dis_servis: Number(row.dis_servis || 0),
+                        parca: Number(row.parca || 0),
+                        toplam: Number(row.planli || 0) + Number(row.arizi || 0) + Number(row.dis_servis || 0) + Number(row.parca || 0)
+                    }))
                 },
                 // TPM: Bakımı yaklaşan makineler
                 bakimi_yaklasan: {
