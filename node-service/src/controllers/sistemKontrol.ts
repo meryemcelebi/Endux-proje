@@ -136,3 +136,26 @@ export const siralaArizaTurleri = async (req: Request, res: Response) => {
         res.status(500).json({ success: false, message: "Arıza türleri listelenirken bir hata oluştu." });
     }
 };
+
+//ariza türleri listesi API
+export const siralaArizaTurleri = async (req: Request, res: Response) => {
+    try {
+        const makine_tur_id = req.query.makine_tur_id;
+        let whereClause = {};
+        if (makine_tur_id) {
+             whereClause = {
+                  OR: [
+                      { makine_tur_id: Number(makine_tur_id) },
+                      { makine_tur_id: null }
+                  ]
+             };
+        }
+        const arizaTurleri = await prisma.ariza_turu.findMany({ 
+             where: whereClause,
+             select: { ariza_tur_id: true, ariza_tur: true } 
+        });
+        res.json({ success: true, arizaTurleri });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Arıza türleri listelenirken bir hata oluştu." });
+    }
+};

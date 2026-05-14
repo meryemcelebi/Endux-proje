@@ -7,6 +7,8 @@ import FirmModal from "./components/FirmModal";
 export default function TedarikciListesi() {
   // --- STATE TANIMLAMALARI ---
   const [activeTab, setActiveTab] = useState("tedarikciler");
+  const [editingSupplier, setEditingSupplier] = useState(null);
+  const [selectedTedarikciId, setSelectedTedarikciId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [purchaseRatingId, setPurchaseRatingId] = useState(null); // Sonradan alım puanlama için
@@ -83,24 +85,41 @@ export default function TedarikciListesi() {
   // --- TEDARİKÇİ EKLEME ---
   const handleSaveFirm = async (firmData) => {
     try {
+      const isUpdate = !!firmData.id;
       const response = await api.addFirm(firmData);
-      const newFirm = response?.data || response;
-      const newSupplier = {
-        tedarikci_id: newFirm.tedarikci_id || newFirm.id,
-        firma_adi: newFirm.firma_adi || newFirm.ad || firmData.ad,
-        telefon: firmData.telefon || newFirm.iletisim?.telefon || null,
-        email: firmData.email || newFirm.iletisim?.mail || null,
-        adres: firmData.adres || newFirm.iletisim?.acik_adres || null,
-        aktiflik: newFirm.aktiflik ?? true,
-        vergi_no: newFirm.vergi_no || firmData.vergi_no || null,
-        yetkili_kisi: newFirm.yetkili_kisi || firmData.yetkili_kisi || null
-      };
-      setTedarikciler([...tedarikciler, newSupplier]);
+      const updatedOrNewFirm = response?.data || response;
+      
+      if (isUpdate) {
+        setTedarikciler(tedarikciler.map(t => (t.tedarikci_id || t.id) === (firmData.id) ? {
+          ...t,
+          firma_adi: updatedOrNewFirm.firma_adi || firmData.ad,
+          yetkili_kisi: updatedOrNewFirm.yetkili_kisi || firmData.yetkili_kisi,
+          telefon: firmData.telefon,
+          email: firmData.email,
+          adres: firmData.adres,
+          vergi_no: firmData.vergi_no,
+          iletisim: updatedOrNewFirm.iletisim || t.iletisim
+        } : t));
+        alert("Tedarikçi bilgileri güncellendi!");
+      } else {
+        const newSupplier = {
+          tedarikci_id: updatedOrNewFirm.tedarikci_id || updatedOrNewFirm.id,
+          firma_adi: updatedOrNewFirm.firma_adi || updatedOrNewFirm.ad || firmData.ad,
+          telefon: firmData.telefon || updatedOrNewFirm.iletisim?.telefon || null,
+          email: firmData.email || updatedOrNewFirm.iletisim?.mail || null,
+          adres: firmData.adres || updatedOrNewFirm.iletisim?.acik_adres || null,
+          aktiflik: updatedOrNewFirm.aktiflik ?? true,
+          vergi_no: updatedOrNewFirm.vergi_no || firmData.vergi_no || null,
+          yetkili_kisi: updatedOrNewFirm.yetkili_kisi || firmData.yetkili_kisi || null
+        };
+        setTedarikciler([...tedarikciler, newSupplier]);
+        alert("Tedarikçi başarıyla eklendi!");
+      }
       setIsModalOpen(false);
-      alert("Tedarikçi başarıyla eklendi!");
+      setEditingSupplier(null);
     } catch (error) {
-      console.error("Tedarikçi eklenirken hata:", error); 
-      alert("Tedarikçi eklenirken hata oluştu!");
+      console.error("Tedarikçi işlemi sırasında hata:", error);
+      alert(`Tedarikçi ${firmData.id ? "güncellenirken" : "eklenirken"} hata oluştu!`);
     }
   };
 
@@ -271,9 +290,17 @@ export default function TedarikciListesi() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredTedarikciler.length > 0 ? (
-                    filteredTedarikciler.map((t) => (
-                      <tr key={t.tedarikci_id || t.id} style={trStyle}>
+                    {filteredTedarikciler.length > 0 ? (
+                      filteredTedarikciler.map((t) => (
+                        <tr 
+                          key={t.tedarikci_id || t.id} 
+                          style={{
+                            ...trStyle,
+                            background: selectedTedarikciId === (t.tedarikci_id || t.id) ? "rgba(233, 69, 96, 0.05)" : "transparent",
+                            cursor: "pointer"
+                          }}
+                          onClick={() => setSelectedTedarikciId(selectedTedarikciId === (t.tedarikci_id || t.id) ? null : (t.tedarikci_id || t.id))}
+                        >
                         <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>
                           {t.firma_adi || t.ad}
                           <div style={{ fontSize: "11px", color: "#95a5a6", fontWeight: "normal" }}>Kayıt: {t.kayit_tarihi?.split('T')[0] || "-"}</div>
@@ -320,24 +347,52 @@ export default function TedarikciListesi() {
                           </span>
                         </td>
                         <td style={tdStyle}>
-                          <button
-                            onClick={() => handleDeleteSupplier(t)}
-                            style={{
-                              background: "rgba(231, 76, 60, 0.1)",
-                              color: "#e74c3c",
-                              border: "1px solid rgba(231, 76, 60, 0.3)",
-                              padding: "8px 12px",
-                              borderRadius: "8px",
-                              fontSize: "12px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                              transition: "0.2s"
-                            }}
-                            onMouseOver={(e) => { e.target.style.background = "#e74c3c"; e.target.style.color = "white"; }}
-                            onMouseOut={(e) => { e.target.style.background = "rgba(231, 76, 60, 0.1)"; e.target.style.color = "#e74c3c"; }}
-                          >
-                            Sözleşmeyi İptal Et
-                          </button>
+                          {selectedTedarikciId === (t.tedarikci_id || t.id) && (
+                            <div style={{ display: "flex", gap: "8px", animation: "fadeIn 0.3s ease" }}>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingSupplier(t);
+                                  setIsModalOpen(true);
+                                }}
+                                style={{
+                                  background: "#3498db",
+                                  color: "white",
+                                  border: "none",
+                                  padding: "8px 16px",
+                                  borderRadius: "8px",
+                                  fontSize: "12px",
+                                  fontWeight: "bold",
+                                  cursor: "pointer",
+                                  boxShadow: "0 4px 10px rgba(52, 152, 219, 0.3)"
+                                }}
+                              >
+                                Güncelle
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteSupplier(t);
+                                }}
+                                style={{
+                                  background: "#e74c3c",
+                                  color: "white",
+                                  border: "none",
+                                  padding: "8px 16px",
+                                  borderRadius: "8px",
+                                  fontSize: "12px",
+                                  fontWeight: "bold",
+                                  cursor: "pointer",
+                                  boxShadow: "0 4px 10px rgba(231, 76, 60, 0.3)"
+                                }}
+                              >
+                                Sil
+                              </button>
+                            </div>
+                          )}
+                          {selectedTedarikciId !== (t.tedarikci_id || t.id) && (
+                            <span style={{ color: "#95a5a6", fontSize: "12px", fontStyle: "italic" }}>İşlem için tıkla</span>
+                          )}
                         </td>
                       </tr>
                     ))
@@ -642,15 +697,15 @@ export default function TedarikciListesi() {
                             <span style={{ color: "#bdc3c7", fontSize: "12px", marginLeft: "4px" }}>adet</span>
                           </td>
                           <td style={tdStyle}>
-                             {s.tahmini_omur_saati ? (
-                               <span style={{ 
-                                 fontSize: "14px",
-                                 fontWeight: "bold",
-                                 color: "#34495e"
-                               }}>
-                                 {s.tahmini_omur_saati} Saat
-                               </span>
-                             ) : "-"}
+                            {s.tahmini_omur_saati ? (
+                              <span style={{
+                                fontSize: "14px",
+                                fontWeight: "bold",
+                                color: "#34495e"
+                              }}>
+                                {s.tahmini_omur_saati} Saat
+                              </span>
+                            ) : "-"}
                           </td>
                           <td style={tdStyle}>
                             <div style={stokKapsayiciStyle}>
@@ -742,10 +797,10 @@ export default function TedarikciListesi() {
                 <div style={{ textAlign: "center", padding: "60px 0", color: "#95a5a6", fontSize: "16px" }}>
                   Veriler yükleniyor...
                 </div>
-              ) : satinAlmalar.filter(sa => 
-                  (!filterPartName || (sa.parca_adi || "").toLowerCase().includes(filterPartName.toLowerCase())) &&
-                  (!filterCategory || sa.kategori_adi === filterCategory)
-                ).length === 0 ? (
+              ) : satinAlmalar.filter(sa =>
+                (!filterPartName || (sa.parca_adi || "").toLowerCase().includes(filterPartName.toLowerCase())) &&
+                (!filterCategory || sa.kategori_adi === filterCategory)
+              ).length === 0 ? (
                 <div style={{ textAlign: "center", padding: "60px 0" }}>
                   <div style={{ color: "#95a5a6", fontSize: "16px" }}>Arama kriterlerine uygun satın alma kaydı bulunmamaktadır.</div>
                 </div>
@@ -761,7 +816,7 @@ export default function TedarikciListesi() {
                   </thead>
                   <tbody>
                     {satinAlmalar
-                      .filter(sa => 
+                      .filter(sa =>
                         (!filterPartName || (sa.parca_adi || "").toLowerCase().includes(filterPartName.toLowerCase())) &&
                         (!filterCategory || sa.kategori_adi === filterCategory)
                       )
@@ -769,11 +824,11 @@ export default function TedarikciListesi() {
                         <tr key={`${sa.parca_adi}-${sa.stok_giris_tarihi}-${index}`} style={trStyle}>
                           <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>{sa.parca_adi || "-"}</td>
                           <td style={tdStyle}>
-                            <span style={{ 
-                              background: "rgba(149, 165, 166, 0.1)", 
-                              color: "#7f8c8d", 
-                              padding: "4px 10px", 
-                              borderRadius: "12px", 
+                            <span style={{
+                              background: "rgba(149, 165, 166, 0.1)",
+                              color: "#7f8c8d",
+                              padding: "4px 10px",
+                              borderRadius: "12px",
                               fontSize: "12px",
                               fontWeight: "bold"
                             }}>
@@ -794,9 +849,13 @@ export default function TedarikciListesi() {
 
           <FirmModal
             isOpen={isModalOpen}
-            onClose={() => setIsModalOpen(false)}
+            onClose={() => {
+              setIsModalOpen(false);
+              setEditingSupplier(null);
+            }}
             onSave={handleSaveFirm}
             initialType="Tedarikçi"
+            initialData={editingSupplier}
           />
 
         </div>
