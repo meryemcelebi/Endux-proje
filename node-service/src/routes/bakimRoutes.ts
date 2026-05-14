@@ -13,7 +13,8 @@ import {
     bakimIsleminiOnayla,
     bakimBaslat,
     qrBakimTamamla,
-    acilBakimBildir
+    acilBakimBildir,
+    durusSuresiYenidenHesapla
 } from "../controllers/bakimKontrol";
 
 import { oturumKontrol, rolKontrol } from "../middlewares/yetki";
@@ -39,6 +40,9 @@ router.post('/qr-tamamla', oturumKontrol, qrBakimTamamla);
 
 // POST /api/bakimlar/acil-bildir — Riskli makineden doğrudan teknik servis iş emri oluşturur
 router.post('/acil-bildir', oturumKontrol, rolKontrol('YONETICI'), acilBakimBildir);
+
+// POST /api/bakimlar/durus-yeniden-hesapla — Mevcut kayıtların duruş sürelerini vardiya bazlı yeniden hesaplar
+router.post('/durus-yeniden-hesapla', oturumKontrol, rolKontrol('YONETICI'), durusSuresiYenidenHesapla);
 
 // POST /api/bakimlar  — Yeni bakım kaydı oluşturur
 router.post('/', oturumKontrol, rolKontrol('TEKNISYEN', 'YONETICI', 'SERVIS'), bakimKaydiGir);

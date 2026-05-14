@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../config/prisma';
 import { Prisma } from '@prisma/client';
 import { supabase } from '../config/supabase';
+import { otomatikDurusSuresiHesapla } from '../utils/durusSuresiHesapla';
 
 const ACIL_BILDIRIM_ETIKETI = "[ACIL_BILDIRIM]";
 
@@ -44,6 +45,25 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
 
         const sonuc = await prisma.$transaction(async (tx) => {
 
+            // TPM: Eğer bu makine için daha önce bekleyen bir bakım kaydı varsa,
+            // duruş süresini o kaydın oluşturulma zamanından itibaren hesapla
+            let hesaplananDurus: number | null = null;
+            const mevcutBekleyen = await tx.bakim_kaydi.findFirst({
+                where: {
+                    makine_id: Number(makine_id),
+                    durum: { in: ['BEKLEYEN', 'Onay Bekliyor', 'ONAYLANDI', 'Teknik Serviste', 'Bakımda'] }
+                },
+                orderBy: { bakim_tarihi: 'desc' },
+                select: { bakim_tarihi: true }
+            });
+
+            if (mevcutBekleyen?.bakim_tarihi) {
+                hesaplananDurus = await otomatikDurusSuresiHesapla(
+                    mevcutBekleyen.bakim_tarihi,
+                    new Date()
+                );
+            }
+
             // A. Bakım Kaydını Oluştur
             const bakimKaydi = await tx.bakim_kaydi.create({
                 data: {
@@ -57,7 +77,9 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                     bakim_tur_id: bakim_tur_id ? Number(bakim_tur_id) : null,
 
                     bakim_maliyet: Number(bakim_maliyet),
-                    durus_suresi: durus_suresi ? new Prisma.Decimal(durus_suresi) : null,
+                    durus_suresi: hesaplananDurus !== null
+                        ? new Prisma.Decimal(hesaplananDurus)
+                        : (durus_suresi ? new Prisma.Decimal(durus_suresi) : null),
                     aciklama: aciklama || null,
                     bakim_tarihi: new Date(),
 
@@ -726,7 +748,8 @@ export const bakimIsleminiOnayla = async (req: Request, res: Response) => {
             select: {
                 bakim_id: true,
                 servis_puan_id: true,
-                makine_id: true
+                makine_id: true,
+                bakim_tarihi: true
             }
         });
 
@@ -738,11 +761,21 @@ export const bakimIsleminiOnayla = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: "İşlem onaylanmadan önce puan verilmelidir." });
         }
 
+        // TPM: Duruş süresini otomatik hesapla (bakım oluşturulma → tamamlanma)
+        let hesaplananDurus: number = 0;
+        if (bakim.bakim_tarihi) {
+            hesaplananDurus = await otomatikDurusSuresiHesapla(
+                bakim.bakim_tarihi,
+                new Date()
+            );
+        }
+
         await prisma.$transaction([
             prisma.bakim_kaydi.update({
                 where: { bakim_id: bakimId },
                 data: {
-                    durum: "TAMAMLANDI"
+                    durum: "TAMAMLANDI",
+                    durus_suresi: new Prisma.Decimal(hesaplananDurus)
                 }
             }),
             prisma.makine.update({
@@ -901,7 +934,8 @@ export const qrBakimTamamla = async (req: Request, res: Response) => {
             select: {
                 bakim_id: true,
                 makine_id: true,
-                durum: true
+                durum: true,
+                bakim_tarihi: true
             }
         });
 
@@ -930,10 +964,19 @@ export const qrBakimTamamla = async (req: Request, res: Response) => {
             // 1) Bakım kaydını güncelle — durum TAMAMLANDI, form detayları yazılır
             // Tip dönüşümleri — frontend'den gelen değerlerin güvenli parse'ı
             const parsedMaliyet = bakim_maliyet ? Number(bakim_maliyet) : 0;
-            const parsedDurus = durus_suresi ? Number(String(durus_suresi)) : null;
             const parsedAciklama = aciklama ? String(aciklama).trim() : '';
 
-            console.log('[QR-TAMAMLA] Parse edilen değerler → maliyet:', parsedMaliyet, '| durus:', parsedDurus, '| aciklama:', parsedAciklama.substring(0, 50));
+            // TPM: Duruş süresini otomatik hesapla (bakım oluşturulma → tamamlanma)
+            // bakim_tarihi orijinal oluşturulma zamanını temsil eder, overwrite edilmez
+            let hesaplananDurus: number = 0;
+            if (mevcutBakim.bakim_tarihi) {
+                hesaplananDurus = await otomatikDurusSuresiHesapla(
+                    mevcutBakim.bakim_tarihi,
+                    new Date()
+                );
+            }
+
+            console.log('[QR-TAMAMLA] Parse edilen değerler → maliyet:', parsedMaliyet, '| otomatik durus:', hesaplananDurus, '| aciklama:', parsedAciklama.substring(0, 50));
 
             const guncellenmisKayit = await tx.bakim_kaydi.update({
                 where: { bakim_id: parsedBakimId },
@@ -941,8 +984,8 @@ export const qrBakimTamamla = async (req: Request, res: Response) => {
                     durum: 'TAMAMLANDI',
                     bakim_maliyet: parsedMaliyet,
                     aciklama: parsedAciklama || undefined,
-                    durus_suresi: parsedDurus ? new Prisma.Decimal(parsedDurus) : undefined,
-                    bakim_tarihi: new Date() // Tamamlanma anı
+                    durus_suresi: new Prisma.Decimal(hesaplananDurus)
+                    // bakim_tarihi overwrite EDİLMEZ — orijinal oluşturulma zamanı korunur
                 }
             });
 
@@ -1004,6 +1047,74 @@ export const qrBakimTamamla = async (req: Request, res: Response) => {
         res.status(500).json({
             success: false,
             message: 'Bakım tamamlanırken bir hata oluştu.'
+        });
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// DURUŞ SÜRESİ YENİDEN HESAPLAMA — POST /api/bakimlar/durus-yeniden-hesapla
+// Mevcut TAMAMLANDI kayıtlarının duruş sürelerini vardiya bazlı yeniden hesaplar.
+// ═══════════════════════════════════════════════════════════════════
+export const durusSuresiYenidenHesapla = async (req: Request, res: Response) => {
+    try {
+        // Tüm TAMAMLANDI bakım kayıtlarını çek
+        const tamamlananlar = await prisma.bakim_kaydi.findMany({
+            where: { durum: 'TAMAMLANDI' },
+            select: {
+                bakim_id: true,
+                makine_id: true,
+                bakim_tarihi: true,
+                durus_suresi: true
+            }
+        });
+
+        // Her makine için en eski BEKLEYEN/ONAYLANDI kaydını bulmak zor olduğundan,
+        // bakim_tarihi'ni başlangıç kabul edip, mevcut zamana göre DEĞİL,
+        // tamamlanma zamanı bilinmediğinden mevcut durus_suresi > 0 olanları
+        // vardiya bazlı yeniden hesapla (bakim_tarihi + durus_suresi saat ekleyerek bitiş tahmin et)
+        const vardiyalar = await prisma.vardiya_saatleri.findMany({
+            select: { baslangic_saati: true, bitis_saati: true }
+        });
+
+        if (!vardiyalar.length) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vardiya saatleri tanımlı değil. Önce Sistem Ayarlarından vardiyaları tanımlayınız.'
+            });
+        }
+
+        let guncellenenSayisi = 0;
+        const { hesaplaDurusSuresi } = await import('../utils/durusSuresiHesapla');
+
+        for (const kayit of tamamlananlar) {
+            if (!kayit.bakim_tarihi) continue;
+
+            const mevcutDurus = Number(kayit.durus_suresi || 0);
+            if (mevcutDurus <= 0) continue; // Duruş süresi 0 olanları atla
+
+            // Tahmini bitiş zamanı: bakim_tarihi + mevcut durus_suresi (saat)
+            const tahminiTamamlanma = new Date(kayit.bakim_tarihi.getTime() + mevcutDurus * 60 * 60 * 1000);
+            const yeniDurus = hesaplaDurusSuresi(kayit.bakim_tarihi, tahminiTamamlanma, vardiyalar);
+
+            if (yeniDurus !== mevcutDurus) {
+                await prisma.bakim_kaydi.update({
+                    where: { bakim_id: kayit.bakim_id },
+                    data: { durus_suresi: new Prisma.Decimal(yeniDurus) }
+                });
+                guncellenenSayisi++;
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `${guncellenenSayisi} adet bakım kaydının duruş süresi vardiya bazlı yeniden hesaplandı.`,
+            data: { toplam_kayit: tamamlananlar.length, guncellenen: guncellenenSayisi }
+        });
+    } catch (error) {
+        console.error('Duruş süresi yeniden hesaplama hatası:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Duruş süreleri yeniden hesaplanırken bir hata oluştu.'
         });
     }
 };

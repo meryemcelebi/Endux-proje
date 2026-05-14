@@ -122,16 +122,17 @@ Kök dizindeki `.env.example` dosyasını `.env` olarak kopyalayınız ve gerekl
 cp .env.example .env
 ```
 
-### 4. Backend Bağımlılıklarını Yükleyiniz
+### 3. Backend Bağımlılıklarını Yükleyiniz
 
 ```bash
 cd node-service
 npm install
+npx prisma db pull
 npx prisma generate
 npm run dev
 ```
 
-### 5. Frontend Bağımlılıklarını Yükleyiniz
+### 4. Frontend Bağımlılıklarını Yükleyiniz
 
 ```bash
 cd web-client
@@ -139,7 +140,7 @@ npm install
 npm run dev
 ```
 
-### 6. AI Servisini Başlatınız (İsteğe Bağlı)
+### 5. AI Servisini Başlatınız (İsteğe Bağlı)
 
 ```bash
 cd ai-services
