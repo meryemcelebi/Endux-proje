@@ -16,13 +16,9 @@ import {
     acilBakimBildir
 } from "../controllers/bakimKontrol";
 
-
-
 import { oturumKontrol, rolKontrol } from "../middlewares/yetki";
 
 const router = Router();
-
-
 
 // GET /api/bakimlar/onay-bekleyenler — Bekleyen bakımları zenginleştirilmiş formatta getirir
 router.get('/onay-bekleyenler', oturumKontrol, getOnayBekleyenler);
@@ -31,7 +27,7 @@ router.get('/onay-bekleyenler', oturumKontrol, getOnayBekleyenler);
 router.get('/stok-uyarisi', oturumKontrol, dusukStokUyarisi);
 
 // GET /api/bakimlar/teknik-servis — Teknik servis işlerini getirir
-router.get('/teknik-servis', oturumKontrol, rolKontrol('YONETICI', 'TEKNISYEN'), getTeknikServisIsleri);
+router.get('/teknik-servis', oturumKontrol, rolKontrol('YONETICI', 'TEKNISYEN', 'SERVIS'), getTeknikServisIsleri);
 
 // GET /api/bakimlar/tum-bakimlar — Tüm bakım geçmişini toplu getirir
 router.get('/tum-bakimlar', oturumKontrol, rolKontrol('YONETICI'), TumBakimlarToplu);

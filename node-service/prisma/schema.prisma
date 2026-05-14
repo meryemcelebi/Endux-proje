@@ -68,7 +68,6 @@ model ariza_kaydi {
 model ariza_turu {
   ariza_tur_id Int           @id @default(autoincrement())
   ariza_tur    String        @db.VarChar(150)
-  makine_tur_id Int?
   ariza_kaydi  ariza_kaydi[]
 }
 
@@ -354,6 +353,7 @@ model makine_turu {
   makine_tur_adi        String            @db.VarChar(50)
   risk_katsayisi        Decimal?          @db.Decimal(5, 2)
   periyodik_bakim_saati Int?
+  ariza_turu            ariza_turu[]
   saatlik_durus_maliyeti Float?            @default(0)
   kontrol_sablonu       kontrol_sablonu[]
   makine                makine[]
@@ -534,7 +534,6 @@ model uretim_kaydi {
   @@index([makine_id, vardiya_tarihi], map: "idx_uretim_makine_tarih")
   @@index([vardiya_tarihi], map: "idx_uretim_tarih")
 }
-
 
 model parca_stok_hareketleri {
   hareket_id     Int       @id @default(autoincrement())

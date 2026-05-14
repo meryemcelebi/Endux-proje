@@ -49,7 +49,16 @@ export default function Makineler() {
           id: m.makine_id,
           makineid: "MKN-" + m.makine_id,
           makine_ad: m.makine_adi || m.makine_ad,
-          aktiflik_durumu: typeof m.aktiflik_durumu === "string" ? m.aktiflik_durumu : (m.aktiflik_durumu ? "Aktif" : "Pasif"),
+          aktiflik_durumu: (() => {
+            // FIX #1: Aktif bakım kaydı varsa „Bakımda“ göster
+            const aktifBakim = (m.bakim_kaydi || []).find(
+              b => ["ONAYLANDI", "Teknik Serviste", "Bakımda"].includes(b.durum)
+            );
+            if (aktifBakim) return "Bakımda";
+            // Yoksa boolean → string dönüşümü
+            if (typeof m.aktiflik_durumu === "string") return m.aktiflik_durumu;
+            return m.aktiflik_durumu ? "Aktif" : "Pasif";
+          })(),
           lokasyon: Array.isArray(m.lokasyon) ? m.lokasyon[0] || null : m.lokasyon || null
         }));
 
@@ -65,6 +74,16 @@ export default function Makineler() {
 
 
     fetchData();
+
+    //  Kullanıcı başka sekmeden/sayfadan geri döndüğünde veriyi otomatik yenile
+    // Bakım tamamlandıktan sonra Makineler sayfasına geçildiğinde durum "Aktif" görünecek
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchData();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
   const [isModalOpen, setIsModalOpen] = useState(false);

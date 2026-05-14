@@ -52,12 +52,25 @@ export default function ServisMerkezi() {
           durum: t.durum || "ONAYLANDI"
         }));
 
-        setTasks(formattedTasks);
+        // FIX #2: Aynı makineye ait birden fazla kayıt varsa sadece en son olanı göster
+        const tekil = new Map();
+        formattedTasks.forEach(t => {
+          const mevcut = tekil.get(t.makine_id);
+          if (!mevcut || t.bakim_id > mevcut.bakim_id) {
+            tekil.set(t.makine_id, t);
+          }
+        });
+
+        setTasks([...tekil.values()]);
         setFirms(firmData);
         setAllHistory(historyData);
 
-        // Dış servis işlemleri (Backend verileri - Onaylanmamış olanlar)
-        const liveHistory = historyData.filter(h => h.servis_firma_id && h.durum !== "TAMAMLANDI");
+        // FIX #2: Dış servis puan listesi — TAMAMLANDI olan DİŞ servis bakımlarını göster
+        // Daha önce "!== TAMAMLANDI" filtresi vardı, bu yüzden tamamlanan işler hiç görünmuyordu
+        const liveHistory = historyData.filter(h =>
+          h.servis_firma_id &&             // Dış servis firması atanmış olmalı
+          h.durum === "TAMAMLANDI"          // Sadece tamamlananlar
+        );
 
         setDisServisler(liveHistory);
       } catch (err) {

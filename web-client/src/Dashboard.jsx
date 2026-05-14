@@ -33,6 +33,8 @@ export default function Dashboard() {
   const [activeBreakdownId, setActiveBreakdownId] = useState(null);
   const [breakdownDesc, setBreakdownDesc] = useState("");
   const [emergencySubmitId, setEmergencySubmitId] = useState(null);
+  const [arizaTurleri, setArizaTurleri] = useState([]);
+  const [selectedArizaTurId, setSelectedArizaTurId] = useState("");
   const [ignoredRiskIds, setIgnoredRiskIds] = useState([]);
   const [activeFloor, setActiveFloor] = useState(0); // Fabrika haritası kat kontrolü
   const [isMapExpanded, setIsMapExpanded] = useState(false); // Harita büyütme durumu
@@ -130,6 +132,12 @@ export default function Dashboard() {
 
         const inventoryData = await api.getInventory();
         setLowStockParts((inventoryData || []).filter(part => Number(part.miktar || 0) < 5));
+
+        // Arıza türlerini çek (dropdown için)
+        try {
+          const turleri = await api.getArizaTurleri();
+          setArizaTurleri(turleri || []);
+        } catch { /* sessiz geç */ }
 
       } catch (err) {
         console.error("Dashboard yükleme hatası:", err);

@@ -23,8 +23,8 @@ TedarikciRouter.post('/', oturumKontrol, rolKontrol('YONETICI'), tedarikciEkle);
 // DELETE /api/firma/tedarikciler/:id — Tedarikçi siler
 TedarikciRouter.delete('/:id', oturumKontrol, rolKontrol('YONETICI'), tedarikciSil);
 
-// GET /api/firma/servis-firmalari  — Tüm servis firmalarını getirir
-ServisFirmasiRouter.get('/', oturumKontrol, tumServisFirmalariniGetir);
+// GET /api/servis-firmalari — Tüm servis firmalarını getirir (token gerektirmez — misafir girişi için gerekli)
+ServisFirmasiRouter.get('/', tumServisFirmalariniGetir);
 
 // POST /api/firma/servis-firmalari  — Yeni servis firması ekler
 ServisFirmasiRouter.post('/', oturumKontrol, rolKontrol('YONETICI'), servisFirmasiEkle);

@@ -303,6 +303,7 @@ export const api = {
         sifre: userData.sifre,
         telefon: userData.telefon,
         eposta: userData.eposta || null,
+        baslama_tarihi: userData.baslama_tarihi || null,
         firma_id: Number(userData.firma_id),
       }),
     });
@@ -339,6 +340,12 @@ export const api = {
     return (await handleResponse(res)).makineTurleri || [];
   },
 
+  // RCA: Arıza türleri/kategorileri (Elektriksel, Mekanik, Hidrolik vb.)
+  getArizaTurleri: async () => {
+    const res = await fetch(`${API_BASE}/sistem/ariza-turleri`, { headers: getHeaders() });
+    return (await handleResponse(res)).arizaTurleri || [];
+  },
+
   // ═══════════════ 13. TEDARİKÇİLER ═══════════════
   // GET /api/tedarikciler
   getSuppliers: async () => {
@@ -365,10 +372,11 @@ export const api = {
     return handleResponse(res);
   },
 
-  // ═══════════════ 14. SERVİS FİRMALARI ═══════════════
-  // GET /api/servis-firmalari
+  // GET /api/servis-firmalari (token gerektirmez — misafir girişi için herkese açık)
   getServiceFirms: async () => {
-    const res = await fetch(`${API_BASE}/servis-firmalari`, { headers: getHeaders() });
+    const res = await fetch(`${API_BASE}/servis-firmalari`, {
+      headers: { "Content-Type": "application/json" } // Authorization header yok — token gerekmez
+    });
     const json = await handleResponse(res);
     return json.data || [];
   },

@@ -146,8 +146,8 @@ export default function Servis() {
         kullanici_id: currentUser?.userId || currentUser?.kullanici_id ? Number(currentUser.userId || currentUser.kullanici_id) : null,
         teknisyen_id: currentUser?.userId || currentUser?.kullanici_id ? Number(currentUser.userId || currentUser.kullanici_id) : null,
 
-        // Kural 2: Formdan seçilmiş bir firma varsa onu al, yoksa veritabanındaki GÜVENLİ bir ID'yi (13 - Güvenilir Servis A.Ş) varsayılan yap. 1 gönderme!
-        servis_firma_id: form.servis_firma_id ? Number(form.servis_firma_id) : 13,
+        // Kural 2: Formdan seçilmiş bir firma varsa onu al, yoksa kullanıcının kendi firma ID'sini kullan, ikisi de yoksa 13 (varsayılan) yap.
+        servis_firma_id: form.servis_firma_id ? Number(form.servis_firma_id) : (currentUser.firma_id ? Number(currentUser.firma_id) : 13),
 
         // Kural 3: Sabit 1 gönderme. Formda arıza türü seçildiyse onu al, seçilmediyse veritabanındaki (3 - Donanım Arızası) ID'sini kullan.
         ariza_id: form.ariza_id ? Number(form.ariza_id) : 3,
