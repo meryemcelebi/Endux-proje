@@ -25,10 +25,12 @@ export default function Servis() {
   // Bakım formu state'leri
   const [form, setForm] = useState({
     bakim_maliyet: "",
+    durus_suresi: "",
     aciklama: "",
     ariza_sebebi: "",
     ariza_id: "",
     bakim_tur_id: "",
+    servis_firma_id: "",
     degisen_parcalar: []
   });
 
@@ -116,7 +118,10 @@ export default function Servis() {
         bakim_id: Number(bekleyenIs.bakim_id),
         bakim_maliyet: Number(form.bakim_maliyet),
         aciklama: String(form.aciklama || form.ariza_sebebi || "").trim(),
-        degisen_parcalar: form.degisen_parcalar
+        degisen_parcalar: form.degisen_parcalar,
+        durus_suresi: form.durus_suresi ? Number(form.durus_suresi) : undefined,
+        servis_firma_id: form.servis_firma_id ? Number(form.servis_firma_id) : undefined,
+        bakim_tur_id: form.bakim_tur_id ? Number(form.bakim_tur_id) : undefined
       };
 
       console.log("Gönderilen veriler:", gonderilecekVeri);
@@ -156,14 +161,15 @@ export default function Servis() {
       kullanici_id: currentUser?.userId || currentUser?.kullanici_id ? Number(currentUser.userId || currentUser.kullanici_id) : null,
       teknisyen_id: currentUser?.userId || currentUser?.kullanici_id ? Number(currentUser.userId || currentUser.kullanici_id) : null,
 
-      // Kural 2: Formdan seçilmiş bir servis firması varsa onu al, yoksa null gönder (farklı tablolar!)
-      servis_firma_id: form.servis_firma_id ? Number(form.servis_firma_id) : null,
+      // Kural 2: Eğer giriş yapan kullanıcı dış servis ise (firma_id doluysa) onu kullan, yoksa formdan seçilmiş olanı al.
+      servis_firma_id: currentUser?.firma_id ? Number(currentUser.firma_id) : (form.servis_firma_id ? Number(form.servis_firma_id) : null),
 
       // Kural 3: Sabit 1 gönderme. Formda arıza türü seçildiyse onu al, seçilmediyse veritabanındaki (3 - Donanım Arızası) ID'sini kullan.
       ariza_id: form.ariza_id ? Number(form.ariza_id) : 3,
 
       ariza_sebebi: form.ariza_sebebi,
       bakim_maliyet: Number(form.bakim_maliyet) || 0,
+      durus_suresi: form.durus_suresi ? Number(form.durus_suresi) : null,
       bakim_tarihi: new Date().toISOString(),
       aciklama: form.aciklama,
       bakim_tur_id: form.bakim_tur_id ? Number(form.bakim_tur_id) : undefined,
@@ -173,7 +179,7 @@ export default function Servis() {
     try {
       const savedRecord = await api.addServiceRecord(payload);
       setHistory([savedRecord, ...history]);
-      setForm({ ariza_sebebi: "", bakim_maliyet: "", aciklama: "", bakim_tur_id: "", degisen_parcalar: [] });
+      setForm({ ariza_sebebi: "", bakim_maliyet: "", durus_suresi: "", aciklama: "", bakim_tur_id: "", degisen_parcalar: [] });
       setTamamlandiMi(true); // Formu kapat ve başarı mesajını göster
     } catch (err) {
       console.error("Kayıt eklenemedi:", err);
@@ -480,6 +486,24 @@ export default function Servis() {
                   </select>
                 </div>
 
+                {/* Servis Firması (Dış servis ataması için) - Sadece kendi firma_id'si olmayanlar (iç personeller) görebilir */}
+                {!currentUser?.firma_id && (
+                  <div style={{ marginBottom: "15px" }}>
+                    <label style={labelStil}>Servis Firması (Dış Servis)</label>
+                    <select
+                      name="servis_firma_id"
+                      value={form.servis_firma_id}
+                      onChange={handleChange}
+                      style={inputStil}
+                    >
+                      <option value="">— İç Personel Bakımı (Firma Seçmeyin) —</option>
+                      {firms.filter(f => f.tip === "Servis").map((f) => (
+                        <option key={f.id} value={f.id}>{f.ad}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
 
 
                 {/* 5. Maliyet (bakim_maliyet) */}
@@ -492,6 +516,21 @@ export default function Servis() {
                     value={form.bakim_maliyet}
                     onChange={handleChange}
                     style={inputStil}
+                  />
+                </div>
+
+                {/* 5b. Duruş Süresi */}
+                <div style={{ marginBottom: "15px" }}>
+                  <label style={labelStil}>Duruş Süresi (Saat)</label>
+                  <input
+                    type="number"
+                    name="durus_suresi"
+                    placeholder="Örn: 2.5"
+                    value={form.durus_suresi}
+                    onChange={handleChange}
+                    style={inputStil}
+                    step="0.5"
+                    min="0"
                   />
                 </div>
 

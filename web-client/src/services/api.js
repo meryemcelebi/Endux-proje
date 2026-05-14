@@ -817,6 +817,8 @@ export const api = {
         aciklama: formData.aciklama || undefined,
         durus_suresi: formData.durus_suresi ? Number(formData.durus_suresi) : undefined,
         degisen_parcalar: formData.degisen_parcalar || [],
+        servis_firma_id: formData.servis_firma_id ? Number(formData.servis_firma_id) : undefined,
+        bakim_tur_id: formData.bakim_tur_id ? Number(formData.bakim_tur_id) : undefined,
       }),
     });
     return handleResponse(res);
