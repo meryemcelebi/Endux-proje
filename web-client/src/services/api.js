@@ -6,7 +6,8 @@ const getHeaders = () => ({
 });
 
 const handleResponse = async (res) => {
-  const json = await res.json();
+  const contentType = res.headers.get("content-type") || "";
+  const json = contentType.includes("application/json") ? await res.json() : {};
   if (!res.ok) throw new Error(json.hata_detayi || json.message || json.hata || json.error || "İstek başarısız");
   return json;
 };

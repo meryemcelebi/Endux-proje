@@ -11,7 +11,14 @@ const prisma_1 = require("./config/prisma");
 const app = (0, express_1.default)();
 // Veritabanı bağlantısını başlat
 (0, prisma_1.connectDB)();
-app.use((0, cors_1.default)());
+const corsOrigins = config_1.config.corsOrigin
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+app.use((0, cors_1.default)({
+    origin: corsOrigins.includes("*") ? true : corsOrigins,
+    credentials: true,
+}));
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 app.get("/api/health", (_req, res) => {
