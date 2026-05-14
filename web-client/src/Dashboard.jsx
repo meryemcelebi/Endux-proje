@@ -33,8 +33,6 @@ export default function Dashboard() {
   const [activeBreakdownId, setActiveBreakdownId] = useState(null);
   const [breakdownDesc, setBreakdownDesc] = useState("");
   const [emergencySubmitId, setEmergencySubmitId] = useState(null);
-  const [arizaTurleri, setArizaTurleri] = useState([]);
-  const [selectedArizaTurId, setSelectedArizaTurId] = useState("");
   const [ignoredRiskIds, setIgnoredRiskIds] = useState([]);
   const [activeFloor, setActiveFloor] = useState(0); // Fabrika haritası kat kontrolü
   const [isMapExpanded, setIsMapExpanded] = useState(false); // Harita büyütme durumu
@@ -132,12 +130,6 @@ export default function Dashboard() {
 
         const inventoryData = await api.getInventory();
         setLowStockParts((inventoryData || []).filter(part => Number(part.miktar || 0) < 5));
-
-        // Arıza türlerini çek (dropdown için)
-        try {
-          const turleri = await api.getArizaTurleri();
-          setArizaTurleri(turleri || []);
-        } catch { /* sessiz geç */ }
 
       } catch (err) {
         console.error("Dashboard yükleme hatası:", err);
@@ -618,20 +610,20 @@ export default function Dashboard() {
 
   // --- ANA RENDER SÜRECİ (Görünüm) ---
   return (
-    <div className="app-container" style={{ display: "flex", background: "#f5f6fa", minHeight: "100vh" }}>
+    <div style={{ display: "flex", background: "#f5f6fa", minHeight: "100vh" }}>
       {/* SOL MENÜ (Sidebar): Tüm sayfalara erişim sağlayan sabit yan panel */}
       <Sidebar />
 
       {/* SAĞ TARAF (Navigasyon ve İçerik): Sayfanın üst barı ve ana panel verilerini içerir */}
-      <div className="app-content-wrapper" style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
         {/* ÜST BİLGİ ÇUBUĞU (Navbar): Kullanıcı bilgileri ve sayfa başlığını barındırır */}
         <Navbar />
 
         {/* ANA PANEL İÇERİK YÜZEYİ: Tüm KPI kartları ve grafiklerin listelendiği kaydırılabilir alan */}
-        <div className="app-content" style={{ padding: "30px", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "25px" }}>
+        <div style={{ padding: "30px 30px 10px 30px", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "25px" }}>
 
           {/* KPI KUTULARI (DİNAMİK + SADE BAŞLIKLAR) */}
-          <div className="responsive-flex-col" style={{ display: "flex", gap: "20px", width: "100%", flex: "0 0 auto", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "20px", width: "100%", flex: "0 0 160px" }}>
             {/* KPI 1: TEKNİK UYARILAR */}
             {/* KPI 1: GÜNLÜK KRİTİK UYARILAR (Riskli Makineler ve Garanti Sorunları) */}
             <div
@@ -792,7 +784,7 @@ export default function Dashboard() {
           </div >
 
           {/* ALT ALAN (Geniş Kaplama) */}
-          <div className="responsive-flex-col" style={{ display: "flex", gap: "20px", width: "100%", flex: 1, minHeight: "auto", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "20px", width: "100%", alignItems: "stretch", marginBottom: "0", flex: 1 }}>
             {/* FABRİKA HARİTASI (Dinamik) */}
             < div
               onClick={() => setIsMapExpanded(true)}
@@ -1143,59 +1135,59 @@ export default function Dashboard() {
                     ) : (
                       <>
                         {riskyMachines
-                          .sort((a, b) => {
-                            const priority = { "Yüksek Riskli": 3, "Bakımı Yaklaşan": 2, "Bakımda Olan": 1 };
-                            return (priority[b.kategori] || 0) - (priority[a.kategori] || 0);
-                          })
-                          .map(m => {
-                            const makineAdi = m.ad || m.makine_adi || `Makine #${m.id}`;
-                            const riskSkoru = Number(m.mevcut_risk_skoru || 0).toFixed(2);
-                            return (
-                              <div key={m.id} style={{ padding: "16px", background: "white", borderRadius: "12px", border: "1px solid #e1e5eb", borderLeft: "6px solid #e74c3c", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px" }}>
-                                  <div style={{ minWidth: 0 }}>
-                                    <strong style={{ display: "block", fontSize: "17px", color: "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{makineAdi}</strong>
-                                    <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
-                                      <span style={{ fontSize: "11px", fontWeight: "800", color: "#b91c1c", background: "#fee2e2", padding: "4px 10px", borderRadius: "20px", border: "1px solid #fecaca" }}>
-                                        Yüksek Riskli Makine
-                                      </span>
-                                      <span style={{ fontSize: "11px", fontWeight: "800", color: "#334155", background: "#f1f5f9", padding: "4px 10px", borderRadius: "20px", border: "1px solid #e2e8f0" }}>
-                                        Risk Skoru: {riskSkoru}/100
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(90px, 1fr))", gap: "8px", minWidth: "330px" }}>
-                                    <button onClick={() => navigate(`/makine/${m.id}`)} style={{ ...btnStyle, background: "#1e293b", width: "100%", minWidth: "0" }}>Detay Gör</button>
-                                    <button onClick={() => setActiveBreakdownId(activeBreakdownId === m.id ? null : m.id)} style={{ ...btnStyle, background: "#e94560", width: "100%", minWidth: "0" }}>
-                                      {activeBreakdownId === m.id ? "Gizle" : "Arıza Kaydı"}
-                                    </button>
-                                    <button onClick={() => handleIgnoreMachine(m.id, makineAdi)} style={{ ...btnStyle, background: "#94a3b8", width: "100%", minWidth: "0" }}>Yoksay</button>
-                                  </div>
+                      .sort((a, b) => {
+                        const priority = { "Yüksek Riskli": 3, "Bakımı Yaklaşan": 2, "Bakımda Olan": 1 };
+                        return (priority[b.kategori] || 0) - (priority[a.kategori] || 0);
+                      })
+                      .map(m => {
+                        const makineAdi = m.ad || m.makine_adi || `Makine #${m.id}`;
+                        const riskSkoru = Number(m.mevcut_risk_skoru || 0).toFixed(2);
+                        return (
+                          <div key={m.id} style={{ padding: "16px", background: "white", borderRadius: "12px", border: "1px solid #e1e5eb", borderLeft: "6px solid #e74c3c", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px" }}>
+                              <div style={{ minWidth: 0 }}>
+                                <strong style={{ display: "block", fontSize: "17px", color: "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{makineAdi}</strong>
+                                <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
+                                  <span style={{ fontSize: "11px", fontWeight: "800", color: "#b91c1c", background: "#fee2e2", padding: "4px 10px", borderRadius: "20px", border: "1px solid #fecaca" }}>
+                                    Yüksek Riskli Makine
+                                  </span>
+                                  <span style={{ fontSize: "11px", fontWeight: "800", color: "#334155", background: "#f1f5f9", padding: "4px 10px", borderRadius: "20px", border: "1px solid #e2e8f0" }}>
+                                    Risk Skoru: {riskSkoru}/100
+                                  </span>
                                 </div>
-
-                                {activeBreakdownId === m.id && (
-                                  <div style={{ marginTop: "16px", padding: "16px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e1e5eb" }}>
-                                    <div style={{ marginBottom: "10px", fontWeight: "bold", fontSize: "14px", color: "#333" }}>Detaylı Arıza Açıklaması:</div>
-                                    <textarea
-                                      value={breakdownDesc}
-                                      onChange={(e) => setBreakdownDesc(e.target.value)}
-                                      placeholder="Açıklama..."
-                                      style={{ width: "100%", padding: "12px", boxSizing: "border-box", borderRadius: "6px", border: "1px solid #ccc", outline: "none", minHeight: "90px", marginBottom: "12px", fontSize: "14px", resize: "vertical" }}
-                                    />
-                                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                                      <button
-                                        onClick={() => handleCreateBreakdown({ ...m, ad: makineAdi })}
-                                        disabled={emergencySubmitId === m.id}
-                                        style={{ ...saveBtnStyle, opacity: emergencySubmitId === m.id ? 0.7 : 1, cursor: emergencySubmitId === m.id ? "default" : "pointer" }}
-                                      >
-                                        {emergencySubmitId === m.id ? "Gönderiliyor..." : "Kaydet ve Bildir"}
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
                               </div>
-                            );
-                          })}
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(90px, 1fr))", gap: "8px", minWidth: "330px" }}>
+                                <button onClick={() => navigate(`/makine/${m.id}`)} style={{ ...btnStyle, background: "#1e293b", width: "100%", minWidth: "0" }}>Detay Gör</button>
+                                <button onClick={() => setActiveBreakdownId(activeBreakdownId === m.id ? null : m.id)} style={{ ...btnStyle, background: "#e94560", width: "100%", minWidth: "0" }}>
+                                  {activeBreakdownId === m.id ? "Gizle" : "Arıza Kaydı"}
+                                </button>
+                                <button onClick={() => handleIgnoreMachine(m.id, makineAdi)} style={{ ...btnStyle, background: "#94a3b8", width: "100%", minWidth: "0" }}>Yoksay</button>
+                              </div>
+                            </div>
+
+                            {activeBreakdownId === m.id && (
+                              <div style={{ marginTop: "16px", padding: "16px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e1e5eb" }}>
+                                <div style={{ marginBottom: "10px", fontWeight: "bold", fontSize: "14px", color: "#333" }}>Detaylı Arıza Açıklaması:</div>
+                                <textarea
+                                  value={breakdownDesc}
+                                  onChange={(e) => setBreakdownDesc(e.target.value)}
+                                  placeholder="Açıklama..."
+                                  style={{ width: "100%", padding: "12px", boxSizing: "border-box", borderRadius: "6px", border: "1px solid #ccc", outline: "none", minHeight: "90px", marginBottom: "12px", fontSize: "14px", resize: "vertical" }}
+                                />
+                                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                                  <button
+                                    onClick={() => handleCreateBreakdown({ ...m, ad: makineAdi })}
+                                    disabled={emergencySubmitId === m.id}
+                                    style={{ ...saveBtnStyle, opacity: emergencySubmitId === m.id ? 0.7 : 1, cursor: emergencySubmitId === m.id ? "default" : "pointer" }}
+                                  >
+                                    {emergencySubmitId === m.id ? "Gönderiliyor..." : "Kaydet ve Bildir"}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                       </>
                     )}
                   </div>
