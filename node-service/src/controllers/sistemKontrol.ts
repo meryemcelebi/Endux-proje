@@ -120,23 +120,6 @@ export const setVardiyaSaatleri = async (req: Request, res: Response) => {
     }
 };
 
-// Arıza türleri/kategorileri listesi API
-export const siralaArizaTurleri = async (req: Request, res: Response) => {
-    try {
-        const arizaTurleri = await prisma.ariza_turu.findMany({
-            select: {
-                ariza_tur_id: true,
-                ariza_tur: true
-            },
-            orderBy: { ariza_tur_id: 'asc' }
-        });
-        res.json({ success: true, arizaTurleri });
-    } catch (error) {
-        console.error("Arıza türleri listeleme hatası:", error);
-        res.status(500).json({ success: false, message: "Arıza türleri listelenirken bir hata oluştu." });
-    }
-};
-
 //ariza türleri listesi API
 export const siralaArizaTurleri = async (req: Request, res: Response) => {
     try {
