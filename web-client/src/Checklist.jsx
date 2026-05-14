@@ -211,7 +211,6 @@ function SoruKarti({ soru, index, cevap, onCevapSec }) {
         <span style={{ fontSize: "20px" }}>{ikon}</span>
         <div style={{ flex: 1 }}>
           <span style={{ fontWeight: "700", color: "#2d3748", fontSize: "15px" }}>{index}. {soruAdi}</span>
-          {soru.teknik_parametre && <span style={{ display: "block", fontSize: "11px", color: "#a0aec0", marginTop: "2px", fontFamily: "monospace" }}>{soru.teknik_parametre}</span>}
         </div>
         {cevap !== undefined && <span style={{ padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "700", background: seviyeRenkleri[cevap].bg, color: seviyeRenkleri[cevap].text, border: `1px solid ${seviyeRenkleri[cevap].border}` }}>{seviyeRenkleri[cevap].label}</span>}
       </div>

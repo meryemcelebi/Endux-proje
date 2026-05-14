@@ -449,14 +449,11 @@ export default function MakineDetay() {
                             <p style={{ color: "#777" }}>Henüz bir servis kaydı sisteme yansımamış.</p>
                         ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                                {Array.isArray(history) && history.map((kayit) => (
+                                {Array.isArray(history) && history.slice(0, 5).map((kayit) => (
                                     <div key={kayit.bakim_id} style={servisKartStil}>
                                         <div style={servisKartUstStil}>
                                             <span style={servisTarihStil}>
                                                 {kayit.bakim_tarihi ? new Date(kayit.bakim_tarihi).toLocaleDateString("tr-TR") : "-"}
-                                            </span>
-                                            <span style={servisMaliyetStil}>
-                                                Maliyet: {Number(kayit.bakim_maliyet || 0).toLocaleString()} ₺
                                             </span>
                                         </div>
 

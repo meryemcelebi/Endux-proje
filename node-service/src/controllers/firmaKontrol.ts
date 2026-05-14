@@ -110,6 +110,65 @@ export async function tedarikciSil(req: Request, res: Response) {
     }
 }
 
+export async function tedarikciGuncelle(req: Request, res: Response) {
+    try {
+        const id = Number(req.params.id);
+        const { firma_adi, telefon, email, adres, il, ilce, yetkili_kisi, vergi_no } = req.body;
+
+        if (isNaN(id)) return res.status(400).json({ success: false, message: "Geçerli bir ID gereklidir." });
+
+        const tedarikci = await prisma.tedarikci.findUnique({
+            where: { tedarikci_id: id },
+            include: { iletisim: true }
+        });
+
+        if (!tedarikci) return res.status(404).json({ success: false, message: "Tedarikçi bulunamadı." });
+
+        // İletişim bilgilerini güncelle veya oluştur
+        if (tedarikci.iletisim_id) {
+            await prisma.iletisim.update({
+                where: { iletisim_id: tedarikci.iletisim_id },
+                data: {
+                    telefon: telefon !== undefined ? String(telefon) : undefined,
+                    mail: email !== undefined ? String(email) : undefined,
+                    acik_adres: adres !== undefined ? String(adres) : undefined,
+                    il: il !== undefined ? String(il) : undefined,
+                    ilce: ilce !== undefined ? String(ilce) : undefined,
+                }
+            });
+        } else if (telefon || email || adres || il || ilce) {
+            const yeniIletisim = await prisma.iletisim.create({
+                data: {
+                    telefon: telefon ? String(telefon) : null,
+                    mail: email ? String(email) : null,
+                    acik_adres: adres ? String(adres) : null,
+                    il: il ? String(il) : null,
+                    ilce: ilce ? String(ilce) : null,
+                }
+            });
+            await prisma.tedarikci.update({
+                where: { tedarikci_id: id },
+                data: { iletisim_id: yeniIletisim.iletisim_id }
+            });
+        }
+
+        const guncelTedarikci = await prisma.tedarikci.update({
+            where: { tedarikci_id: id },
+            data: {
+                firma_adi: firma_adi !== undefined ? String(firma_adi) : undefined,
+                yetkili_kisi: yetkili_kisi !== undefined ? String(yetkili_kisi) : undefined,
+                vergi_no: vergi_no !== undefined ? String(vergi_no) : undefined,
+            },
+            include: { iletisim: true }
+        });
+
+        res.status(200).json({ success: true, message: 'Tedarikçi başarıyla güncellendi.', data: guncelTedarikci });
+    } catch (error) {
+        console.error("Tedarikçi güncelleme hatası:", error);
+        res.status(500).json({ success: false, message: 'Tedarikçi güncellenirken bir hata oluştu.' });
+    }
+}
+
 
 // --- Servis Firmaları İşlemleri ---
 
@@ -230,5 +289,109 @@ export async function servisFirmasiSil(req: Request, res: Response) {
             message: 'Servis firması iptal edilirken bir hata oluştu.'
         });
 
+    }
+}
+
+export async function servisFirmasiGuncelle(req: Request, res: Response) {
+    try {
+        const id = Number(req.params.id);
+        const { firma_adi, telefon, email, adres, il, ilce, uzmanlik_alani, sorumlu_ad, sorumlu_telefon, sorumlu_unvan } = req.body;
+
+        if (isNaN(id)) return res.status(400).json({ success: false, message: "Geçerli bir ID gereklidir." });
+
+        const firm = await prisma.servis_firma.findUnique({
+            where: { servis_firma_id: id },
+            include: { iletisim: true, servis_sorumlusu: true, servis_firma_uzmanlik: true }
+        });
+
+        if (!firm) return res.status(404).json({ success: false, message: "Servis firması bulunamadı." });
+
+        // İletişim güncelle
+        if (firm.iletisim_id) {
+            await prisma.iletisim.update({
+                where: { iletisim_id: firm.iletisim_id },
+                data: {
+                    telefon: telefon !== undefined ? String(telefon) : undefined,
+                    mail: email !== undefined ? String(email) : undefined,
+                    acik_adres: adres !== undefined ? String(adres) : undefined,
+                    il: il !== undefined ? String(il) : undefined,
+                    ilce: ilce !== undefined ? String(ilce) : undefined,
+                }
+            });
+        } else if (telefon || email || adres || il || ilce) {
+            const yeniIletisim = await prisma.iletisim.create({
+                data: {
+                    telefon: telefon ? String(telefon) : null,
+                    mail: email ? String(email) : null,
+                    acik_adres: adres ? String(adres) : null,
+                    il: il ? String(il) : null,
+                    ilce: ilce ? String(ilce) : null,
+                }
+            });
+            await prisma.servis_firma.update({
+                where: { servis_firma_id: id },
+                data: { iletisim_id: yeniIletisim.iletisim_id }
+            });
+        }
+
+        // Uzmanlık güncelle
+        if (uzmanlik_alani !== undefined) {
+            if (firm.servis_firma_uzmanlik) {
+                await prisma.servis_firma_uzmanlik.update({
+                    where: { servis_firma_id: id },
+                    data: { uzmanlik_adi: String(uzmanlik_alani) }
+                });
+            } else {
+                await prisma.servis_firma_uzmanlik.create({
+                    data: { servis_firma_id: id, uzmanlik_adi: String(uzmanlik_alani) }
+                });
+            }
+        }
+
+        // Sorumlu güncelle
+        if (sorumlu_ad !== undefined) {
+            const [ad, ...soyadParts] = String(sorumlu_ad).trim().split(/\s+/);
+            if (firm.servis_sorumlusu.length > 0) {
+                await prisma.servis_sorumlusu.update({
+                    where: { sorumlu_id: firm.servis_sorumlusu[0].sorumlu_id },
+                    data: {
+                        ad: ad || String(sorumlu_ad).trim(),
+                        soyad: soyadParts.join(" ") || "-",
+                        telefon: sorumlu_telefon ? String(sorumlu_telefon) : undefined,
+                        unvan: sorumlu_unvan ? String(sorumlu_unvan) : undefined,
+                        sorumlu_adi: String(sorumlu_ad).trim()
+                    }
+                });
+            } else {
+                await prisma.servis_sorumlusu.create({
+                    data: {
+                        servis_firma_id: id,
+                        ad: ad || String(sorumlu_ad).trim(),
+                        soyad: soyadParts.join(" ") || "-",
+                        telefon: sorumlu_telefon ? String(sorumlu_telefon) : String(telefon || "Belirtilmedi"),
+                        aktiflik: true,
+                        unvan: sorumlu_unvan ? String(sorumlu_unvan) : null,
+                        sorumlu_adi: String(sorumlu_ad).trim()
+                    }
+                });
+            }
+        }
+
+        const guncelFirm = await prisma.servis_firma.update({
+            where: { servis_firma_id: id },
+            data: {
+                firma_adi: firma_adi !== undefined ? String(firma_adi) : undefined,
+            },
+            include: {
+                servis_sorumlusu: true,
+                iletisim: true,
+                servis_firma_uzmanlik: true
+            }
+        });
+
+        res.status(200).json({ success: true, message: 'Servis firması başarıyla güncellendi.', data: guncelFirm });
+    } catch (error) {
+        console.error("Servis firması güncelleme hatası:", error);
+        res.status(500).json({ success: false, message: 'Servis firması güncellenirken bir hata oluştu.' });
     }
 }
