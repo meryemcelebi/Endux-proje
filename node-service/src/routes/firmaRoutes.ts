@@ -5,7 +5,9 @@ import {
     tumServisFirmalariniGetir,
     servisFirmasiEkle,
     tedarikciSil,
-    servisFirmasiSil
+    servisFirmasiSil,
+    tedarikciGuncelle,
+    servisFirmasiGuncelle
 } from "../controllers/firmaKontrol"
 import { oturumKontrol, rolKontrol } from "../middlewares/yetki";
 
@@ -23,14 +25,17 @@ TedarikciRouter.post('/', oturumKontrol, rolKontrol('YONETICI'), tedarikciEkle);
 // DELETE /api/firma/tedarikciler/:id — Tedarikçi siler
 TedarikciRouter.delete('/:id', oturumKontrol, rolKontrol('YONETICI'), tedarikciSil);
 
-// GET /api/firma/servis-firmalari  — Tüm servis firmalarını getirir
-ServisFirmasiRouter.get('/', oturumKontrol, tumServisFirmalariniGetir);
+// GET /api/servis-firmalari — Tüm servis firmalarını getirir (token gerektirmez — misafir girişi için gerekli)
+ServisFirmasiRouter.get('/', tumServisFirmalariniGetir);
 
 // POST /api/firma/servis-firmalari  — Yeni servis firması ekler
 ServisFirmasiRouter.post('/', oturumKontrol, rolKontrol('YONETICI'), servisFirmasiEkle);
 
 // DELETE /api/firma/servis-firmalari/:id — Servis firması siler
 ServisFirmasiRouter.delete('/:id', oturumKontrol, rolKontrol('YONETICI'), servisFirmasiSil);
+
+// PUT /api/firma/servis-firmalari/:id — Servis firması günceller
+ServisFirmasiRouter.put('/:id', oturumKontrol, rolKontrol('YONETICI'), servisFirmasiGuncelle);
 
 
 

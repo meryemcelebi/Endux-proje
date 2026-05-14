@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 // Yeni firma (Tedarikçi veya Servis) eklemek için kullanılan Modal bileşeni
-export default function FirmModal({ isOpen, onClose, onSave, initialType = "Servis" }) {
+export default function FirmModal({ isOpen, onClose, onSave, initialType = "Servis", initialData = null }) {
   // --- FORM STATE TANIMLAMALARI ---
   const [form, setForm] = useState({
     ad: "", // Firma veya Servis adı
@@ -19,6 +19,35 @@ export default function FirmModal({ isOpen, onClose, onSave, initialType = "Serv
     ilce: "" // İlçe bilgisi
   });
 
+  // initialData değiştiğinde formu doldur (GÜNCELLEME MODU)
+  useEffect(() => {
+    if (initialData && isOpen) {
+      setForm({
+        id: initialData.tedarikci_id || initialData.servis_firma_id || initialData.id,
+        ad: initialData.firma_adi || initialData.ad || "",
+        tip: initialData.tip || initialType,
+        telefon: initialData.telefon || initialData.iletisim?.telefon || "",
+        email: initialData.email || initialData.iletisim?.mail || "",
+        adres: initialData.adres || initialData.iletisim?.acik_adres || "",
+        uzmanlik_alani: initialData.uzmanlik_alani || (initialData.servis_firma_uzmanlik?.[0]?.uzmanlik_adi) || "",
+        sorumlu_ad: initialData.sorumlu_ad || (initialData.servis_sorumlusu?.[0]?.sorumlu_adi) || "",
+        sorumlu_soyad: initialData.sorumlu_soyad || "",
+        sorumlu_telefon: initialData.sorumlu_telefon || (initialData.servis_sorumlusu?.[0]?.telefon) || "",
+        yetkili_kisi: initialData.yetkili_kisi || "",
+        vergi_no: initialData.vergi_no || "",
+        il: initialData.il || initialData.iletisim?.il || "",
+        ilce: initialData.ilce || initialData.iletisim?.ilce || ""
+      });
+    } else {
+      // Yeni ekleme modu için sıfırla
+      setForm({
+        ad: "", tip: initialType, telefon: "", email: "", adres: "",
+        uzmanlik_alani: "", sorumlu_ad: "", sorumlu_soyad: "", sorumlu_telefon: "",
+        yetkili_kisi: "", vergi_no: "", il: "", ilce: ""
+      });
+    }
+  }, [initialData, isOpen, initialType]);
+
   // Modal kapalıysa hiçbir şey render etme
   if (!isOpen) return null;
 
@@ -33,16 +62,18 @@ export default function FirmModal({ isOpen, onClose, onSave, initialType = "Serv
     const payload = {
       ...form,
       aktiflik: true,
-      kayit_tarihi: new Date().toISOString(),
-      ortalama_puan: 0 // Yeni firmalar 0 puanla başlar
+      kayit_tarihi: form.id ? undefined : new Date().toISOString(),
+      ortalama_puan: form.id ? undefined : 0 
     };
     onSave(payload); // Veriyi üst bileşene gönder
 
-    setForm({
-      ad: "", tip: initialType, telefon: "", email: "", adres: "",
-      uzmanlik_alani: "", sorumlu_ad: "", sorumlu_soyad: "", sorumlu_telefon: "",
-      yetkili_kisi: "", vergi_no: "", il: "", ilce: ""
-    }); // Formu sıfırla
+    if (!form.id) {
+        setForm({
+          ad: "", tip: initialType, telefon: "", email: "", adres: "",
+          uzmanlik_alani: "", sorumlu_ad: "", sorumlu_soyad: "", sorumlu_telefon: "",
+          yetkili_kisi: "", vergi_no: "", il: "", ilce: ""
+        });
+    }
   };
 
   return (
@@ -50,7 +81,9 @@ export default function FirmModal({ isOpen, onClose, onSave, initialType = "Serv
       <div style={modalContentStil}>
         {/* Modal Başlığı */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <h3 style={{ margin: 0, color: "#0f3460" }}>Yeni Firma Ekle ({form.tip})</h3>
+          <h3 style={{ margin: 0, color: "#0f3460" }}>
+            {form.id ? `${form.tip} Bilgilerini Güncelle` : `Yeni ${form.tip} Ekle`}
+          </h3>
           <button onClick={onClose} style={closeButonStil}>&times;</button>
         </div>
 

@@ -119,8 +119,8 @@ export default function Checklist() {
   const ozelSorular = sorular.filter(s => !ortakParametreKeys.includes(s.teknik_parametre) && s.teknik_parametre !== "form_doldurma_suresi_sn");
 
   return (
-    <div style={sayfaStil}>
-      <div style={konteynerStil}>
+    <div className="app-container" style={sayfaStil}>
+      <div className="app-content-wrapper app-content" style={konteynerStil}>
 
         {/* BAŞLIK ALANI */}
         <div style={baslikKartStil}>
@@ -154,7 +154,6 @@ export default function Checklist() {
             <div style={bolumBaslikStil}>
               <span style={{ fontSize: "18px" }}>{makineTuru?.includes("CNC") ? "⚙️" : makineTuru?.includes("Pres") ? "🔨" : "💉"}</span>
               <h3 style={{ margin: 0, color: "#2d3748", fontSize: "16px", fontWeight: "700" }}>{makineTuru} Özel Parametreleri</h3>
-              <span style={{ fontSize: "12px", color: turRenk.text, marginLeft: "auto", background: `${turRenk.bg}60`, padding: "3px 10px", borderRadius: "12px" }}>{ozelSorular.length} Soru</span>
             </div>
             {ozelSorular.map((soru, idx) => (
               <SoruKarti key={soru.madde_id} soru={soru} index={idx + 1} cevap={cevaplar[soru.madde_id]} onCevapSec={(v) => setCevap(soru.madde_id, v)} />
@@ -212,7 +211,6 @@ function SoruKarti({ soru, index, cevap, onCevapSec }) {
         <span style={{ fontSize: "20px" }}>{ikon}</span>
         <div style={{ flex: 1 }}>
           <span style={{ fontWeight: "700", color: "#2d3748", fontSize: "15px" }}>{index}. {soruAdi}</span>
-          {soru.teknik_parametre && <span style={{ display: "block", fontSize: "11px", color: "#a0aec0", marginTop: "2px", fontFamily: "monospace" }}>{soru.teknik_parametre}</span>}
         </div>
         {cevap !== undefined && <span style={{ padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: "700", background: seviyeRenkleri[cevap].bg, color: seviyeRenkleri[cevap].text, border: `1px solid ${seviyeRenkleri[cevap].border}` }}>{seviyeRenkleri[cevap].label}</span>}
       </div>

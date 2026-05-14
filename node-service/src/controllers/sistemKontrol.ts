@@ -119,3 +119,38 @@ export const setVardiyaSaatleri = async (req: Request, res: Response) => {
         res.status(500).json({ success: false, message: "Vardiya saatleri guncellenirken hata olustu." });
     }
 };
+
+//ariza türleri listesi API
+export const siralaArizaTurleri = async (req: Request, res: Response) => {
+    try {
+        const makine_tur_id = req.query.makine_tur_id;
+        let whereClause = {};
+        if (makine_tur_id) {
+             whereClause = {
+                  OR: [
+                      { makine_tur_id: Number(makine_tur_id) },
+                      { makine_tur_id: null }
+                  ]
+             };
+        }
+        const arizaTurleri = await prisma.ariza_turu.findMany({ 
+             where: whereClause,
+             select: { ariza_tur_id: true, ariza_tur: true } 
+        });
+        res.json({ success: true, arizaTurleri });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Arıza türleri listelenirken bir hata oluştu." });
+    }
+};
+
+//bakim türleri listesi API
+export const siralaBakimTurleri = async (req: Request, res: Response) => {
+    try {
+        const bakimTurleri = await prisma.bakim_turu.findMany({
+            select: { bakim_tur_id: true, bakim_tur_adi: true }
+        });
+        res.json({ success: true, bakimTurleri });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Bakım türleri listelenirken bir hata oluştu." });
+    }
+};

@@ -130,10 +130,10 @@ export default function ChecklistGiris() {
   };
 
   return (
-    <div style={sayfaStil}>
+    <div className="app-container" style={sayfaStil}>
       <div style={kartStil}>
         <div style={{ textAlign: "center", marginBottom: "25px" }}>
-          <h1 style={{ color: "#e94560", margin: 0, fontSize: "32px", fontWeight: "bold", letterSpacing: "2px" }}>MAİNTFY</h1>
+          <h1 style={{ color: "#e94560", margin: 0, fontSize: "32px", fontWeight: "bold", letterSpacing: "2px" }}>MAINTIFY</h1>
           <p style={{ color: "#a0a5b1", marginTop: "5px", fontSize: "14px" }}>
             {isGuestMode ? "Misafir (Servis) Girişi" : "Personel Giriş Paneli"}
           </p>
@@ -153,7 +153,7 @@ export default function ChecklistGiris() {
               <label style={etiketYaziStil}>Kullanıcı Adı</label>
               <input
                 type="text"
-                placeholder="operatör / yönetici"
+                placeholder="operatör / yönetici / teknisyen"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 style={inputStil}

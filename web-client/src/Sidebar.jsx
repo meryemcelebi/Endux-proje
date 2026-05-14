@@ -50,6 +50,7 @@ const Sidebar = () => {
 
   return (
     <div
+      className="sidebar-container"
       style={{
         width: "260px",
         background: "#0f3460", // Darker premium navy
@@ -65,7 +66,7 @@ const Sidebar = () => {
     >
       {/* MAİNTFY LOGO ALANI */}
       <div style={{ textAlign: "center", marginBottom: "30px", paddingBottom: "20px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-        <h2 style={{ margin: 0, fontSize: "32px", fontWeight: "bold", letterSpacing: "3px", color: "#e94560" }}>MAİNTFY</h2>
+        <h2 style={{ margin: 0, fontSize: "32px", fontWeight: "bold", letterSpacing: "3px", color: "#e94560" }}>MAINTIFY</h2>
         <span style={{ fontSize: "12px", color: "#a0a5b1", letterSpacing: "1px" }}>
           {isAdmin ? "YÖNETİM PANELİ" : "SERVİS PANELİ"}
         </span>

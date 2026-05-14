@@ -51,9 +51,9 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                     // Eğer SERVIS rolüyse sorumlu_id'ye, değilse kullanici_id'ye ata
                     sorumlu_id: isServisRole ? currentUserId : null,
                     kullanici_id: !isServisRole ? currentUserId : null,
-                    
+
                     servis_firma_id: servis_firma_id ? Number(servis_firma_id) : null,
-                    ariza_id: null, 
+                    ariza_id: null,
                     bakim_tur_id: bakim_tur_id ? Number(bakim_tur_id) : null,
 
                     bakim_maliyet: Number(bakim_maliyet),
@@ -66,7 +66,7 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                 },
             });
 
-            
+
             await tx.makine.update({
                 where: { makine_id: Number(makine_id) },
                 data: { aktiflik_durumu: true }
@@ -85,7 +85,7 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                 });
             }
 
-            
+
             if (degisen_Parcalar && Array.isArray(degisen_Parcalar) && degisen_Parcalar.length > 0) {
                 for (const parca of degisen_Parcalar) {
                     const parcaId = Number(parca.parca_id);
@@ -114,7 +114,7 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                         data: {
                             bakim_id: bakimKaydi.bakim_id,
                             parca_id: parcaId,
-                            adet: adet 
+                            adet: adet
                         }
                     });
 
@@ -251,7 +251,7 @@ export const makineBakimKayitlari = async (req: Request, res: Response) => {
                     },
                 },
                 //değişen parçaların bilgileri (parca_degisim tablosundan)
-                
+
                 parca_degisim: {
                     include: {
                         parca: {
@@ -262,6 +262,15 @@ export const makineBakimKayitlari = async (req: Request, res: Response) => {
                                 tahmini_omur_saati: true,
                             }
                         }
+                    }
+                },
+                // Dahili teknisyen bilgisi için kullanici tablosu
+                kullanici: {
+                    select: {
+                        kullanici_id: true,
+                        ad: true,
+                        soyad: true,
+                        telefon: true
                     }
                 },
                 // servis_puan bilgisini dahil et
@@ -517,7 +526,7 @@ export const getTeknikServisIsleri = async (req: Request, res: Response) => {
         const isler = await prisma.bakim_kaydi.findMany({
             where: {
                 durum: {
-                    in: ['Teknik Serviste', 'TAMAMLANDI', 'Bakımda', 'ONAYLANDI']
+                    in: ['BEKLEYEN', 'Onay Bekliyor', 'Teknik Serviste', 'TAMAMLANDI', 'Bakımda', 'ONAYLANDI']
                 }
             },
             include: {
@@ -542,6 +551,12 @@ export const getTeknikServisIsleri = async (req: Request, res: Response) => {
                         soyad: true
                     }
                 },
+                kullanici: {
+                    select: {
+                        ad: true,
+                        soyad: true
+                    }
+                },
                 parca_degisim: {
                     include: {
                         parca: {
@@ -558,8 +573,19 @@ export const getTeknikServisIsleri = async (req: Request, res: Response) => {
             }
         });
 
+        const enGuncelIslerMap = new Map<number, any>();
+        for (const is of isler) {
+            // Her makine_id için sadece ilk karşılaştığımızı (en yenisini) alıyoruz.
+            if (is.makine_id && !enGuncelIslerMap.has(is.makine_id)) {
+                enGuncelIslerMap.set(is.makine_id, is);
+            }
+        }
+
+        // Map'ten sadece eşsiz (en güncel) kayıtları diziye çevir
+        const filtrelenmisIsler = Array.from(enGuncelIslerMap.values());
+
         // 3. Görseldeki tabloya uygun formatta DTO hazırlıyoruz
-        const tabloVerisi = isler.map(is => {
+        const tabloVerisi = filtrelenmisIsler.map((is: any) => {
             // Durum mapping: Teknik Serviste -> ONAYLANDI (frontend mantığı)
             let frontendDurum = is.durum;
             if (is.durum === 'Teknik Serviste' || is.durum === 'Bakımda') {
@@ -582,10 +608,13 @@ export const getTeknikServisIsleri = async (req: Request, res: Response) => {
                 durus_suresi: is.durus_suresi ? Number(is.durus_suresi) : 0,
                 aciklama: temizAciklama,
                 servis_firmasi: is.servis_firma?.firma_adi || "Belirtilmemiş",
-                teknisyen: is.servis_sorumlusu
-                    ? `${is.servis_sorumlusu.ad} ${is.servis_sorumlusu.soyad}`
-                    : "Belirtilmemiş",
-                degisen_parcalar: (is.parca_degisim || []).map(pd => ({
+                // Teknisyen adı: kullanici_id doluysa iç personel, sorumlu_id doluysa misafir servis
+                teknisyen: is.kullanici_id && is.kullanici
+                    ? `${is.kullanici.ad} ${is.kullanici.soyad}`
+                    : is.sorumlu_id && is.servis_sorumlusu
+                        ? `${is.servis_sorumlusu.ad} ${is.servis_sorumlusu.soyad}`
+                        : "Belirtilmemiş",
+                degisen_parcalar: (is.parca_degisim || []).map((pd: any) => ({
                     parca_adi: pd.parca?.parca_adi || "Bilinmeyen",
                     adet: pd.adet || 1,
                     maliyet: pd.parca?.parca_maliyeti || 0
@@ -696,7 +725,8 @@ export const bakimIsleminiOnayla = async (req: Request, res: Response) => {
             where: { bakim_id: bakimId },
             select: {
                 bakim_id: true,
-                servis_puan_id: true
+                servis_puan_id: true,
+                makine_id: true
             }
         });
 
@@ -708,12 +738,18 @@ export const bakimIsleminiOnayla = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: "İşlem onaylanmadan önce puan verilmelidir." });
         }
 
-        await prisma.bakim_kaydi.update({
-            where: { bakim_id: bakimId },
-            data: {
-                durum: "TAMAMLANDI"
-            }
-        });
+        await prisma.$transaction([
+            prisma.bakim_kaydi.update({
+                where: { bakim_id: bakimId },
+                data: {
+                    durum: "TAMAMLANDI"
+                }
+            }),
+            prisma.makine.update({
+                where: { makine_id: bakim.makine_id },
+                data: { aktiflik_durumu: true }
+            })
+        ]);
 
         return res.status(200).json({
             success: true,

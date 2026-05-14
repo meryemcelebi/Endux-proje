@@ -49,7 +49,16 @@ export default function Makineler() {
           id: m.makine_id,
           makineid: "MKN-" + m.makine_id,
           makine_ad: m.makine_adi || m.makine_ad,
-          aktiflik_durumu: typeof m.aktiflik_durumu === "string" ? m.aktiflik_durumu : (m.aktiflik_durumu ? "Aktif" : "Pasif"),
+          aktiflik_durumu: (() => {
+            // FIX #1: Aktif bakım kaydı varsa „Bakımda“ göster
+            const aktifBakim = (m.bakim_kaydi || []).find(
+              b => ["ONAYLANDI", "Teknik Serviste", "Bakımda"].includes(b.durum)
+            );
+            if (aktifBakim) return "Bakımda";
+            // Yoksa boolean → string dönüşümü
+            if (typeof m.aktiflik_durumu === "string") return m.aktiflik_durumu;
+            return m.aktiflik_durumu ? "Aktif" : "Pasif";
+          })(),
           lokasyon: Array.isArray(m.lokasyon) ? m.lokasyon[0] || null : m.lokasyon || null
         }));
 
@@ -65,6 +74,16 @@ export default function Makineler() {
 
 
     fetchData();
+
+    //  Kullanıcı başka sekmeden/sayfadan geri döndüğünde veriyi otomatik yenile
+    // Bakım tamamlandıktan sonra Makineler sayfasına geçildiğinde durum "Aktif" görünecek
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchData();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -162,11 +181,11 @@ export default function Makineler() {
         };
 
         const response = await api.addMachine(payload);
-        
+
         if (response && response.makine) {
           const rawLokasyon = response.makine.lokasyon;
           const normalizedLokasyon = Array.isArray(rawLokasyon) ? rawLokasyon[0] || null : rawLokasyon || null;
-          
+
           addedMachinesList.push({
             ...response.makine,
             lokasyon: normalizedLokasyon,
@@ -239,14 +258,14 @@ export default function Makineler() {
       `}</style>
       <Sidebar />
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <div className="app-content-wrapper" style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
         <Navbar />
 
-        <div style={{ padding: "25px", flex: 1, overflowY: "auto", position: "relative" }}>
+        <div className="app-content" style={{ padding: "25px", flex: 1, overflowY: "auto", position: "relative" }}>
 
           {/* ARAMA VE FİLTRELEME ALANI - MİNİMAL */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", gap: "12px", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", gap: "10px", flex: 1, minWidth: "300px", alignItems: "center" }}>
+          <div className="responsive-flex-col" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", gap: "12px", flexWrap: "wrap" }}>
+            <div className="responsive-flex-col" style={{ display: "flex", gap: "10px", flex: 1, minWidth: "250px", alignItems: "center", flexWrap: "wrap" }}>
               {/* Arama Kutusu */}
               <input
                 type="text"
@@ -362,7 +381,7 @@ export default function Makineler() {
           </div>
 
           {/* KPI ALANI: Makinelerin durum özetini gösteren interaktif kartlar */}
-          <div style={kpiContainer}>
+          <div className="responsive-flex-col" style={{ ...kpiContainer, flexWrap: "wrap" }}>
             {/* Tümü Filtresi */}
             <div
               style={{ ...kpiBox, border: filter === "Tümü" ? "2px solid #3498db" : "2px solid transparent", cursor: "pointer" }}
@@ -421,171 +440,171 @@ export default function Makineler() {
                 const isMaxRisk = riskSkoru >= 100;
 
                 return (
-                <div
-                  key={m.id}
-                  style={{
-                    ...cardStyle,
-                    cursor: "pointer",
-                    border: expandedMachineId === m.id
-                      ? "2px solid #3498db"
-                      : isMaxRisk
-                        ? "2px solid rgba(231, 76, 60, 0.55)"
-                        : "2px solid transparent",
-                    background: isMaxRisk
-                      ? "linear-gradient(180deg, #fff5f5 0%, #ffffff 42%)"
-                      : "white",
-                    boxShadow: isMaxRisk
-                      ? "0 10px 24px rgba(231, 76, 60, 0.16)"
-                      : cardStyle.boxShadow,
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "space-between",
-                    minHeight: "380px",
-                    opacity: (m.aktiflik_durumu === "Pasif" || m.aktiflik_durumu === false) ? 0.7 : 1, // Pasif makineleri hafif şeffaf yap
-                    transition: "all 0.3s ease"
-                  }}
-                  onClick={() => setExpandedMachineId(expandedMachineId === m.id ? null : m.id)}
-                >
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid #eee", paddingBottom: "10px", marginBottom: "15px", height: "50px" }}>
-                      <h3 style={{ margin: 0, color: "#2c3e50", fontSize: "16px", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{m.makine_adi || m.makine_ad}</h3>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "5px", alignItems: "flex-end" }}>
-                        {m.garanti_suresi > 0 && (
-                          <span style={garantiRozetStyle} title={`${m.garanti_suresi} Ay Garanti`}>
-                            🛡️ Garantili
-                          </span>
-                        )}
-                        <div
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleStatus(m);
-                          }}
-                          style={{
-                            padding: "6px 12px",
-                            borderRadius: "20px",
-                            fontSize: "12px",
-                            fontWeight: "800",
-                            color: "white",
-                            minWidth: "100px",
-                            textAlign: "center",
-                            cursor: "pointer",
-                            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                            background: m.aktiflik_durumu === "Aktif" ? "#2ecc71" :
-                              (m.aktiflik_durumu === "Pasif" || m.aktiflik_durumu === false) ? "#e74c3c" : "#f39c12",
-                            border: "none"
-                          }}
-                          title="Durumu Değiştirmek İçin Tıklayın"
-                        >
-                          {m.aktiflik_durumu === "Aktif" ? "AKTİF" :
-                            (m.aktiflik_durumu === "Pasif" || m.aktiflik_durumu === false) ? "PASİF" : m.aktiflik_durumu}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "14px", color: "#555" }}>
-                      <div><strong>ID:</strong> {m.makineid}</div>
-
-                      {m.satin_alma_tarihi && <div><strong>Satın Alma:</strong> {m.satin_alma_tarihi?.split('T')[0]}</div>}
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <strong>Risk Skoru:</strong> {m.mevcut_risk_skoru}
-                        {m.mevcut_risk_skoru > 75 && (
-                          <span style={{ 
-                            color: "#e74c3c", 
-                            fontWeight: "bold", 
-                            fontSize: "14px",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            width: "24px",
-                            height: "24px",
-                            background: "rgba(231, 76, 60, 0.1)",
-                            borderRadius: "50%",
-                            border: "1px solid rgba(231, 76, 60, 0.3)",
-                            animation: "warningBlink 1.5s infinite ease-in-out" 
-                          }} title="Kritik Risk Seviyesi">
-                            ⚠️
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {expandedMachineId === m.id && (
-                      <div style={{ marginTop: "15px", paddingTop: "15px", borderTop: "1px dashed #ccc", overflow: "hidden" }}>
-                        <div style={{ marginBottom: "10px", color: "#0f3460", fontWeight: "bold", fontSize: "14px" }}>Detaylı Bilgiler</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "13px", color: "#555" }}>
-                          <div><strong>Maliyet:</strong> {m.satin_alma_maliyeti || "-"} ₺</div>
-                          <div><strong>Çalışma Saatleri:</strong> {m.toplam_calisma_saati || 0} Saat</div>
-                          <div><strong>Lokasyon:</strong> {m.lokasyon ? `${m.lokasyon.kat} — ${m.lokasyon.fabrika_alani}` : (m.lo_id || "-")}</div>
-                          <div><strong>Makine Türü:</strong> {m.makine_turu?.makine_tur_adi || m.m_tur_id || "-"}</div>
-                          <div><strong>Seri No:</strong> {Array.isArray(m.seri_no) ? m.seri_no.join(", ") : m.seri_no || "-"}</div>
-                          <div style={{ color: "#e94560", fontWeight: "bold" }}><strong>Servis PIN:</strong> {m.servis_pin || "####"}</div>
-                          <div><strong>Garanti Süresi:</strong> {m.garanti_suresi ? m.garanti_suresi + " Ay" : "-"}</div>
-                          {m.garanti_suresi > 0 && m.tedarikci && (
-                            <>
-                              <div><strong>Garanti Firması:</strong> {m.tedarikci.firma_adi || m.tedarikci.ad || "-"}</div>
-                              <div><strong>Garanti Tel:</strong> {m.tedarikci.telefon || "-"}</div>
-                            </>
+                  <div
+                    key={m.id}
+                    style={{
+                      ...cardStyle,
+                      cursor: "pointer",
+                      border: expandedMachineId === m.id
+                        ? "2px solid #3498db"
+                        : isMaxRisk
+                          ? "2px solid rgba(231, 76, 60, 0.55)"
+                          : "2px solid transparent",
+                      background: isMaxRisk
+                        ? "linear-gradient(180deg, #fff5f5 0%, #ffffff 42%)"
+                        : "white",
+                      boxShadow: isMaxRisk
+                        ? "0 10px 24px rgba(231, 76, 60, 0.16)"
+                        : cardStyle.boxShadow,
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      minHeight: "380px",
+                      opacity: (m.aktiflik_durumu === "Pasif" || m.aktiflik_durumu === false) ? 0.7 : 1, // Pasif makineleri hafif şeffaf yap
+                      transition: "all 0.3s ease"
+                    }}
+                    onClick={() => setExpandedMachineId(expandedMachineId === m.id ? null : m.id)}
+                  >
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid #eee", paddingBottom: "10px", marginBottom: "15px", height: "50px" }}>
+                        <h3 style={{ margin: 0, color: "#2c3e50", fontSize: "16px", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{m.makine_adi || m.makine_ad}</h3>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "5px", alignItems: "flex-end" }}>
+                          {m.garanti_suresi > 0 && (
+                            <span style={garantiRozetStyle} title={`${m.garanti_suresi} Ay Garanti`}>
+                              🛡️ Garantili
+                            </span>
                           )}
-                          <div style={{ gridColumn: "span 2" }}>
-                            <span style={tedarikEtiketStil}>Kapasite & Donanım Özellikleri:</span>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", justifyContent: "flex-end" }}>
-                              {(() => {
-                                const oz = m.makine_ozellikleri?.teknik_ozellikler;
-                                if (!oz) return <span style={{ color: "#999" }}>Belirtilmemiş</span>;
-
-                                // String ise parse et
-                                const data = typeof oz === "string" ? JSON.parse(oz) : oz;
-
-                                if (typeof data === "object" && data !== null) {
-                                  return Object.entries(data).map(([key, val]) => (
-                                    <span key={key} style={{
-                                      background: "#f0f4f8",
-                                      padding: "4px 10px",
-                                      borderRadius: "8px",
-                                      fontSize: "13px",
-                                      color: "#2c3e50",
-                                      border: "1px solid #dfe6e9"
-                                    }}>
-                                      <strong>{key}:</strong> {String(val)}
-                                    </span>
-                                  ));
-                                }
-
-                                return String(data);
-                              })()}
-                            </div>
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleStatus(m);
+                            }}
+                            style={{
+                              padding: "6px 12px",
+                              borderRadius: "20px",
+                              fontSize: "12px",
+                              fontWeight: "800",
+                              color: "white",
+                              minWidth: "100px",
+                              textAlign: "center",
+                              cursor: "pointer",
+                              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                              background: m.aktiflik_durumu === "Aktif" ? "#2ecc71" :
+                                (m.aktiflik_durumu === "Pasif" || m.aktiflik_durumu === false) ? "#e74c3c" : "#f39c12",
+                              border: "none"
+                            }}
+                            title="Durumu Değiştirmek İçin Tıklayın"
+                          >
+                            {m.aktiflik_durumu === "Aktif" ? "AKTİF" :
+                              (m.aktiflik_durumu === "Pasif" || m.aktiflik_durumu === false) ? "PASİF" : m.aktiflik_durumu}
                           </div>
                         </div>
                       </div>
-                    )}
 
-                    {/* QR KOD VE AKSİYONLAR: Her makine için dinamik QR kod oluşturma */}
-                    <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", alignItems: "center", background: "#f8f9fa", padding: "15px", borderRadius: "8px" }} onClick={(e) => e.stopPropagation()}>
-                      <div className={`qr-container-${m.id}`}>
-                        <QRCodeCanvas value={`${window.location.origin}/checklist-giris/${m.makine_qr}`} size={100} />
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "14px", color: "#555" }}>
+                        <div><strong>ID:</strong> {m.makineid}</div>
+
+                        {m.satin_alma_tarihi && <div><strong>Satın Alma:</strong> {m.satin_alma_tarihi?.split('T')[0]}</div>}
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <strong>Risk Skoru:</strong> {m.mevcut_risk_skoru}
+                          {m.mevcut_risk_skoru > 75 && (
+                            <span style={{
+                              color: "#e74c3c",
+                              fontWeight: "bold",
+                              fontSize: "14px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: "24px",
+                              height: "24px",
+                              background: "rgba(231, 76, 60, 0.1)",
+                              borderRadius: "50%",
+                              border: "1px solid rgba(231, 76, 60, 0.3)",
+                              animation: "warningBlink 1.5s infinite ease-in-out"
+                            }} title="Kritik Risk Seviyesi">
+                              ⚠️
+                            </span>
+                          )}
+                        </div>
                       </div>
 
-                      {/* QR Çıktı Al: QR kodu yeni pencerede yazdırılabilir formatta açar */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
+                      {expandedMachineId === m.id && (
+                        <div style={{ marginTop: "15px", paddingTop: "15px", borderTop: "1px dashed #ccc", overflow: "hidden" }}>
+                          <div style={{ marginBottom: "10px", color: "#0f3460", fontWeight: "bold", fontSize: "14px" }}>Detaylı Bilgiler</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "13px", color: "#555" }}>
+                            <div><strong>Maliyet:</strong> {m.satin_alma_maliyeti || "-"} ₺</div>
+                            <div><strong>Çalışma Saatleri:</strong> {m.toplam_calisma_saati || 0} Saat</div>
+                            <div><strong>Lokasyon:</strong> {m.lokasyon ? `${m.lokasyon.kat} — ${m.lokasyon.fabrika_alani}` : (m.lo_id || "-")}</div>
+                            <div><strong>Makine Türü:</strong> {m.makine_turu?.makine_tur_adi || m.m_tur_id || "-"}</div>
+                            <div><strong>Seri No:</strong> {Array.isArray(m.seri_no) ? m.seri_no.join(", ") : m.seri_no || "-"}</div>
+                            <div style={{ color: "#e94560", fontWeight: "bold" }}><strong>Servis PIN:</strong> {m.servis_pin || "####"}</div>
+                            <div><strong>Garanti Süresi:</strong> {m.garanti_suresi ? m.garanti_suresi + " Ay" : "-"}</div>
+                            {m.garanti_suresi > 0 && m.tedarikci && (
+                              <>
+                                <div><strong>Garanti Firması:</strong> {m.tedarikci.firma_adi || m.tedarikci.ad || "-"}</div>
+                                <div><strong>Garanti Tel:</strong> {m.tedarikci.telefon || "-"}</div>
+                              </>
+                            )}
+                            <div style={{ gridColumn: "span 2" }}>
+                              <span style={tedarikEtiketStil}>Kapasite & Donanım Özellikleri:</span>
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", justifyContent: "flex-end" }}>
+                                {(() => {
+                                  const oz = m.makine_ozellikleri?.teknik_ozellikler;
+                                  if (!oz) return <span style={{ color: "#999" }}>Belirtilmemiş</span>;
 
-                          const container = document.querySelector(`.qr-container-${m.id}`);
-                          const canvas = container?.querySelector("canvas");
-                          if (!canvas) {
-                            alert("QR alanı bulunamadı.");
-                            return;
-                          }
+                                  // String ise parse et
+                                  const data = typeof oz === "string" ? JSON.parse(oz) : oz;
 
-                          const imgData = canvas.toDataURL("image/png");
-                          const printWindow = window.open("", "_blank", "width=700,height=700");
+                                  if (typeof data === "object" && data !== null) {
+                                    return Object.entries(data).map(([key, val]) => (
+                                      <span key={key} style={{
+                                        background: "#f0f4f8",
+                                        padding: "4px 10px",
+                                        borderRadius: "8px",
+                                        fontSize: "13px",
+                                        color: "#2c3e50",
+                                        border: "1px solid #dfe6e9"
+                                      }}>
+                                        <strong>{key}:</strong> {String(val)}
+                                      </span>
+                                    ));
+                                  }
 
-                          if (!printWindow) {
-                            alert("Tarayıcı açılır pencereyi engelledi. Lütfen popup izni ver.");
-                            return;
-                          }
+                                  return String(data);
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
-                          printWindow.document.write(`
+                      {/* QR KOD VE AKSİYONLAR: Her makine için dinamik QR kod oluşturma */}
+                      <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", alignItems: "center", background: "#f8f9fa", padding: "15px", borderRadius: "8px" }} onClick={(e) => e.stopPropagation()}>
+                        <div className={`qr-container-${m.id}`}>
+                          <QRCodeCanvas value={`${window.location.origin}/checklist-giris/${m.makine_qr}`} size={100} />
+                        </div>
+
+                        {/* QR Çıktı Al: QR kodu yeni pencerede yazdırılabilir formatta açar */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+
+                            const container = document.querySelector(`.qr-container-${m.id}`);
+                            const canvas = container?.querySelector("canvas");
+                            if (!canvas) {
+                              alert("QR alanı bulunamadı.");
+                              return;
+                            }
+
+                            const imgData = canvas.toDataURL("image/png");
+                            const printWindow = window.open("", "_blank", "width=700,height=700");
+
+                            if (!printWindow) {
+                              alert("Tarayıcı açılır pencereyi engelledi. Lütfen popup izni ver.");
+                              return;
+                            }
+
+                            printWindow.document.write(`
       <html>
         <head>
           <title>QR Kod Çıktısı - ${m.makine_adi || m.makine_ad || "Makine"}</title>
@@ -612,27 +631,27 @@ export default function Makineler() {
       </html>
     `);
 
-                          printWindow.document.close();
-                          printWindow.focus();
-                        }}
-                        style={printBtnStyle}
-                      >
-                        QR Çıktı Al
-                      </button>
+                            printWindow.document.close();
+                            printWindow.focus();
+                          }}
+                          style={printBtnStyle}
+                        >
+                          QR Çıktı Al
+                        </button>
 
-                      {/* Detay Sayfasına Git Butonu */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/makine/${m.id}`);
-                        }}
-                        style={{ ...printBtnStyle, background: "gray", marginTop: "10px" }}
-                      >
-                        Tüm Detayları Gör
-                      </button>
+                        {/* Detay Sayfasına Git Butonu */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/makine/${m.id}`);
+                          }}
+                          style={{ ...printBtnStyle, background: "gray", marginTop: "10px" }}
+                        >
+                          Tüm Detayları Gör
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
                 );
               })}
           </div>

@@ -7,7 +7,7 @@ import prisma from "../config/prisma";
 
 export async function servisPuanVer(req: Request, res: Response) {
     try {
-        const { servis_firma_id, puan, yorum } = req.body;
+        const { servis_firma_id, puan, yorum, bakim_id } = req.body;
         const puanlayanID = Number(req.user?.userId);
 
         if (!servis_firma_id || puan === undefined || puan === null) {
@@ -18,15 +18,15 @@ export async function servisPuanVer(req: Request, res: Response) {
             return;
         }
         const puanDegeri = Number(puan);
-       
+
         // puan yerine puanDegeri üzerinden kontrol ediyoruz
-          
+
         if (Number.isNaN(puanDegeri) || !Number.isInteger(puanDegeri) || puanDegeri < 1 || puanDegeri > 5) {
-           res.status(400).json({
-             success: false,
-             message: "Puan 1 ile 5 arasında olmalıdır ve tam sayı olmalıdır."
-           });
-        return;
+            res.status(400).json({
+                success: false,
+                message: "Puan 1 ile 5 arasında olmalıdır ve tam sayı olmalıdır."
+            });
+            return;
         }
 
         //servis firma var mı 
@@ -49,6 +49,7 @@ export async function servisPuanVer(req: Request, res: Response) {
                     puan: puanDegeri,
                     yorum: yorum ? String(yorum) : null,
                     puanlayan_kullanici_id: puanlayanID,
+                    bakim_id: bakim_id ? Number(bakim_id) : null, // BUG FIX: bakim_id kaydediliyor
                     tarih: new Date()
                 }
             });
@@ -86,13 +87,13 @@ export async function tedarikciPuanVer(req: Request, res: Response) {
         }
         const puanDegeri = Number(puan);
 
-     // puan yerine puanDegeri üzerinden kontrol ediyoruz
-       if (Number.isNaN(puanDegeri) || !Number.isInteger(puanDegeri) || puanDegeri < 1 || puanDegeri > 5) {
-           res.status(400).json({
-             success: false,
-             message: "Puan 1 ile 5 arasında olmalıdır ve tam sayı olmalıdır."
+        // puan yerine puanDegeri üzerinden kontrol ediyoruz
+        if (Number.isNaN(puanDegeri) || !Number.isInteger(puanDegeri) || puanDegeri < 1 || puanDegeri > 5) {
+            res.status(400).json({
+                success: false,
+                message: "Puan 1 ile 5 arasında olmalıdır ve tam sayı olmalıdır."
             });
-           return;
+            return;
         }
 
         //tedarikçi var mı
@@ -117,6 +118,24 @@ export async function tedarikciPuanVer(req: Request, res: Response) {
                     tarih: new Date()
                 }
             });
+
+            //  guvenilirlik_skoru alanını güncel ortalamaya göre güncelle
+            const tumPuanlar = await tx.tedarikci_puan.findMany({
+                where: { tedarikci_id: Number(tedarikci_id) },
+                select: { puan: true }
+            });
+            const gecerliPuanlar = tumPuanlar
+                .map(tp => Number(tp.puan))
+                .filter(p => Number.isFinite(p) && p > 0);
+            if (gecerliPuanlar.length > 0) {
+                const ortalama = gecerliPuanlar.reduce((a, b) => a + b, 0) / gecerliPuanlar.length;
+                // guvenilirlik_skoru = ortalama * 10 (1-5 puan → 10-50 skor)
+                await tx.tedarikci.update({
+                    where: { tedarikci_id: Number(tedarikci_id) },
+                    data: { guvenilirlik_skoru: Number((ortalama * 10).toFixed(1)) }
+                });
+            }
+
             return yeniPuan;
         });
         res.status(201).json({

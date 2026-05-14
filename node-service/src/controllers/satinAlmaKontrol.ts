@@ -39,7 +39,7 @@ export const satinAlmaKaydet = async (req: Request, res: Response): Promise<void
         });
 
         const p_tedarikci_firma_adi = tedarikci ? tedarikci.firma_adi : 'Bilinmeyen Tedarikçi';
-        
+
         // Kategori adını belirle (Seçilen makine türü varsa onun adını al)
         let resolvedKategoriAdi = req.body.kategori_adi || 'Genel';
         if (makine_tur_id) {
@@ -50,7 +50,7 @@ export const satinAlmaKaydet = async (req: Request, res: Response): Promise<void
                 resolvedKategoriAdi = mTur.makine_tur_adi;
             }
         }
-        
+
         const p_parca_adi = parca_adi;
         const p_tahmini_omur_saati = req.body.tahmini_omur ? parseLocaleNumber(req.body.tahmini_omur) : 0;
         const parsedBirimFiyat = parseLocaleNumber(birim_fiyat);
@@ -84,7 +84,7 @@ export const satinAlmaKaydet = async (req: Request, res: Response): Promise<void
 
         // ─── KRİTİK GÜNCELLEME: Prisma ile Doğrudan Stok Yazma ───
         // Prosedürün yapamadığı veya eksik bıraktığı güncellemeleri burada kesinleştiriyoruz.
-        
+
         // 1. Kategori ID'sini çöz
         let finalKatId = null;
         if (p_kategori_adi && p_kategori_adi !== 'Genel') {
@@ -218,20 +218,24 @@ export const getAlimGecmisi = async (req: Request, res: Response): Promise<void>
 // GET /api/satin-alma/stok
 export const getStokDurumu = async (req: Request, res: Response): Promise<void> => {
     try {
+        // Sadece stok_miktari > 0 olanları getir (tükenmiş parçaları hariç tut)
         const parcalar = await prisma.parca.findMany({
+            where: {
+                stok_miktari: { gt: 0 }
+            },
             orderBy: {
                 parca_adi: 'asc'
             }
         });
 
-        // Frontend'in beklediği veri yapısına çeviriyoruz
+        // frontend için
         const formatliStoklar = parcalar.map((p: any) => ({
             stok_id: p.parca_id,
             parca_adi: p.parca_adi,
             miktar: p.stok_miktari || 0,
             min_stok: p.min_stok_seviyesi || 5,
             tahmini_omur_saati: p.tahmini_omur_saati || 0,
-            son_guncelleme: new Date() 
+            son_guncelleme: new Date()
         }));
 
         res.json({ data: formatliStoklar });

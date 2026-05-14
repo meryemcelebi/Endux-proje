@@ -77,36 +77,38 @@ export const makineEkle = async (req: Request, res: Response) => {
             }
         });
 
-        // 2.5 Garanti Firması (Tedarikçi) — Eğer ID yoksa ama isim varsa oluştur/bul
+        // 2.5 Garanti Firması — Eğer ID yoksa ama isim varsa garanti_firma tablosunda oluştur/bul
         if (!garanti_firma_id && tedarikci && tedarikci.firma_adi) {
             try {
-                let s_firma = await prisma.servis_firma.findFirst({
+                // Önce iletişim kaydı oluştur
+                const newIletisim = await prisma.iletisim.create({
+                    data: {
+                        telefon: tedarikci.telefon || null,
+                        mail: tedarikci.email || null,
+                        acik_adres: tedarikci.adres || null,
+                        il: tedarikci.il_ilce?.split('/')[0]?.trim() || null,
+                        ilce: tedarikci.il_ilce?.split('/')[1]?.trim() || null
+                    }
+                });
+
+                // garanti_firma tablosunda ara veya oluştur 
+                let g_firma = await prisma.garanti_firma.findFirst({
                     where: { firma_adi: tedarikci.firma_adi }
                 });
 
-                if (!s_firma) {
-                    const newIletisim = await prisma.iletisim.create({
-                        data: {
-                            telefon: tedarikci.telefon || null,
-                            mail: tedarikci.email || null,
-                            acik_adres: tedarikci.adres || null,
-                            il: tedarikci.il_ilce?.split('/')[0]?.trim() || null,
-                            ilce: tedarikci.il_ilce?.split('/')[1]?.trim() || null
-                        }
-                    });
-
-                    s_firma = await prisma.servis_firma.create({
+                if (!g_firma) {
+                    g_firma = await prisma.garanti_firma.create({
                         data: {
                             firma_adi: tedarikci.firma_adi,
-                            aktiflik: true,
                             iletisim_id: newIletisim.iletisim_id
                         }
                     });
                 }
 
+                // Makineyi garanti firmasına bağla
                 await prisma.makine.update({
                     where: { makine_id: yeniMakine.makine_id },
-                    data: { garanti_firma_id: s_firma.servis_firma_id }
+                    data: { garanti_firma_id: g_firma.garanti_firma_id }
                 });
             } catch (err) {
                 console.error("Garanti firması oluşturma/atama hatası:", err);

@@ -106,11 +106,11 @@ export default function SatinAlma() {
   };
 
   return (
-    <div style={{ display: "flex", background: "#f5f6fa", minHeight: "100vh" }}>
+    <div className="app-container" style={{ display: "flex", background: "#f5f6fa", minHeight: "100vh" }}>
       <Sidebar />
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <div className="app-content-wrapper" style={{ flex: 1, display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
         <Navbar />
-        <div style={{ padding: "30px", flex: 1, overflowY: "auto" }}>
+        <div className="app-content" style={{ padding: "30px", flex: 1, overflowY: "auto" }}>
 
           {/* BAŞLIK */}
           <div style={{ marginBottom: "25px" }}>
@@ -211,6 +211,7 @@ export default function SatinAlma() {
                       style={selectStyle}
                     >
                       <option value="">— Opsiyonel: Makine türü seçin —</option>
+                      <option value="genel">Genel</option>
                       {machineTypes.map(type => (
                         <option key={type.makine_tur_id} value={type.makine_tur_id}>
                           {type.makine_tur_adi}
@@ -408,15 +409,15 @@ export default function SatinAlma() {
                           </td>
                           <td style={tdStyle}>
                             {s.tahmini_omur_saati ? (
-                              <span style={{ 
-                                background: "rgba(52,152,219,0.1)", 
-                                color: "#3498db", 
-                                padding: "4px 10px", 
-                                borderRadius: "12px", 
+                              <span style={{
+                                background: "rgba(52,152,219,0.1)",
+                                color: "#3498db",
+                                padding: "4px 10px",
+                                borderRadius: "12px",
                                 fontSize: "12px",
                                 fontWeight: "bold"
                               }}>
-                                ⏳ {s.tahmini_omur_saati} Saat
+                                {s.tahmini_omur_saati} Saat
                               </span>
                             ) : "-"}
                           </td>
@@ -522,11 +523,11 @@ export default function SatinAlma() {
                         </td>
                         <td style={tdStyle}>
                           {sa.tahmini_omur_saati ? (
-                            <span style={{ 
-                              background: "rgba(52,152,219,0.1)", 
-                              color: "#3498db", 
-                              padding: "4px 10px", 
-                              borderRadius: "12px", 
+                            <span style={{
+                              background: "rgba(52,152,219,0.1)",
+                              color: "#3498db",
+                              padding: "4px 10px",
+                              borderRadius: "12px",
                               fontSize: "12px",
                               fontWeight: "bold"
                             }}>

@@ -109,13 +109,13 @@ export default function MakineDetay() {
     })();
 
     return (
-        <div style={sayfaStil}>
-            <div style={containerStil}>
+        <div className="app-container" style={sayfaStil}>
+            <div className="app-content-wrapper app-content" style={containerStil}>
                 {/* BAŞLIK */}
-                <div style={headerStil}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+                <div className="responsive-flex-col" style={{ ...headerStil, flexWrap: "wrap", gap: "20px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "20px", flexWrap: "wrap" }}>
                         <div>
-                            <h2 style={{ margin: 0, color: "white", fontSize: "24px", display: "flex", alignItems: "center", gap: "10px" }}>
+                            <h2 style={{ margin: 0, color: "white", fontSize: "24px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                                 {safeVal(machine.makine_adi || machine.makine_ad)}
                                 <span style={{
                                     padding: "4px 10px",
@@ -136,7 +136,7 @@ export default function MakineDetay() {
                     </div>
 
                     {/* BUTONLAR - Focus View Toggled */}
-                    <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                    <div className="responsive-flex-col" style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", width: "100%" }}>
                         <button
                             onClick={() => setIsFocusView(!isFocusView)}
                             style={{
@@ -159,7 +159,10 @@ export default function MakineDetay() {
                             borderRadius: "12px",
                             display: "flex",
                             alignItems: "center",
-                            gap: "15px"
+                            gap: "15px",
+                            flexWrap: "wrap",
+                            width: "100%",
+                            boxSizing: "border-box"
                         }}>
                             <span style={{ color: "#e94560", fontWeight: "bold", fontSize: "14px" }}>SERVİS GİRİŞ ŞİFRESİ:</span>
                             <span style={{ color: "white", fontSize: "20px", fontWeight: "900", letterSpacing: "4px", background: "#e94560", padding: "4px 12px", borderRadius: "6px" }}>
@@ -264,10 +267,12 @@ export default function MakineDetay() {
                                         <div style={{ padding: "12px", background: "#f8fbff", borderRadius: "10px", border: "1px solid #e2e8f0" }}>
                                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                                                 <span style={{ fontSize: "13px", fontWeight: "bold", color: "#2980b9" }}>⏱️ Periyodik Bakım Durumu</span>
-                                                <span style={{ fontSize: "12px", fontWeight: "800", color: (() => {
-                                                    const oran = (Number(machine.toplam_calisma_saati || 0) / machine.makine_turu.periyodik_bakim_saati) * 100;
-                                                    return oran >= 100 ? "#dc2626" : oran >= 90 ? "#e94560" : oran >= 75 ? "#f59e0b" : "#2ecc71";
-                                                })() }}>
+                                                <span style={{
+                                                    fontSize: "12px", fontWeight: "800", color: (() => {
+                                                        const oran = (Number(machine.toplam_calisma_saati || 0) / machine.makine_turu.periyodik_bakim_saati) * 100;
+                                                        return oran >= 100 ? "#dc2626" : oran >= 90 ? "#e94560" : oran >= 75 ? "#f59e0b" : "#2ecc71";
+                                                    })()
+                                                }}>
                                                     {Number(machine.toplam_calisma_saati || 0)} / {machine.makine_turu.periyodik_bakim_saati} saat
                                                 </span>
                                             </div>
@@ -285,10 +290,12 @@ export default function MakineDetay() {
                                             </div>
                                             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px", fontSize: "11px", color: "#64748b" }}>
                                                 <span>Son Bakım: {machine.son_bakim_tarihi ? new Date(machine.son_bakim_tarihi).toLocaleDateString("tr-TR") : "Kayıt yok"}</span>
-                                                <span style={{ fontWeight: "bold", color: (() => {
-                                                    const kalan = machine.makine_turu.periyodik_bakim_saati - Number(machine.toplam_calisma_saati || 0);
-                                                    return kalan <= 0 ? "#dc2626" : kalan <= 100 ? "#e94560" : "#2980b9";
-                                                })() }}>
+                                                <span style={{
+                                                    fontWeight: "bold", color: (() => {
+                                                        const kalan = machine.makine_turu.periyodik_bakim_saati - Number(machine.toplam_calisma_saati || 0);
+                                                        return kalan <= 0 ? "#dc2626" : kalan <= 100 ? "#e94560" : "#2980b9";
+                                                    })()
+                                                }}>
                                                     {(() => {
                                                         const kalan = machine.makine_turu.periyodik_bakim_saati - Number(machine.toplam_calisma_saati || 0);
                                                         return kalan <= 0 ? "⛔ Bakım süresi aşıldı!" : `Kalan: ${kalan} saat`;
@@ -381,81 +388,83 @@ export default function MakineDetay() {
 
                 {/* ORTA - SON 3 GÜNLÜK CHECKLIST GEÇMİŞİ */}
                 {!isFocusView && (
-                    <div style={{ ...detayKartStil, flex: 3, width: "100%", marginTop: "10px", animation: "slideDown 0.3s ease-out" }}>
+                    <div className="app-content" style={{ ...detayKartStil, flex: 3, width: "100%", marginTop: "10px", animation: "slideDown 0.3s ease-out", padding: "20px" }}>
                         <h3 style={bolumBaslikStil}>Son 3 Günlük Kontrol ve Risk Analizi</h3>
 
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-                            {checklistHistory.map((item, idx) => (
-                                <div key={idx} style={checklistKartStil}>
-                                    <div style={checklistUstStil}>
-                                        <span style={tarihRozetStil}>{new Date(item.tarih).toLocaleDateString("tr-TR")}</span>
-                                        <span style={{
-                                            padding: "4px 10px",
-                                            borderRadius: "12px",
-                                            fontSize: "12px",
-                                            background: item.tespit_eden === "AI" ? "#6c5ce7" : item.tespit_eden === "Operatör" ? "#00b894" : "#e17055",
-                                            color: "white",
-                                            fontWeight: "bold"
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "15px" }}>
+                            {[...checklistHistory].sort((a, b) => new Date(b.tarih) - new Date(a.tarih)).slice(0, 3).map((item, idx) => {
+                                const isSafe = item.risk_sebebi?.toLowerCase().includes("normal") ||
+                                    item.risk_sebebi?.toLowerCase().includes("yok") ||
+                                    item.risk_sebebi?.toLowerCase().includes("temiz");
+                                return (
+                                    <div key={idx} style={checklistKartStil}>
+                                        <div style={checklistUstStil}>
+                                            <span style={tarihRozetStil}>{new Date(item.tarih).toLocaleDateString("tr-TR")}</span>
+                                            <span style={{
+                                                padding: "4px 10px",
+                                                borderRadius: "12px",
+                                                fontSize: "12px",
+                                                background: item.tespit_eden === "AI" ? "#6c5ce7" : item.tespit_eden === "Operatör" ? "#00b894" : "#e17055",
+                                                color: "white",
+                                                fontWeight: "bold"
+                                            }}>
+                                                Tespit: {item.tespit_eden}
+                                            </span>
+                                        </div>
+
+                                        <div style={{
+                                            marginTop: "15px",
+                                            padding: "10px",
+                                            borderRadius: "8px",
+                                            background: isSafe ? "#f0fff4" : "#fff5f5",
+                                            borderLeft: `4px solid ${isSafe ? "#38a169" : "#e53e3e"}`,
+                                            color: isSafe ? "#2f855a" : "#c53030",
+                                            fontSize: "13px"
                                         }}>
-                                            Tespit: {item.tespit_eden}
-                                        </span>
-                                    </div>
+                                            <strong>{isSafe ? "✅ Analiz Özeti:" : "⚠️ Risk Sebebi:"}</strong> {item.risk_sebebi}
+                                        </div>
 
-                                    <div style={{ 
-                                        marginTop: "15px", 
-                                        padding: "10px", 
-                                        borderRadius: "8px", 
-                                        background: item.risk_sebebi?.toLowerCase().includes("normal") ? "#f0fff4" : "#fff5f5",
-                                        borderLeft: `4px solid ${item.risk_sebebi?.toLowerCase().includes("normal") ? "#38a169" : "#e53e3e"}`,
-                                        color: item.risk_sebebi?.toLowerCase().includes("normal") ? "#2f855a" : "#c53030",
-                                        fontSize: "13px"
-                                    }}>
-                                        <strong>{item.risk_sebebi?.toLowerCase().includes("normal") ? "✅ Analiz Özeti:" : "⚠️ Risk Sebebi:"}</strong> {item.risk_sebebi}
+                                        <div style={{ marginTop: "15px" }}>
+                                            <div style={{ fontSize: "13px", fontWeight: "bold", color: "#636e72", marginBottom: "8px" }}>Soru & Cevaplar</div>
+                                            {Array.isArray(item.cevaplar) ? item.cevaplar.map((c, i) => (
+                                                <div key={i} style={cevapSatirStil}>
+                                                    <span style={{ flex: 1 }}>{c.soru}</span>
+                                                    <strong style={{ color: c.cevap === "HAYIR" ? "#d63031" : "#00b894" }}>{safeVal(c.cevap)}</strong>
+                                                </div>
+                                            )) : null}
+                                        </div>
                                     </div>
-
-                                    <div style={{ marginTop: "15px" }}>
-                                        <div style={{ fontSize: "13px", fontWeight: "bold", color: "#636e72", marginBottom: "8px" }}>Soru & Cevaplar</div>
-                                        {Array.isArray(item.cevaplar) ? item.cevaplar.map((c, i) => (
-                                            <div key={i} style={cevapSatirStil}>
-                                                <span style={{ flex: 1 }}>{c.soru}</span>
-                                                <strong style={{ color: c.cevap === "HAYIR" ? "#d63031" : "#00b894" }}>{safeVal(c.cevap)}</strong>
-                                            </div>
-                                        )) : null}
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 )}
 
                 {/* SAĞ - SERVİS GEÇMİŞİ & PARÇALAR */}
                 {!isFocusView && (
-                    <div style={{ ...detayKartStil, flex: 2, minWidth: "400px", marginTop: "20px" }}>
+                    <div className="app-content" style={{ ...detayKartStil, flex: 2, minWidth: "auto", width: "100%", marginTop: "20px", padding: "20px" }}>
                         <h3 style={bolumBaslikStil}>Servis Geçmişi ve Değişen Parçalar</h3>
 
                         {Array.isArray(history) && history.length === 0 ? (
                             <p style={{ color: "#777" }}>Henüz bir servis kaydı sisteme yansımamış.</p>
                         ) : (
                             <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                                {Array.isArray(history) && history.map((kayit) => (
+                                {Array.isArray(history) && history.slice(0, 5).map((kayit) => (
                                     <div key={kayit.bakim_id} style={servisKartStil}>
                                         <div style={servisKartUstStil}>
                                             <span style={servisTarihStil}>
                                                 {kayit.bakim_tarihi ? new Date(kayit.bakim_tarihi).toLocaleDateString("tr-TR") : "-"}
                                             </span>
-                                            <span style={servisMaliyetStil}>
-                                                Maliyet: {Number(kayit.bakim_maliyet || 0).toLocaleString()} ₺
-                                            </span>
                                         </div>
 
-                                        <div style={{ display: "flex", gap: "20px", marginTop: "12px", fontSize: "14px" }}>
-                                            <div>
+                                        <div className="responsive-flex-col" style={{ display: "flex", gap: "10px", marginTop: "12px", fontSize: "13px", flexWrap: "wrap" }}>
+                                            <div style={{ minWidth: "120px" }}>
                                                 <span style={griBaslik}>Bakım Türü:</span> <strong>{safeVal(kayit.bakim_turu)}</strong>
                                             </div>
-                                            <div>
+                                            <div style={{ minWidth: "120px" }}>
                                                 <span style={griBaslik}>Servis Firması:</span> {kayit.servis_firmasi || `ID: ${kayit.servis_firma_id}`}
                                             </div>
-                                            <div>
+                                            <div style={{ minWidth: "120px" }}>
                                                 <span style={griBaslik}>Temel Nedeni:</span> {kayit.ariza_sebebi}
                                             </div>
                                         </div>

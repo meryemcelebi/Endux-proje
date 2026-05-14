@@ -6,8 +6,10 @@ import FirmModal from "./components/FirmModal";
 export default function Servis() {
   const { id } = useParams();
 
+  const [arizaSecenekleri, setArizaSecenekleri] = useState([]);
   const [history, setHistory] = useState([]); // Makineye ait eski servis kayıtları
   const [firms, setFirms] = useState([]); // Sistemdeki tüm kayıtlı firmalar (Servis/Tedarikçi)
+  const [bakimTurleri, setBakimTurleri] = useState([]); // Sistemdeki bakım türleri
   const [isModalOpen, setIsModalOpen] = useState(false); // Yeni firma ekleme modalı durumu
   const [modalType, setModalType] = useState("Servis"); // Eklenecek firmanın türü
 
@@ -16,13 +18,18 @@ export default function Servis() {
   const [tamamlandiMi, setTamamlandiMi] = useState(false); // Başarılı tamamlama mesajı
   const [kaydetYukleniyor, setKaydetYukleniyor] = useState(false); // Kaydet butonu loading durumu
 
+  const [stoklar, setStoklar] = useState([]);
+  const [selectedPartId, setSelectedPartId] = useState("");
+
+
   // Bakım formu state'leri
   const [form, setForm] = useState({
     bakim_maliyet: "",
-    durus_suresi: "",
     aciklama: "",
     ariza_sebebi: "",
-    bakim_turu: ""
+    ariza_id: "",
+    bakim_tur_id: "",
+    degisen_parcalar: []
   });
 
   // Giriş yapmış kullanıcı bilgisini al
@@ -33,12 +40,23 @@ export default function Servis() {
     const fetchData = async () => {
       try {
         // Makineye özel servis geçmişini ve genel firma listesini çek (Paralel istek)
-        const [histData, firmData] = await Promise.all([
+        const [histData, firmData, stokData, makineData, bakimData] = await Promise.all([
           api.getServiceHistory(id),
-          api.getFirms()
+          api.getFirms(),
+          api.getInventory(),
+          api.getMachineDetails(id),
+          api.getSystemBakimTurleri()
         ]);
         setHistory(histData);
         setFirms(firmData);
+        setStoklar(stokData);
+        setBakimTurleri(bakimData);
+        if (makineData && makineData.makine_tur_id) {
+          try {
+            const arizalar = await api.getSystemArizaTurleri(makineData.makine_tur_id);
+            setArizaSecenekleri(arizalar);
+          } catch (err) { console.error("Arızalar çekilemedi", err); }
+        }
 
         // Bu makine için bekleyen (ONAYLANDI) iş var mı kontrol et
         try {
@@ -69,7 +87,7 @@ export default function Servis() {
     }
   };
 
-  const sortedHistory = [...history].sort((a, b) => (b.servis_puan?.puan || 0) - (a.servis_puan?.puan || 0));
+  const sortedHistory = [...history].sort((a, b) => new Date(b.bakim_tarihi || 0).getTime() - new Date(a.bakim_tarihi || 0).getTime());
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -98,8 +116,7 @@ export default function Servis() {
         bakim_id: Number(bekleyenIs.bakim_id),
         bakim_maliyet: Number(form.bakim_maliyet),
         aciklama: String(form.aciklama || form.ariza_sebebi || "").trim(),
-        durus_suresi: form.durus_suresi ? Number(form.durus_suresi) : null,
-        degisen_parcalar: []
+        degisen_parcalar: form.degisen_parcalar
       };
 
       console.log("Gönderilen veriler:", gonderilecekVeri);
@@ -108,7 +125,7 @@ export default function Servis() {
 
       setTamamlandiMi(true);
       setBekleyenIs(null);
-      setForm({ bakim_maliyet: "", durus_suresi: "", aciklama: "", ariza_sebebi: "", bakim_turu: "" });
+      setForm({ bakim_maliyet: "", aciklama: "", ariza_sebebi: "", bakim_tur_id: "", degisen_parcalar: [] });
 
       // Geçmişi yenile
       try {
@@ -133,327 +150,381 @@ export default function Servis() {
 
     // API'ye gönderilecek servis kaydı objesi (Payload)
     const payload = {
-        makine_id: Number(id),
+      makine_id: Number(id),
 
-        // Kural 1: Eğer kullanıcı/teknisyen ID yoksa 0 (Sıfır) GÖNDERME! null veya undefined gönder ki Prisma çökmek yerine boş geçsin.
-        kullanici_id: currentUser?.userId || currentUser?.kullanici_id ? Number(currentUser.userId || currentUser.kullanici_id) : null,
-        teknisyen_id: currentUser?.userId || currentUser?.kullanici_id ? Number(currentUser.userId || currentUser.kullanici_id) : null,
+      // Kural 1: Eğer kullanıcı/teknisyen ID yoksa 0 (Sıfır) GÖNDERME! null veya undefined gönder ki Prisma çökmek yerine boş geçsin.
+      kullanici_id: currentUser?.userId || currentUser?.kullanici_id ? Number(currentUser.userId || currentUser.kullanici_id) : null,
+      teknisyen_id: currentUser?.userId || currentUser?.kullanici_id ? Number(currentUser.userId || currentUser.kullanici_id) : null,
 
-        // Kural 2: Formdan seçilmiş bir firma varsa onu al, yoksa veritabanındaki GÜVENLİ bir ID'yi (13 - Güvenilir Servis A.Ş) varsayılan yap. 1 gönderme!
-        servis_firma_id: form.servis_firma_id ? Number(form.servis_firma_id) : 13,
+      // Kural 2: Formdan seçilmiş bir servis firması varsa onu al, yoksa null gönder (farklı tablolar!)
+      servis_firma_id: form.servis_firma_id ? Number(form.servis_firma_id) : null,
 
-        // Kural 3: Sabit 1 gönderme. Formda arıza türü seçildiyse onu al, seçilmediyse veritabanındaki (3 - Donanım Arızası) ID'sini kullan.
-        ariza_id: form.ariza_id ? Number(form.ariza_id) : 3,
+      // Kural 3: Sabit 1 gönderme. Formda arıza türü seçildiyse onu al, seçilmediyse veritabanındaki (3 - Donanım Arızası) ID'sini kullan.
+      ariza_id: form.ariza_id ? Number(form.ariza_id) : 3,
 
-        ariza_sebebi: form.ariza_sebebi,
-        bakim_maliyet: Number(form.bakim_maliyet) || 0,
-        durus_suresi: Number(form.durus_suresi) || 0,
-        bakim_tarihi: new Date().toISOString(),
-        aciklama: form.aciklama,
-        bakim_turu: form.bakim_turu || "Planlı Bakım"
-      };
-
-      try {
-        const savedRecord = await api.addServiceRecord(payload);
-        setHistory([savedRecord, ...history]);
-        setForm({ ariza_sebebi: "", bakim_maliyet: "", durus_suresi: "", aciklama: "", bakim_turu: "" });
-        setTamamlandiMi(true); // Formu kapat ve başarı mesajını göster
-      } catch (err) {
-        console.error("Kayıt eklenemedi:", err);
-        alert("Bakım kaydedilirken hata oluştu: " + (err.message || "Bilinmeyen hata"));
-      }
+      ariza_sebebi: form.ariza_sebebi,
+      bakim_maliyet: Number(form.bakim_maliyet) || 0,
+      bakim_tarihi: new Date().toISOString(),
+      aciklama: form.aciklama,
+      bakim_tur_id: form.bakim_tur_id ? Number(form.bakim_tur_id) : undefined,
+      degisen_Parcalar: form.degisen_parcalar
     };
 
-    const handleSaveFirm = async (firmData) => {
-      try {
-        const newFirm = await api.addFirm(firmData);
-        setFirms([...firms, newFirm]);
-        setForm({ ...form, servis_firma_id: newFirm.id });
-        setIsModalOpen(false);
-        alert(`${firmData.tip} başarıyla eklendi!`);
-      } catch (error) {
-        alert("Firma eklenirken hata oluştu!");
-      }
-    };
+    try {
+      const savedRecord = await api.addServiceRecord(payload);
+      setHistory([savedRecord, ...history]);
+      setForm({ ariza_sebebi: "", bakim_maliyet: "", aciklama: "", bakim_tur_id: "", degisen_parcalar: [] });
+      setTamamlandiMi(true); // Formu kapat ve başarı mesajını göster
+    } catch (err) {
+      console.error("Kayıt eklenemedi:", err);
+      alert("Bakım kaydedilirken hata oluştu: " + (err.message || "Bilinmeyen hata"));
+    }
+  };
 
-    const openAddFirm = (type) => {
-      setModalType(type);
-      setIsModalOpen(true);
-    };
+  const handleSaveFirm = async (firmData) => {
+    try {
+      const newFirm = await api.addFirm(firmData);
+      setFirms([...firms, newFirm]);
+      setForm({ ...form, servis_firma_id: newFirm.id });
+      setIsModalOpen(false);
+      alert(`${firmData.tip} başarıyla eklendi!`);
+    } catch (error) {
+      alert("Firma eklenirken hata oluştu!");
+    }
+  };
 
-    return (
-      <div style={sayfaStil}>
-        <div style={containerStil}>
-          {/* BAŞLIK */}
-          <div style={headerStil}>
-            <h2 style={{ margin: 0, color: "white", fontSize: "22px" }}>Bakım Kaydı</h2>
-            <div style={badgeStil}>Makine ID: {id}</div>
-          </div>
+  const openAddFirm = (type) => {
+    setModalType(type);
+    setIsModalOpen(true);
+  };
 
-          {/* BAŞARILI TAMAMLAMA MESAJI */}
-          {tamamlandiMi && (
-            <div style={{
-              background: "linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)",
-              color: "white", padding: "20px", borderRadius: "12px",
-              marginBottom: "20px", textAlign: "center", fontSize: "16px",
-              fontWeight: "bold", boxShadow: "0 4px 15px rgba(46, 204, 113, 0.4)",
-            }}>
-              ✅ Bakım kaydı başarıyla eklendi! Makine aktif duruma geçirildi.
-            </div>
-          )}
+  const handleAddPart = () => {
+    if (!selectedPartId) return;
+    const parca = stoklar.find(s => String(s.stok_id) === String(selectedPartId));
+    if (!parca) return;
 
-          {/* QR BAZLI BAKIM TAMAMLAMA FORMU */}
-          {bekleyenIs && (
-            <div style={{
-              background: "white", padding: "25px", borderRadius: "16px",
-              boxShadow: "0 8px 30px rgba(0,0,0,0.15)", marginBottom: "25px",
-              border: "2px solid #e94560"
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
-                <span style={{ fontSize: "24px" }}>📱</span>
-                <div>
-                  <h3 style={{ margin: 0, color: "#e94560", fontSize: "18px" }}>Bakımı Tamamla</h3>
-                  <p style={{ margin: "4px 0 0 0", color: "#7f8c8d", fontSize: "13px" }}>
-                    Bu makine için onaylanmış bir bakım görevi var. Formu doldurup kaydedin.
-                  </p>
-                </div>
-              </div>
+    const varMi = form.degisen_parcalar.find(p => p.parca_id === selectedPartId);
+    if (varMi) {
+      setForm(prev => ({
+        ...prev,
+        degisen_parcalar: prev.degisen_parcalar.map(p =>
+          p.parca_id === selectedPartId ? { ...p, adet: p.adet + 1 } : p
+        )
+      }));
+    } else {
+      setForm(prev => ({
+        ...prev,
+        degisen_parcalar: [...prev.degisen_parcalar, { parca_id: selectedPartId, parca_adi: parca.parca_adi, adet: 1 }]
+      }));
+    }
+    setSelectedPartId("");
+  };
 
-              {/* Bekleyen İş Bilgisi */}
-              <div style={{
-                background: "rgba(233, 69, 96, 0.05)", padding: "12px 16px",
-                borderRadius: "10px", marginBottom: "20px", border: "1px solid rgba(233, 69, 96, 0.15)"
-              }}>
-                <div style={{ fontSize: "12px", color: "#e94560", fontWeight: "bold", textTransform: "uppercase", marginBottom: "4px" }}>Bekleyen Görev</div>
-                <div style={{ fontSize: "14px", color: "#2c3e50" }}>
-                  {bekleyenIs.ariza_notu || "Belirtilmemiş"} — <span style={{ color: "#7f8c8d" }}>{bekleyenIs.kayit_tarihi?.split('T')[0]}</span>
-                </div>
-              </div>
+  const handleRemovePart = (id) => {
+    setForm(prev => ({
+      ...prev,
+      degisen_parcalar: prev.degisen_parcalar.filter(p => p.parca_id !== id)
+    }));
+  };
 
-              {/* Teknisyen Bilgisi (Salt Okunur) */}
-              <div style={{ marginBottom: "15px" }}>
-                <label style={labelStil}>Teknisyen / Sorumlu</label>
-                <div style={{ ...inputStil, background: "#f0f0f0", color: "navy", fontWeight: "bold" }}>
-                  {currentUser.ad || "Bilinmeyen Teknisyen"}
-                </div>
-              </div>
+  const renderPartSelection = () => (
+    <div style={{ marginBottom: "20px", padding: "15px", background: "#f8f9fa", borderRadius: "10px", border: "1px solid #ddd" }}>
+      <label style={labelStil}>Değişen Parçalar </label>
+      <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+        <select
+          value={selectedPartId}
+          onChange={(e) => setSelectedPartId(e.target.value)}
+          style={{ ...inputStil, flex: 1, marginBottom: 0 }}
+        >
+          <option value="">— Parça Seçin —</option>
+          {stoklar.map(s => (
+            <option key={s.stok_id} value={s.stok_id} disabled={s.miktar <= 0}>
+              {s.parca_adi} (Stok: {s.miktar})
+            </option>
+          ))}
+        </select>
+        <button type="button" onClick={handleAddPart} style={{ padding: "0 20px", background: "#3498db", color: "white", border: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}>
+          Ekle
+        </button>
+      </div>
 
-              {/* Maliyet */}
-              <div style={{ marginBottom: "15px" }}>
-                <label style={labelStil}>Maliyet (₺) *</label>
+      {form.degisen_parcalar.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "10px" }}>
+          {form.degisen_parcalar.map((p, idx) => (
+            <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "white", padding: "8px 12px", borderRadius: "6px", border: "1px solid #eee" }}>
+              <span style={{ fontSize: "13px", fontWeight: "bold", color: "#2c3e50" }}>{p.parca_adi}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <input
                   type="number"
-                  name="bakim_maliyet"
-                  placeholder="Örn: 1500"
-                  value={form.bakim_maliyet}
-                  onChange={handleChange}
-                  style={inputStil}
+                  min="1"
+                  value={p.adet}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value) || 1;
+                    setForm(prev => ({
+                      ...prev,
+                      degisen_parcalar: prev.degisen_parcalar.map(item => item.parca_id === p.parca_id ? { ...item, adet: val } : item)
+                    }));
+                  }}
+                  style={{ width: "50px", padding: "4px", textAlign: "center", border: "1px solid #ddd", borderRadius: "4px" }}
                 />
+                <span style={{ fontSize: "12px", color: "#7f8c8d" }}>Adet</span>
+                <button type="button" onClick={() => handleRemovePart(p.parca_id)} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: "16px" }}>✖</button>
               </div>
-
-              {/* Duruş Süresi */}
-              <div style={{ marginBottom: "15px" }}>
-                <label style={labelStil}>Makine Duruş Süresi (Saat)</label>
-                <input
-                  type="number"
-                  name="durus_suresi"
-                  placeholder="Kaç saat sürdü?"
-                  value={form.durus_suresi}
-                  onChange={handleChange}
-                  style={inputStil}
-                />
-              </div>
-
-              {/* Açıklama */}
-              <div style={{ marginBottom: "20px" }}>
-                <label style={labelStil}>Yapılan İşlem Açıklaması</label>
-                <textarea
-                  name="aciklama"
-                  placeholder="Bakım sırasında neler yapıldı, hangi parçalar değiştirildi..."
-                  value={form.aciklama}
-                  onChange={handleChange}
-                  style={{ ...inputStil, height: "100px", resize: "vertical" }}
-                />
-              </div>
-
-              {/* KAYDET BUTONU */}
-              <button
-                onClick={handleBakimiTamamla}
-                disabled={kaydetYukleniyor}
-                style={{
-                  width: "100%", padding: "16px",
-                  background: kaydetYukleniyor
-                    ? "#95a5a6"
-                    : "linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)",
-                  color: "white", border: "none", borderRadius: "10px",
-                  fontSize: "16px", fontWeight: "bold",
-                  cursor: kaydetYukleniyor ? "not-allowed" : "pointer",
-                  boxShadow: kaydetYukleniyor ? "none" : "0 4px 15px rgba(39, 174, 96, 0.3)",
-                  transition: "all 0.3s ease"
-                }}
-              >
-                {kaydetYukleniyor ? "⏳ Kaydediliyor..." : "✅ Bakımı Kaydet ve Tamamla"}
-              </button>
             </div>
-          )}
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
-          {!tamamlandiMi && (
-            <div style={icerikStil}>
-              {/* SOL - GEÇMİŞ KAYITLAR */}
-              <div style={{ flex: 1 }}>
-                <h3 style={{ ...baslikStil, color: "white" }}>Geçmiş İşlemler</h3>
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  {sortedHistory.map((item, index) => {
-                    const isTarihArray = Array.isArray(item.bakim_tarihi) && item.bakim_tarihi.length > 0;
-                    const tarihDate = isTarihArray ? item.bakim_tarihi[0] : item.bakim_tarihi;
-                    const formatTarih = tarihDate ? new Date(tarihDate).toLocaleDateString("tr-TR") : "Belirtilmemiş";
-
-                    const formatMaliyet = Array.isArray(item.bakim_maliyet) ? item.bakim_maliyet[0] : item.bakim_maliyet;
-
-                    return (
-                      <div key={index} style={kayitKartStil}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                          <div>
-                            <div style={tarihStil}>{formatTarih}</div>
-                            <div style={{ fontWeight: "bold", color: "navy", fontSize: "16px", marginTop: "10px" }}>
-                              İşlem: {item.bakim_turu?.bakim_tur_adi || "Bakım"}
-                            </div>
-                            <div style={{ color: "#34495e", fontSize: "14px", marginTop: "4px" }}>
-                              Duruş Süresi: <span style={{ color: "#e74c3c", fontWeight: "bold" }}>{item.durus_suresi || 0} Saat</span> | Maliyet: {formatMaliyet} ₺
-                            </div>
-                            <p style={{ margin: 0, color: "#555", fontSize: "14px", marginTop: "8px", fontStyle: "italic" }}>"{item.aciklama}"</p>
-                          </div>
-                          <div style={{ textAlign: "right" }}>
-                            <div style={{ fontSize: "12px", color: "#7f8c8d", marginBottom: "4px", fontWeight: "bold" }}>İşlem Puanı</div>
-                            <div style={{ display: "flex", gap: "2px" }}>
-                              {[1, 2, 3, 4, 5].map(star => (
-                                <span key={star}
-                                  onClick={() => handleRecordPuanla(item.bakim_id, star)}
-                                  style={{
-                                    cursor: "pointer",
-                                    fontSize: "20px",
-                                    color: (item.servis_puan?.puan || 0) >= star ? "#f39c12" : "#dfe6e9",
-                                    transition: "transform 0.1s"
-                                  }}
-                                  onMouseOver={(e) => e.target.style.transform = "scale(1.2)"}
-                                  onMouseOut={(e) => e.target.style.transform = "scale(1)"}
-                                >
-                                  ★
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* SAĞ - YENİ BAKIM KAYDI (Bekleyen iş yoksa göster) */}
-              {!bekleyenIs && (
-                <div style={yeniKayitAlaniStil}>
-                  <h3 style={baslikStil}>Yeni Bakım Kaydı</h3>
-
-                  {/* İşlemi Yapan Kişi Bilgisi (Salt Okunur) */}
-                  <div style={{ marginBottom: "15px" }}>
-                    <label style={labelStil}>Teknisyen / Sorumlu</label>
-                    <div style={{ ...inputStil, background: "#f0f0f0", color: "navy", fontWeight: "bold" }}>
-                      {currentUser.ad || "Bilinmeyen Teknisyen"}
-                    </div>
-                  </div>
-
-                  {/* Sistem Tarafından Kaydedilen Tarih (Salt Okunur) */}
-                  <div style={{ marginBottom: "15px" }}>
-                    <label style={labelStil}>İşlem Tarihi (Sistem Tarafından Kaydedilir)</label>
-                    <input
-                      type="text"
-                      value={new Date().toLocaleDateString("tr-TR")}
-                      readOnly
-                      style={{ ...inputStil, background: "#eee", cursor: "not-allowed", color: "#666" }}
-                    />
-                  </div>
-
-                  {/* 3. Neden Yapıldığı (ariza_sebebi) */}
-                  <div style={{ marginBottom: "15px" }}>
-                    <label style={labelStil}>Arıza Sebebi</label>
-                    <input
-                      type="text"
-                      name="ariza_sebebi"
-                      placeholder="Örn: Sensör Hatası, Periyodik Bakım"
-                      value={form.ariza_sebebi}
-                      onChange={handleChange}
-                      style={inputStil}
-                    />
-                  </div>
-
-                  {/* Bakım Türü (bakim_turu) */}
-                  <div style={{ marginBottom: "15px" }}>
-                    <label style={labelStil}>Bakım Türü</label>
-                    <input
-                      type="text"
-                      name="bakim_turu"
-                      placeholder="Örn: Rutin, Planlı"
-                      value={form.bakim_turu}
-                      onChange={handleChange}
-                      style={inputStil}
-                    />
-                  </div>
-
-                  {/* 4. Makine Duruş Süresi (Yeni) */}
-                  <div style={{ marginBottom: "15px" }}>
-                    <label style={labelStil}>Makine Duruş Süresi (Saat)</label>
-                    <input
-                      type="number"
-                      name="durus_suresi"
-                      placeholder="Kaç saat sürdü?"
-                      value={form.durus_suresi}
-                      onChange={handleChange}
-                      style={inputStil}
-                    />
-                  </div>
-
-                  {/* 5. Maliyet (bakim_maliyet) */}
-                  <div style={{ marginBottom: "15px" }}>
-                    <label style={labelStil}>Maliyet (₺)</label>
-                    <input
-                      type="number"
-                      name="bakim_maliyet"
-                      placeholder="Örn: 1500"
-                      value={form.bakim_maliyet}
-                      onChange={handleChange}
-                      style={inputStil}
-                    />
-                  </div>
-
-                  {/* 5. Açıklama */}
-                  <div style={{ marginBottom: "20px" }}>
-                    <label style={labelStil}>Açıklama</label>
-                    <textarea
-                      name="aciklama"
-                      placeholder="Bakım hakkında açıklama yazın..."
-                      value={form.aciklama}
-                      onChange={handleChange}
-                      style={{ ...inputStil, height: "100px", resize: "vertical" }}
-                    />
-                  </div>
-
-                  <button onClick={addRecord} style={butonStil}>Kaydı Ekle</button>
-                </div>
-              )}
-            </div>
-          )}
+  return (
+    <div className="app-container" style={sayfaStil}>
+      <div className="app-content-wrapper app-content" style={containerStil}>
+        {/* BAŞLIK */}
+        <div className="responsive-flex-col" style={{ ...headerStil, flexWrap: "wrap", gap: "10px" }}>
+          <h2 style={{ margin: 0, color: "white", fontSize: "22px" }}>Bakım Kaydı</h2>
+          <div style={badgeStil}>Makine ID: {id}</div>
         </div>
 
-        <FirmModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          onSave={handleSaveFirm}
-          initialType={modalType}
-        />
+        {/* BAŞARILI TAMAMLAMA MESAJI */}
+        {tamamlandiMi && (
+          <div style={{
+            background: "linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)",
+            color: "white", padding: "20px", borderRadius: "12px",
+            marginBottom: "20px", textAlign: "center", fontSize: "16px",
+            fontWeight: "bold", boxShadow: "0 4px 15px rgba(46, 204, 113, 0.4)",
+          }}>
+            ✅ Bakım kaydı başarıyla eklendi! Makine aktif duruma geçirildi.
+          </div>
+        )}
+
+        {/* QR BAZLI BAKIM TAMAMLAMA FORMU */}
+        {bekleyenIs && (
+          <div style={{
+            background: "white", padding: "25px", borderRadius: "16px",
+            boxShadow: "0 8px 30px rgba(0,0,0,0.15)", marginBottom: "25px",
+            border: "2px solid #e94560"
+          }}>
+            <div className="responsive-flex-col" style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
+
+              <div>
+                <h3 style={{ margin: 0, color: "#e94560", fontSize: "18px" }}>Bakımı Tamamla</h3>
+                <p style={{ margin: "4px 0 0 0", color: "#7f8c8d", fontSize: "13px" }}>
+                  Bu makine için onaylanmış bir bakım görevi var. Formu doldurup kaydedin.
+                </p>
+              </div>
+            </div>
+
+            {/* Bekleyen İş Bilgisi */}
+            <div style={{
+              background: "rgba(233, 69, 96, 0.05)", padding: "12px 16px",
+              borderRadius: "10px", marginBottom: "20px", border: "1px solid rgba(233, 69, 96, 0.15)"
+            }}>
+              <div style={{ fontSize: "12px", color: "#e94560", fontWeight: "bold", textTransform: "uppercase", marginBottom: "4px" }}>Bekleyen Görev</div>
+              <div style={{ fontSize: "14px", color: "#2c3e50" }}>
+                {bekleyenIs.ariza_notu || "Belirtilmemiş"} — <span style={{ color: "#7f8c8d" }}>{bekleyenIs.kayit_tarihi?.split('T')[0]}</span>
+              </div>
+            </div>
+
+            {/* Teknisyen Bilgisi (Salt Okunur) */}
+            <div style={{ marginBottom: "15px" }}>
+              <label style={labelStil}>Teknisyen / Sorumlu</label>
+              <div style={{ ...inputStil, background: "#f0f0f0", color: "navy", fontWeight: "bold" }}>
+                {currentUser.ad || "Bilinmeyen Teknisyen"}
+              </div>
+            </div>
+
+            {/* Maliyet */}
+            <div style={{ marginBottom: "15px" }}>
+              <label style={labelStil}>Maliyet (₺) *</label>
+              <input
+                type="number"
+                name="bakim_maliyet"
+                placeholder="Örn: 1500"
+                value={form.bakim_maliyet}
+                onChange={handleChange}
+                style={inputStil}
+              />
+            </div>
+
+
+
+            {/* Açıklama */}
+            <div style={{ marginBottom: "20px" }}>
+              <label style={labelStil}>Yapılan İşlem Açıklaması</label>
+              <textarea
+                name="aciklama"
+                placeholder="Bakım sırasında neler yapıldı, hangi parçalar değiştirildi..."
+                value={form.aciklama}
+                onChange={handleChange}
+                style={{ ...inputStil, height: "100px", resize: "vertical" }}
+              />
+            </div>
+
+            {renderPartSelection()}
+
+            {/* KAYDET BUTONU */}
+            <button
+              onClick={handleBakimiTamamla}
+              disabled={kaydetYukleniyor}
+              style={{
+                width: "100%", padding: "16px",
+                background: kaydetYukleniyor
+                  ? "#95a5a6"
+                  : "linear-gradient(135deg, #27ae60 0%, #2ecc71 100%)",
+                color: "white", border: "none", borderRadius: "10px",
+                fontSize: "16px", fontWeight: "bold",
+                cursor: kaydetYukleniyor ? "not-allowed" : "pointer",
+                boxShadow: kaydetYukleniyor ? "none" : "0 4px 15px rgba(39, 174, 96, 0.3)",
+                transition: "all 0.3s ease"
+              }}
+            >
+              {kaydetYukleniyor ? "⏳ Kaydediliyor..." : "✅ Bakımı Kaydet ve Tamamla"}
+            </button>
+          </div>
+        )}
+
+        {!tamamlandiMi && (
+          <div className="responsive-flex-col" style={icerikStil}>
+            {/* SOL - GEÇMİŞ KAYITLAR */}
+            <div style={{ flex: 1 }}>
+              <h3 style={{ ...baslikStil, color: "white" }}>Geçmiş İşlemler</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {sortedHistory.slice(0, 5).map((item, index) => {
+                  const isTarihArray = Array.isArray(item.bakim_tarihi) && item.bakim_tarihi.length > 0;
+                  const tarihDate = isTarihArray ? item.bakim_tarihi[0] : item.bakim_tarihi;
+                  const formatTarih = tarihDate ? new Date(tarihDate).toLocaleDateString("tr-TR") : "Belirtilmemiş";
+
+                  const formatMaliyet = Array.isArray(item.bakim_maliyet) ? item.bakim_maliyet[0] : item.bakim_maliyet;
+
+                  return (
+                    <div key={index} style={kayitKartStil}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div>
+                          <div style={tarihStil}>{formatTarih}</div>
+                          <div style={{ fontWeight: "bold", color: "navy", fontSize: "16px", marginTop: "10px" }}>
+                            İşlem: {item.bakim_turu?.bakim_tur_adi || "Bakım"}
+                          </div>
+                          <div style={{ color: "#34495e", fontSize: "14px", marginTop: "4px" }}>
+                            Duruş Süresi: <span style={{ color: "#e74c3c", fontWeight: "bold" }}>{item.durus_suresi || 0} Saat</span>
+                          </div>
+                          <p style={{ margin: 0, color: "#555", fontSize: "14px", marginTop: "8px", fontStyle: "italic" }}>"{item.aciklama}"</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* SAĞ - YENİ BAKIM KAYDI (Bekleyen iş yoksa göster) */}
+            {!bekleyenIs && (
+              <div style={yeniKayitAlaniStil}>
+                <h3 style={baslikStil}>Yeni Bakım Kaydı</h3>
+
+                {/* İşlemi Yapan Kişi Bilgisi (Salt Okunur) */}
+                <div style={{ marginBottom: "15px" }}>
+                  <label style={labelStil}>Teknisyen / Sorumlu</label>
+                  <div style={{ ...inputStil, background: "#f0f0f0", color: "navy", fontWeight: "bold" }}>
+                    {currentUser.ad || "Bilinmeyen Teknisyen"}
+                  </div>
+                </div>
+
+                {/* Sistem Tarafından Kaydedilen Tarih (Salt Okunur) */}
+                <div style={{ marginBottom: "15px" }}>
+                  <label style={labelStil}>İşlem Tarihi (Sistem Tarafından Kaydedilir)</label>
+                  <input
+                    type="text"
+                    value={new Date().toLocaleDateString("tr-TR")}
+                    readOnly
+                    style={{ ...inputStil, background: "#eee", cursor: "not-allowed", color: "#666" }}
+                  />
+                </div>
+
+                {/* 3. Neden Yapıldığı (ariza_sebebi / ariza_id) */}
+                <div style={{ marginBottom: "15px" }}>
+                  <label style={labelStil}>Arıza</label>
+                  <select
+                    name="ariza_id"
+                    value={form.ariza_id}
+                    onChange={(e) => {
+                      const selectedAriza = arizaSecenekleri.find(a => String(a.ariza_tur_id) === e.target.value);
+                      setForm({
+                        ...form,
+                        ariza_id: e.target.value,
+                        ariza_sebebi: selectedAriza ? selectedAriza.ariza_tur : ""
+                      });
+                    }}
+                    style={inputStil}
+                  >
+                    <option value="">— Arıza Seçin —</option>
+                    {arizaSecenekleri.map((ariza) => (
+                      <option key={ariza.ariza_tur_id} value={ariza.ariza_tur_id}>{ariza.ariza_tur}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Bakım Türü (bakim_turu) */}
+                <div style={{ marginBottom: "15px" }}>
+                  <label style={labelStil}>Bakım Türü</label>
+                  <select
+                    name="bakim_tur_id"
+                    value={form.bakim_tur_id}
+                    onChange={handleChange}
+                    style={inputStil}
+                  >
+                    <option value="">— Bakım Türü Seçin —</option>
+                    {bakimTurleri.map((tur) => (
+                      <option key={tur.bakim_tur_id} value={tur.bakim_tur_id}>{tur.bakim_tur_adi}</option>
+                    ))}
+                  </select>
+                </div>
+
+
+
+                {/* 5. Maliyet (bakim_maliyet) */}
+                <div style={{ marginBottom: "15px" }}>
+                  <label style={labelStil}>Maliyet (₺)</label>
+                  <input
+                    type="number"
+                    name="bakim_maliyet"
+                    placeholder="Örn: 1500"
+                    value={form.bakim_maliyet}
+                    onChange={handleChange}
+                    style={inputStil}
+                  />
+                </div>
+
+                {/* 5. Açıklama */}
+                <div style={{ marginBottom: "20px" }}>
+                  <label style={labelStil}>Açıklama</label>
+                  <textarea
+                    name="aciklama"
+                    placeholder="Bakım hakkında açıklama yazın..."
+                    value={form.aciklama}
+                    onChange={handleChange}
+                    style={{ ...inputStil, height: "100px", resize: "vertical" }}
+                  />
+                </div>
+
+                {renderPartSelection()}
+
+                <button onClick={addRecord} style={butonStil}>Kaydı Ekle</button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
-    );
-  }
+
+      <FirmModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveFirm}
+        initialType={modalType}
+      />
+    </div>
+  );
+}
 
 const miniButonStil = {
   padding: "4px 8px",
@@ -531,13 +602,15 @@ const tarihStil = {
 };
 
 const yeniKayitAlaniStil = {
-  width: "380px",
+  width: "100%",
+  maxWidth: "380px",
   flexShrink: 0,
   background: "white",
   padding: "25px",
   borderRadius: "12px",
   boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
   alignSelf: "flex-start",
+  boxSizing: "border-box",
 };
 
 const labelStil = {

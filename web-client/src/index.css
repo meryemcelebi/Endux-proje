@@ -81,3 +81,133 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* ==================================================
+   PWA & RESPONSIVE DESIGN (MOBIL UYUMLULUK) KURALLARI
+   ================================================== */
+
+/* Ana yerleşim kapsayıcıları */
+@media (max-width: 768px) {
+  /* Tüm sayfada kaydırmayı kesin olarak aktif et */
+  html, body, #root {
+    overflow-y: auto !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app-container {
+    display: block !important;
+    width: 100% !important;
+    min-height: 100vh !important;
+    padding: 10px !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+
+  .app-content-wrapper {
+    width: 100% !important;
+    height: auto !important;
+    display: block !important;
+  }
+
+  .app-content {
+    padding: 5px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .sidebar-container {
+    width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    padding: 15px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    position: relative;
+    z-index: 100;
+  }
+
+  .sidebar-container nav {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    margin-top: 10px;
+  }
+
+  .sidebar-container nav a {
+    flex: 1 1 45% !important;
+    font-size: 13px !important;
+    padding: 10px !important;
+    justify-content: center;
+  }
+
+  .navbar-container {
+    padding: 15px !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 15px !important;
+    height: auto !important;
+  }
+
+  .navbar-container input,
+  .navbar-container > div {
+    width: 100% !important;
+  }
+
+  table {
+    display: block !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+  }
+
+  div[style*="display: grid"], 
+  div[style*="display:grid"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .responsive-flex-col,
+  div[style*="icerikStil"], 
+  div[style*="flex-direction: row"] {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+  }
+
+  h1, h2, h3 {
+    font-size: 1.2rem !important;
+    word-break: break-word !important;
+  }
+
+  /* Checklist Özel Düzenlemeler */
+  div[style*="soruKartStil"], 
+  div[style*="padding: 16px"] {
+    padding: 10px !important;
+    margin-bottom: 8px !important;
+  }
+
+  button[style*="display: flex"] {
+    padding: 8px 10px !important;
+    gap: 6px !important;
+  }
+
+  button[style*="display: flex"] > div {
+    width: 20px !important;
+    height: 20px !important;
+    font-size: 11px !important;
+  }
+
+  button[style*="display: flex"] span {
+    font-size: 12px !important;
+  }
+
+  div[style*="position: fixed"] > div[style*="width"] {
+    width: 95% !important;
+    margin: 10px auto !important;
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+  }
+}
