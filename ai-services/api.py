@@ -107,6 +107,8 @@ class TahminSonucu(BaseModel):
 # ==========================================
 KURAL_MOTORU = {
     "YOK": {"tahmini_maliyet": 0.00, "tahmini_durus_suresi": 0.00, "ekip": "Gerek Yok", "parca": "Sorun Yok"},
+    # GENEL KRİTİK DURUM (Güvenlik Ağı — birden fazla parametre aynı anda kötüyse)
+    "GENEL_KRITIK_DURUM": {"tahmini_maliyet": 20000.00, "tahmini_durus_suresi": 16.00, "ekip": "Acil Bakım Ekibi", "parca": "Kapsamlı kontrol gerekli"},
     # CNC
     "SPINDLE_RULMAN_ARIZASI": {"tahmini_maliyet": 12500.00, "tahmini_durus_suresi": 12.00, "ekip": "Mekanik Bakım", "parca": "İş Mili Rulmanı"},
     "EKSEN_MOTOR_ARIZASI": {"tahmini_maliyet": 25000.00, "tahmini_durus_suresi": 8.00, "ekip": "Elektrik/Otomasyon", "parca": "Eksen Sürücüsü"},
@@ -170,6 +172,83 @@ async def tahmin_yap(istek: BakimIstegi):
             # Arıza VAR kararı çıktıysa, risk skoru doğrudan modelin o arızaya verdiği ihtimaldir.
             # Örn: Model %85 Rulman Arızası diyorsa, risk skoru 85'tir (Kırmızı).
             risk_skoru = round(en_yuksek_olasilik / 100, 2)
+
+        # ═══════════════════════════════════════════════════════════════
+        # 3.5 PARAMETRE BAZLI GÜVENLİK AĞI (FMEA Severity Weighted)
+        #
+        # Her parametrenin ağırlığı FMEA (Failure Mode and Effects Analysis)
+        # Severity Rating'e (ISO 17359) dayalıdır. Değerler 1-10 skalasından
+        # normalize edilmiştir (10 → 1.0 = en kritik).
+        #
+        # Referans: FMEA RPN Metodolojisi
+        #   - Severity 9-10: Makinenin tamamen durmasına yol açar
+        #   - Severity 7-8 : Üretim kaybı, büyük onarım gerektirir
+        #   - Severity 4-6 : Performans düşüşü, yeniden işleme gerektirir
+        #   - Severity 1-3 : İhmal edilebilir etki
+        # ═══════════════════════════════════════════════════════════════
+
+        # FMEA Severity Ağırlık Tablosu (Parametre adı → Normalize ciddiyet puanı)
+        FMEA_AGIRLIK = {
+            # ── ORTAK PARAMETRELER ──
+            "sicaklik":         0.80,  # Severity 8/10 — Aşırı ısınma motor/rulman hasarı yapar
+            "titresim":         0.90,  # Severity 9/10 — Rulman arızasının en erken habercisi
+            "ses_anomalisi":    0.70,  # Severity 7/10 — Mekanik aşınma göstergesi
+            "yag_durumu":       0.60,  # Severity 6/10 — Yağlama kaybı uzun vadede hasar verir
+
+            # ── CNC ÖZEL ──
+            "is_mili_ses_ve_titresim": 0.90,  # Severity 9/10 — Spindle rulman arızası direkt göstergesi
+            "eksen_olcu_sapmasi":      0.90,  # Severity 9/10 — Ürün kalitesini doğrudan etkiler
+            "takim_zorlanma_durumu":    0.70,  # Severity 7/10 — Takım kırılma riski
+            "islenen_yuzey_kalitesi":   0.80,  # Severity 8/10 — Üretim kalite kaybı
+            "is_mili_govde_sicakligi":  0.80,  # Severity 8/10 — Motor yanma riski
+            "bor_yagi_ve_sogutma":      0.60,  # Severity 6/10 — Soğutma kaybı sıcaklık artışına yol açar
+            "pnomatik_hava_basinci":    0.50,  # Severity 5/10 — Bağlama sorunları
+            "kizak_yag_seviyesi":       0.50,  # Severity 5/10 — Uzun vadeli aşınma
+
+            # ── PRES ÖZEL ──
+            "hidrolik_basinc_seviyesi":    1.00,  # Severity 10/10 — Ana fonksiyon kaybı, makine durur
+            "hidrolik_yag_sicakligi":      0.80,  # Severity 8/10 — Pompa sağlığı göstergesi
+            "yag_kacak_durumu":            0.90,  # Severity 9/10 — Güvenlik riski + çevre tehlikesi
+            "koc_vuruntu_sesi":            0.70,  # Severity 7/10 — Mekanik aşınma
+            "koc_kilavuz_boslugu":         0.80,  # Severity 8/10 — Hassasiyet kaybı
+            "kavrama_fren_hava_basinci":   1.00,  # Severity 10/10 — İŞ GÜVENLİĞİ KRİTİK
+            "tonaj_sapmasi":               0.90,  # Severity 9/10 — Ürün kalite kaybı
+            "basilan_parca_kalitesi":      0.80,  # Severity 8/10 — Çıktı kalitesi
+
+            # ── ENJEKSİYON ÖZEL ──
+            "kovan_rezistans_sicakligi":   0.80,  # Severity 8/10 — Eriyik kalite kaybı
+            "eriyik_plastik_kokusu":       0.70,  # Severity 7/10 — Malzeme bozulma göstergesi
+            "vida_donus_sesi":             0.70,  # Severity 7/10 — Vida/kovan aşınması
+            "enjeksiyon_baski_basinci":    0.90,  # Severity 9/10 — Ana fonksiyon parametresi
+            "mengene_kapanma_basinci":     0.90,  # Severity 9/10 — Kalıp güvenliği
+            "kalip_sogutma_suyu_debisi":   0.60,  # Severity 6/10 — Çevrim süresi etkisi
+            "sogutma_suyu_sicakligi":      0.60,  # Severity 6/10 — Parça kalitesi etkisi
+            "eksik_baski_durumu":          0.80,  # Severity 8/10 — Fire üretim
+            "capakli_baski_durumu":        0.70,  # Severity 7/10 — Kalıp aşınma göstergesi
+        }
+
+        # Ağırlıklı risk hesaplama
+        agirlikli_toplam = 0.0
+        maksimum_agirlikli_toplam = 0.0
+
+        for parametre_adi in ozellikler:
+            deger = istek_dict[parametre_adi]            # 0, 1 veya 2
+            agirlik = FMEA_AGIRLIK.get(parametre_adi, 0.50)  # Bilinmeyen parametre → orta ağırlık
+            # Değeri 0-1 arasına normalize et (0→0, 1→0.5, 2→1.0)
+            normalize_deger = deger / 2.0
+            agirlikli_toplam += normalize_deger * agirlik
+            maksimum_agirlikli_toplam += agirlik  # Tüm değerler 2 olsaydı
+
+        if maksimum_agirlikli_toplam > 0:
+            parametre_risk = round(agirlikli_toplam / maksimum_agirlikli_toplam, 2)
+
+            # Eğer parametre riski model riskinden yüksekse → güvenlik ağı devreye girer
+            if parametre_risk > risk_skoru:
+                print(f"⚠️ GÜVENLİK AĞI [FMEA]: Model riski {risk_skoru} → Parametre riski {parametre_risk}")
+                risk_skoru = parametre_risk
+                # Model "YOK" demiş ama parametreler tehlike gösteriyorsa
+                if ariza_ad == "YOK" and parametre_risk >= 0.50:
+                    ariza_ad = "GENEL_KRITIK_DURUM"
 
         # Kıyamet Senaryosu ve 10 Saniye Kalkanı
         if ariza_ad != "YOK" and istek.form_doldurma_suresi_sn < 10:
