@@ -6,7 +6,9 @@ import {
      getVardiyaSaatleri,
      setVardiyaSaatleri,
      getMakineTuruDurusMaliyetleri,
-     setMakineTuruDurusMaliyetleri
+     setMakineTuruDurusMaliyetleri,
+     siralaArizaTurleri,
+     siralaBakimTurleri
 } from '../controllers/sistemKontrol';
 
 const router = Router();
@@ -18,5 +20,7 @@ router.get('/vardiya-saatleri', getVardiyaSaatleri);
 router.post('/vardiya-saatleri', setVardiyaSaatleri);
 router.get('/makine-turu-durus-maliyetleri', getMakineTuruDurusMaliyetleri);
 router.post('/makine-turu-durus-maliyetleri', setMakineTuruDurusMaliyetleri);
+router.get('/ariza-turleri', siralaArizaTurleri);
+router.get('/bakim-turleri', siralaBakimTurleri);
 
 export default router;

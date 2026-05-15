@@ -9,6 +9,7 @@ export default function Servis() {
   const [arizaSecenekleri, setArizaSecenekleri] = useState([]);
   const [history, setHistory] = useState([]); // Makineye ait eski servis kayıtları
   const [firms, setFirms] = useState([]); // Sistemdeki tüm kayıtlı firmalar (Servis/Tedarikçi)
+  const [bakimTurleri, setBakimTurleri] = useState([]); // Sistemdeki bakım türleri
   const [isModalOpen, setIsModalOpen] = useState(false); // Yeni firma ekleme modalı durumu
   const [modalType, setModalType] = useState("Servis"); // Eklenecek firmanın türü
 
@@ -24,10 +25,12 @@ export default function Servis() {
   // Bakım formu state'leri
   const [form, setForm] = useState({
     bakim_maliyet: "",
+    durus_suresi: "",
     aciklama: "",
     ariza_sebebi: "",
     ariza_id: "",
-    bakim_turu: "",
+    bakim_tur_id: "",
+    servis_firma_id: "",
     degisen_parcalar: []
   });
 
@@ -39,15 +42,17 @@ export default function Servis() {
     const fetchData = async () => {
       try {
         // Makineye özel servis geçmişini ve genel firma listesini çek (Paralel istek)
-        const [histData, firmData, stokData, makineData] = await Promise.all([
+        const [histData, firmData, stokData, makineData, bakimData] = await Promise.all([
           api.getServiceHistory(id),
           api.getFirms(),
           api.getInventory(),
-          api.getMachineDetails(id)
+          api.getMachineDetails(id),
+          api.getSystemBakimTurleri()
         ]);
         setHistory(histData);
         setFirms(firmData);
         setStoklar(stokData);
+        setBakimTurleri(bakimData);
         if (makineData && makineData.makine_tur_id) {
           try {
             const arizalar = await api.getSystemArizaTurleri(makineData.makine_tur_id);
@@ -113,7 +118,10 @@ export default function Servis() {
         bakim_id: Number(bekleyenIs.bakim_id),
         bakim_maliyet: Number(form.bakim_maliyet),
         aciklama: String(form.aciklama || form.ariza_sebebi || "").trim(),
-        degisen_parcalar: form.degisen_parcalar
+        degisen_parcalar: form.degisen_parcalar,
+        durus_suresi: form.durus_suresi ? Number(form.durus_suresi) : undefined,
+        servis_firma_id: form.servis_firma_id ? Number(form.servis_firma_id) : undefined,
+        bakim_tur_id: form.bakim_tur_id ? Number(form.bakim_tur_id) : undefined
       };
 
       console.log("Gönderilen veriler:", gonderilecekVeri);
@@ -122,7 +130,7 @@ export default function Servis() {
 
       setTamamlandiMi(true);
       setBekleyenIs(null);
-      setForm({ bakim_maliyet: "", aciklama: "", ariza_sebebi: "", bakim_turu: "", degisen_parcalar: [] });
+      setForm({ bakim_maliyet: "", aciklama: "", ariza_sebebi: "", bakim_tur_id: "", degisen_parcalar: [] });
 
       // Geçmişi yenile
       try {
@@ -153,24 +161,25 @@ export default function Servis() {
       kullanici_id: currentUser?.userId || currentUser?.kullanici_id ? Number(currentUser.userId || currentUser.kullanici_id) : null,
       teknisyen_id: currentUser?.userId || currentUser?.kullanici_id ? Number(currentUser.userId || currentUser.kullanici_id) : null,
 
-      // Kural 2: Formdan seçilmiş bir firma varsa onu al, yoksa kullanıcının kendi firma ID'sini kullan, ikisi de yoksa 13 (varsayılan) yap.
-      servis_firma_id: form.servis_firma_id ? Number(form.servis_firma_id) : (currentUser.firma_id ? Number(currentUser.firma_id) : 13),
+      // Kural 2: Eğer giriş yapan kullanıcı dış servis ise (firma_id doluysa) onu kullan, yoksa formdan seçilmiş olanı al.
+      servis_firma_id: currentUser?.firma_id ? Number(currentUser.firma_id) : (form.servis_firma_id ? Number(form.servis_firma_id) : null),
 
       // Kural 3: Sabit 1 gönderme. Formda arıza türü seçildiyse onu al, seçilmediyse veritabanındaki (3 - Donanım Arızası) ID'sini kullan.
       ariza_id: form.ariza_id ? Number(form.ariza_id) : 3,
 
       ariza_sebebi: form.ariza_sebebi,
       bakim_maliyet: Number(form.bakim_maliyet) || 0,
+      durus_suresi: form.durus_suresi ? Number(form.durus_suresi) : null,
       bakim_tarihi: new Date().toISOString(),
       aciklama: form.aciklama,
-      bakim_turu: form.bakim_turu || "Planlı Bakım",
+      bakim_tur_id: form.bakim_tur_id ? Number(form.bakim_tur_id) : undefined,
       degisen_Parcalar: form.degisen_parcalar
     };
 
     try {
       const savedRecord = await api.addServiceRecord(payload);
       setHistory([savedRecord, ...history]);
-      setForm({ ariza_sebebi: "", bakim_maliyet: "", aciklama: "", bakim_turu: "", degisen_parcalar: [] });
+      setForm({ ariza_sebebi: "", bakim_maliyet: "", durus_suresi: "", aciklama: "", bakim_tur_id: "", degisen_parcalar: [] });
       setTamamlandiMi(true); // Formu kapat ve başarı mesajını göster
     } catch (err) {
       console.error("Kayıt eklenemedi:", err);
@@ -464,15 +473,36 @@ export default function Servis() {
                 {/* Bakım Türü (bakim_turu) */}
                 <div style={{ marginBottom: "15px" }}>
                   <label style={labelStil}>Bakım Türü</label>
-                  <input
-                    type="text"
-                    name="bakim_turu"
-                    placeholder="Örn: Rutin, Planlı"
-                    value={form.bakim_turu}
+                  <select
+                    name="bakim_tur_id"
+                    value={form.bakim_tur_id}
                     onChange={handleChange}
                     style={inputStil}
-                  />
+                  >
+                    <option value="">— Bakım Türü Seçin —</option>
+                    {bakimTurleri.map((tur) => (
+                      <option key={tur.bakim_tur_id} value={tur.bakim_tur_id}>{tur.bakim_tur_adi}</option>
+                    ))}
+                  </select>
                 </div>
+
+                {/* Servis Firması (Dış servis ataması için) - Sadece kendi firma_id'si olmayanlar (iç personeller) görebilir */}
+                {!currentUser?.firma_id && (
+                  <div style={{ marginBottom: "15px" }}>
+                    <label style={labelStil}>Servis Firması (Dış Servis)</label>
+                    <select
+                      name="servis_firma_id"
+                      value={form.servis_firma_id}
+                      onChange={handleChange}
+                      style={inputStil}
+                    >
+                      <option value="">— İç Personel Bakımı (Firma Seçmeyin) —</option>
+                      {firms.filter(f => f.tip === "Servis").map((f) => (
+                        <option key={f.id} value={f.id}>{f.ad}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
 
 
@@ -486,6 +516,21 @@ export default function Servis() {
                     value={form.bakim_maliyet}
                     onChange={handleChange}
                     style={inputStil}
+                  />
+                </div>
+
+                {/* 5b. Duruş Süresi */}
+                <div style={{ marginBottom: "15px" }}>
+                  <label style={labelStil}>Duruş Süresi (Saat)</label>
+                  <input
+                    type="number"
+                    name="durus_suresi"
+                    placeholder="Örn: 2.5"
+                    value={form.durus_suresi}
+                    onChange={handleChange}
+                    style={inputStil}
+                    step="0.5"
+                    min="0"
                   />
                 </div>
 

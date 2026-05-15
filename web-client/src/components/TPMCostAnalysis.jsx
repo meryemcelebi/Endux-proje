@@ -1,16 +1,41 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
+import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
 
+/**
+ * TPM Maliyet Analizi Bileşeni (Yeniden Tasarım)
+ * Tüm veriler veritabanından gelir — mock veri yok.
+ * - Kompakt başlık + toplam tutar
+ * - Stacked Progress Bar (yatay çubuk)
+ * - Minimalist 4 satırlık dağılım listesi
+ * - 3 aylık gerçek trend grafiği (sparkline area chart)
+ */
 export default function TPMCostAnalysis({ data }) {
   const navigate = useNavigate();
-  const [selectedCostId, setSelectedCostId] = useState("all");
+
+  // Ay seçici dropdown için son 6 ayın listesini oluştur
+  const months = useMemo(() => {
+    const list = [];
+    const now = new Date();
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const label = d.toLocaleDateString("tr-TR", { month: "long", year: "numeric" });
+      list.push({
+        label: label.charAt(0).toUpperCase() + label.slice(1),
+        value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      });
+    }
+    return list;
+  }, []);
+  const [selectedMonth, setSelectedMonth] = useState(months[0]?.value || "");
 
   const {
     planli_bakim = 0,
     arizi_bakim = 0,
     parca_gideri = 0,
     dis_servis = 0,
+    durus_maliyeti = 0,
+    aylik_trend = [],
   } = data || {};
 
   const formatCurrency = (val) => {
@@ -21,175 +46,358 @@ export default function TPMCostAnalysis({ data }) {
     }).format(val || 0);
   };
 
-  const costItems = useMemo(() => ([
-    {
-      id: "planned",
-      name: "Periyodik Bakım",
-      title: "Periyodik Bakım Maliyetleri",
-      value: Number(planli_bakim || 0),
-      color: "#2ecc71",
-      description: "Planlı ve önleyici bakım kayıtlarından oluşan maliyetler.",
-    },
-    {
-      id: "unplanned",
-      name: "Arızi Bakım",
-      title: "Arızi Bakım Maliyetleri",
-      value: Number(arizi_bakim || 0),
-      color: "#e74c3c",
-      description: "Plansız arıza müdahalelerinden oluşan bakım maliyetleri.",
-    },
-    {
-      id: "external",
-      name: "Dış Servis",
-      title: "Dış Servis Maliyetleri",
-      value: Number(dis_servis || 0),
-      color: "#9b59b6",
-      description: "Dış servis veya taşeron desteğiyle oluşan maliyetler.",
-    },
-    {
-      id: "parts",
-      name: "Yedek Parça",
-      title: "Yedek Parça Maliyetleri",
-      value: Number(parca_gideri || 0),
-      color: "#e67e22",
-      description: "Bakım sırasında değişen parça ve sarf maliyetleri.",
-    },
-  ]), [planli_bakim, arizi_bakim, dis_servis, parca_gideri]);
+  const costItems = useMemo(
+    () => [
+      {
+        id: "planned",
+        name: "Planlı Bakım",
+        value: Number(planli_bakim || 0),
+        color: "#22c55e",
+      },
+      {
+        id: "unplanned",
+        name: "Arıza Bakım",
+        value: Number(arizi_bakim || 0),
+        color: "#ef4444",
+      },
+      {
+        id: "external",
+        name: "Dış Servis",
+        value: Number(dis_servis || 0),
+        color: "#8b5cf6",
+      },
+      {
+        id: "parts",
+        name: "Yedek Parça",
+        value: Number(parca_gideri || 0),
+        color: "#f97316",
+      },
+      {
+        id: "downtime",
+        name: "Duruş Maliyeti",
+        value: Number(durus_maliyeti || 0),
+        color: "#06b6d4",
+      },
+    ],
+    [planli_bakim, arizi_bakim, dis_servis, parca_gideri, durus_maliyeti]
+  );
 
-  const chartData = costItems.filter((item) => item.value > 0);
   const totalCost = costItems.reduce((sum, item) => sum + item.value, 0);
-  const visibleItems = selectedCostId === "all"
-    ? costItems
-    : costItems.filter((item) => item.id === selectedCostId);
 
-  const handleSliceClick = (entry) => {
-    setSelectedCostId(entry.id);
-  };
+  // Backend'den gelen gerçek 6 aylık trend verisini grafik formatına dönüştür
+  const trendData = useMemo(() => {
+    if (!aylik_trend || aylik_trend.length === 0) {
+      return [];
+    }
+    return aylik_trend.map((row) => {
+      const date = new Date(row.ay);
+      const ayLabel = date.toLocaleDateString("tr-TR", { month: "short", year: "2-digit" });
+      return {
+        ay: ayLabel.charAt(0).toUpperCase() + ayLabel.slice(1),
+        maliyet: Number(row.toplam || 0),
+      };
+    });
+  }, [aylik_trend]);
 
-  const openDetail = () => {
-    const query = selectedCostId === "all" ? "" : `?kategori=${selectedCostId}`;
-    navigate(`/maliyet-detay${query}`);
-  };
+
 
   return (
     <div style={containerStyle}>
+      {/* --- 1. BAŞLIK + AY SEÇİCİ + TOPLAM TUTAR --- */}
       <div style={headerStyle}>
-        <div>
-          <h2 style={titleStyle}>MALİYET ANALİZİ</h2>
-          <p style={subTitleStyle}>Bakım, servis ve parça maliyet dağılımı</p>
-        </div>
-        <div style={totalBadgeStyle}>
-          <span style={totalLabelStyle}>TOPLAM MALİYET</span>
-          <span style={totalValueStyle}>{formatCurrency(totalCost)}</span>
-        </div>
+        <span style={titleStyle}>MALİYET ANALİZİ</span>
+        <select
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(e.target.value)}
+          style={dropdownStyle}
+        >
+          {months.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </select>
       </div>
 
-      <div style={mainContentStyle}>
-        <div style={chartSectionStyle}>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={chartData}
-                innerRadius={78}
-                outerRadius={108}
-                paddingAngle={5}
-                dataKey="value"
-                onClick={handleSliceClick}
-                cursor="pointer"
-              >
-                {chartData.map((entry) => (
-                  <Cell
-                    key={entry.id}
-                    fill={entry.color}
-                    opacity={selectedCostId === "all" || selectedCostId === entry.id ? 1 : 0.35}
-                  />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value) => formatCurrency(value)} />
-              <Legend verticalAlign="bottom" height={36} />
-            </PieChart>
-          </ResponsiveContainer>
+      <div
+        style={totalStyle}
+        onClick={() => navigate("/maliyet-detay")}
+        title="Detaylı analize git"
+      >
+        {formatCurrency(totalCost)}
+      </div>
 
-          <div style={filterBarStyle}>
-            <button
-              type="button"
-              onClick={() => setSelectedCostId("all")}
-              style={selectedCostId === "all" ? activeFilterButtonStyle : filterButtonStyle}
+      {/* --- 2. STACKED PROGRESS BAR --- */}
+      <div style={stackedBarContainer}>
+        {costItems.map((item) => {
+          const pct = totalCost > 0 ? (item.value / totalCost) * 100 : 25;
+          if (pct < 0.5) return null;
+          return (
+            <div
+              key={item.id}
+              style={{
+                ...stackedSegment,
+                width: `${pct}%`,
+                backgroundColor: item.color,
+              }}
+              title={`${item.name}: ${formatCurrency(item.value)} (%${pct.toFixed(1)})`}
+            />
+          );
+        })}
+      </div>
+
+      {/* --- 3. MİNİMALİST VERİ LİSTESİ --- */}
+      <div style={listContainer}>
+        {costItems.map((item) => {
+          const pct =
+            totalCost > 0 ? ((item.value / totalCost) * 100).toFixed(1) : "0.0";
+          return (
+            <div
+              key={item.id}
+              style={listRow}
+              onClick={() => navigate(`/maliyet-detay?kategori=${item.id}`)}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = "#f8fafc";
+                e.currentTarget.style.transform = "translateX(3px)";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.transform = "translateX(0)";
+              }}
             >
-              Tümü
-            </button>
-            <button type="button" onClick={openDetail} style={detailButtonStyle}>
-              Detaylı Analiz
-            </button>
-          </div>
-        </div>
+              <div style={listLeft}>
+                <span
+                  style={{
+                    ...colorDot,
+                    backgroundColor: item.color,
+                  }}
+                />
+                <span style={listLabel}>{item.name}</span>
+              </div>
+              <div style={listRight}>
+                <span style={listValue}>{formatCurrency(item.value)}</span>
+                <span style={{ ...listPct, color: item.color }}>%{pct}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
-        <div style={itemsGridStyle}>
-          {visibleItems.map((item) => {
-            const share = totalCost > 0 ? ((item.value / totalCost) * 100).toFixed(1) : "0.0";
-            return (
-              <button
-                type="button"
-                key={item.id}
-                onClick={() => setSelectedCostId(item.id)}
-                style={{ ...miniCardStyle, borderLeftColor: item.color }}
-              >
-                <div style={cardHeaderStyle}>
-                  <span style={miniTitleStyle}>{item.title}</span>
-                  <span style={{ ...shareBadgeStyle, color: item.color }}>%{share}</span>
-                </div>
-                <div style={{ ...miniValueStyle, color: item.color }}>{formatCurrency(item.value)}</div>
-                <div style={miniDescriptionStyle}>{item.description}</div>
-              </button>
-            );
-          })}
+      {/* --- 4. 3 AYLIK GERÇEK TREND GRAFİĞİ --- */}
+      <div style={trendContainer}>
+        <span style={trendTitle}>6 Aylık Bakım Trendi</span>
+        <div style={{ width: "100%", height: 80 }}>
+          {trendData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trendData} margin={{ top: 5, right: 5, left: 5, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="tpmCostGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <Tooltip
+                  formatter={(value) => [formatCurrency(value), "Maliyet"]}
+                  contentStyle={{
+                    background: "#1e293b",
+                    border: "none",
+                    borderRadius: "8px",
+                    color: "#fff",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    padding: "6px 10px",
+                  }}
+                  labelStyle={{ color: "#94a3b8", fontSize: "10px" }}
+                  itemStyle={{ color: "#fff" }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="maliyet"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  fill="url(#tpmCostGradient)"
+                  dot={{ r: 3, fill: "#3b82f6", stroke: "#fff", strokeWidth: 2 }}
+                  activeDot={{ r: 5, fill: "#3b82f6", stroke: "#fff", strokeWidth: 2 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#94a3b8", fontSize: "11px", fontWeight: "700" }}>
+              Henüz trend verisi yok
+            </div>
+          )}
         </div>
       </div>
 
-      <div style={footerNoteStyle}>
-        Pasta grafiğinde bir maliyet kalemine tıklayınca panel yalnızca o veriyi gösterir.
-      </div>
+      {/* Detaylı Analiz Butonu */}
+      <button
+        type="button"
+        onClick={() => navigate("/maliyet-detay")}
+        style={detailBtnStyle}
+        onMouseOver={(e) => {
+          e.currentTarget.style.background = "#1e293b";
+          e.currentTarget.style.color = "#fff";
+        }}
+        onMouseOut={(e) => {
+          e.currentTarget.style.background = "#f1f5f9";
+          e.currentTarget.style.color = "#334155";
+        }}
+      >
+        Detaylı Analiz →
+      </button>
     </div>
   );
 }
 
+// --- STYLE TANIMLARI ---
+
 const containerStyle = {
   background: "#fff",
-  padding: "25px",
-  borderRadius: "12px",
-  boxShadow: "0 10px 25px rgba(0,0,0,0.03)",
+  padding: "20px",
+  borderRadius: "16px",
+  boxShadow: "0 4px 20px rgba(0,0,0,0.04)",
   fontFamily: "'Inter', sans-serif",
   display: "flex",
   flexDirection: "column",
   height: "100%",
   boxSizing: "border-box",
+  gap: "14px",
 };
 
 const headerStyle = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  borderBottom: "1px solid #f1f5f9",
-  paddingBottom: "15px",
-  gap: "18px",
 };
 
-const titleStyle = { margin: 0, fontSize: "20px", fontWeight: "900", color: "#1e293b" };
-const subTitleStyle = { margin: "4px 0 0 0", fontSize: "12px", color: "#64748b", fontWeight: "700", textTransform: "uppercase" };
-const totalBadgeStyle = { background: "linear-gradient(135deg, #1e293b 0%, #334155 100%)", padding: "10px 20px", borderRadius: "8px", display: "flex", flexDirection: "column", alignItems: "flex-end" };
-const totalLabelStyle = { fontSize: "9px", color: "#94a3b8", fontWeight: "800" };
-const totalValueStyle = { fontSize: "22px", color: "#fff", fontWeight: "900" };
-const mainContentStyle = { display: "grid", gridTemplateColumns: "minmax(260px, 1fr) minmax(260px, 0.9fr)", gap: "22px", alignItems: "center" };
-const chartSectionStyle = { display: "flex", flexDirection: "column", alignItems: "center", position: "relative" };
-const filterBarStyle = { display: "flex", alignItems: "center", gap: "10px", marginTop: "10px" };
-const filterButtonStyle = { border: "1px solid #cbd5e1", background: "#fff", color: "#475569", borderRadius: "8px", padding: "9px 13px", fontSize: "12px", fontWeight: "800", cursor: "pointer" };
-const activeFilterButtonStyle = { ...filterButtonStyle, background: "#1e293b", color: "#fff", borderColor: "#1e293b" };
-const detailButtonStyle = { ...filterButtonStyle, background: "#3498db", borderColor: "#3498db", color: "#fff" };
-const itemsGridStyle = { display: "grid", gridTemplateColumns: "1fr", gap: "10px" };
-const miniCardStyle = { padding: "13px", borderRadius: "8px", background: "#f8fafc", border: "1px solid #f1f5f9", borderLeft: "4px solid", display: "flex", flexDirection: "column", gap: "6px", textAlign: "left", cursor: "pointer" };
-const cardHeaderStyle = { display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" };
-const miniTitleStyle = { fontSize: "12px", fontWeight: "900", color: "#475569" };
-const miniValueStyle = { fontSize: "18px", fontWeight: "900" };
-const miniDescriptionStyle = { fontSize: "11px", fontWeight: "600", color: "#64748b", lineHeight: 1.35 };
-const shareBadgeStyle = { fontSize: "11px", fontWeight: "900", background: "#fff", border: "1px solid #e2e8f0", borderRadius: "999px", padding: "3px 8px" };
-const footerNoteStyle = { marginTop: "12px", fontSize: "10px", color: "#94a3b8", textAlign: "center" };
+const titleStyle = {
+  fontSize: "13px",
+  fontWeight: "900",
+  color: "#1e293b",
+  letterSpacing: "1.5px",
+  textTransform: "uppercase",
+};
+
+const dropdownStyle = {
+  fontSize: "11px",
+  fontWeight: "700",
+  color: "#475569",
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  borderRadius: "8px",
+  padding: "5px 10px",
+  cursor: "pointer",
+  outline: "none",
+};
+
+const totalStyle = {
+  fontSize: "28px",
+  fontWeight: "950",
+  color: "#0f172a",
+  letterSpacing: "-0.5px",
+  lineHeight: 1,
+  cursor: "pointer",
+  transition: "color 0.2s",
+};
+
+const stackedBarContainer = {
+  display: "flex",
+  width: "100%",
+  height: "10px",
+  borderRadius: "999px",
+  overflow: "hidden",
+  background: "#f1f5f9",
+};
+
+const stackedSegment = {
+  height: "100%",
+  transition: "width 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
+};
+
+const listContainer = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "2px",
+};
+
+const listRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  padding: "7px 6px",
+  borderRadius: "8px",
+  cursor: "pointer",
+  transition: "all 0.2s ease",
+};
+
+const listLeft = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+};
+
+const colorDot = {
+  width: "10px",
+  height: "10px",
+  borderRadius: "50%",
+  flexShrink: 0,
+};
+
+const listLabel = {
+  fontSize: "12px",
+  fontWeight: "700",
+  color: "#334155",
+};
+
+const listRight = {
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+};
+
+const listValue = {
+  fontSize: "13px",
+  fontWeight: "800",
+  color: "#0f172a",
+};
+
+const listPct = {
+  fontSize: "11px",
+  fontWeight: "800",
+  background: "#f8fafc",
+  border: "1px solid #e2e8f0",
+  borderRadius: "999px",
+  padding: "2px 8px",
+  minWidth: "42px",
+  textAlign: "center",
+};
+
+const trendContainer = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "6px",
+  marginTop: "2px",
+};
+
+const trendTitle = {
+  fontSize: "10px",
+  fontWeight: "800",
+  color: "#94a3b8",
+  textTransform: "uppercase",
+  letterSpacing: "1px",
+};
+
+const detailBtnStyle = {
+  width: "100%",
+  padding: "10px",
+  fontSize: "12px",
+  fontWeight: "800",
+  color: "#334155",
+  background: "#f1f5f9",
+  border: "1px solid #e2e8f0",
+  borderRadius: "10px",
+  cursor: "pointer",
+  transition: "all 0.25s ease",
+  textAlign: "center",
+  marginTop: "auto",
+};
