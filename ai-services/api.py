@@ -110,18 +110,18 @@ KURAL_MOTORU = {
     # GENEL KRİTİK DURUM (Güvenlik Ağı — birden fazla parametre aynı anda kötüyse)
     "GENEL_KRITIK_DURUM": {"tahmini_maliyet": 20000.00, "tahmini_durus_suresi": 16.00, "ekip": "Acil Bakım Ekibi", "parca": "Kapsamlı kontrol gerekli"},
     # CNC
-    "SPINDLE_RULMAN_ARIZASI": {"tahmini_maliyet": 12500.00, "tahmini_durus_suresi": 12.00, "ekip": "Mekanik Bakım", "parca": "İş Mili Rulmanı"},
-    "EKSEN_MOTOR_ARIZASI": {"tahmini_maliyet": 25000.00, "tahmini_durus_suresi": 8.00, "ekip": "Elektrik/Otomasyon", "parca": "Eksen Sürücüsü"},
-    "PNOMATIK_VALF_ARIZASI": {"tahmini_maliyet": 3500.00, "tahmini_durus_suresi": 2.00, "ekip": "Mekanik Bakım", "parca": "Hava Valfi Grubu"},
-    "BOR_YAGI_POMPA_ARIZASI": {"tahmini_maliyet": 6000.00, "tahmini_durus_suresi": 4.00, "ekip": "Mekanik Bakım", "parca": "Soğutma Pompası"},
+    "SPINDLE_RULMAN_ARIZASI": {"tahmini_maliyet": 12500.00, "tahmini_durus_suresi": 12.00, "ekip": "Mekanik Bakım", "parca": "Kesici Takım / İş Mili (Spindle) Rulmanları"},
+    "EKSEN_MOTOR_ARIZASI": {"tahmini_maliyet": 25000.00, "tahmini_durus_suresi": 8.00, "ekip": "Elektrik/Otomasyon", "parca": "X-Y-Z Eksen Motorları ve Sürücüleri"},
+    "PNOMATIK_VALF_ARIZASI": {"tahmini_maliyet": 3500.00, "tahmini_durus_suresi": 2.00, "ekip": "Mekanik Bakım", "parca": "Pnömatik Mengene Valfi"},
+    "BOR_YAGI_POMPA_ARIZASI": {"tahmini_maliyet": 6000.00, "tahmini_durus_suresi": 4.00, "ekip": "Mekanik Bakım", "parca": "Bor Yağı Pompası"},
     # PRES
     "ANA_HIDROLIK_POMPA_ARIZASI": {"tahmini_maliyet": 45000.00, "tahmini_durus_suresi": 24.00, "ekip": "Hidrolik Ekibi", "parca": "Ana Pompa"},
-    "HIDROLIK_YON_VALFI_ARIZASI": {"tahmini_maliyet": 8000.00, "tahmini_durus_suresi": 4.00, "ekip": "Hidrolik Ekibi", "parca": "Yön Valfi"},
-    "MEKANIK_GOVDE_YORULMASI": {"tahmini_maliyet": 85000.00, "tahmini_durus_suresi": 48.00, "ekip": "Ağır Bakım Ekibi", "parca": "Gövde / Kılavuz"},
+    "HIDROLIK_YON_VALFI_ARIZASI": {"tahmini_maliyet": 8000.00, "tahmini_durus_suresi": 4.00, "ekip": "Hidrolik Ekibi", "parca": "Hidrolik Yön Valfleri ve Keçeler"},
+    "MEKANIK_GOVDE_YORULMASI": {"tahmini_maliyet": 85000.00, "tahmini_durus_suresi": 48.00, "ekip": "Ağır Bakım Ekibi", "parca": "Mekanik Gövde / Kılavuz Yatakları"},
     # ENJEKSİYON
-    "ISITICI_REZISTANS_ARIZASI": {"tahmini_maliyet": 5000.00, "tahmini_durus_suresi": 3.00, "ekip": "Elektrik Bakım", "parca": "Kovan Rezistansı"},
-    "VIDA_KOVAN_ASINMASI": {"tahmini_maliyet": 65000.00, "tahmini_durus_suresi": 36.00, "ekip": "Mekanik Bakım", "parca": "Enjeksiyon Vidası"},
-    "KALIP_SOGUTMA_VALFI_ARIZASI": {"tahmini_maliyet": 4500.00, "tahmini_durus_suresi": 2.00, "ekip": "Tesisat/Mekanik", "parca": "Soğutma Eşanjörü"}
+    "ISITICI_REZISTANS_ARIZASI": {"tahmini_maliyet": 5000.00, "tahmini_durus_suresi": 3.00, "ekip": "Elektrik Bakım", "parca": "Isıtıcı Rezistans Bantları"},
+    "VIDA_KOVAN_ASINMASI": {"tahmini_maliyet": 65000.00, "tahmini_durus_suresi": 36.00, "ekip": "Mekanik Bakım", "parca": "Enjeksiyon Vidası ve Kovan (Barel)"},
+    "KALIP_SOGUTMA_VALFI_ARIZASI": {"tahmini_maliyet": 4500.00, "tahmini_durus_suresi": 2.00, "ekip": "Tesisat/Mekanik", "parca": "Kalıp Soğutma Valfleri (Eşanjör)"}
 }
 
 # AI model kodu → Veritabanındaki ariza_turu tablosundaki Türkçe karşılığı
