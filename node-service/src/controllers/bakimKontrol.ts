@@ -74,9 +74,7 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                     bakim_tur_id: bakim_tur_id ? Number(bakim_tur_id) : null,
 
                     bakim_maliyet: Number(bakim_maliyet),
-                    durus_suresi: hesaplananDurus !== null
-                        ? new Prisma.Decimal(hesaplananDurus)
-                        : (durus_suresi ? new Prisma.Decimal(durus_suresi) : null),
+                    durus_suresi: durus_suresi ? new Prisma.Decimal(durus_suresi) : null,
                     aciklama: aciklama || null,
                     bakim_tarihi: new Date(),
 
