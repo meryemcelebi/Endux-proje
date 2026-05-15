@@ -45,24 +45,14 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
 
         const sonuc = await prisma.$transaction(async (tx) => {
 
-            // TPM: Eğer bu makine için daha önce bekleyen bir bakım kaydı varsa,
-            // duruş süresini o kaydın oluşturulma zamanından itibaren hesapla
-            let hesaplananDurus: number | null = null;
-            const mevcutBekleyen = await tx.bakim_kaydi.findFirst({
+            // A0. Aynı makine için bekleyen eski bakım kayıtlarını TAMAMLANDI yap
+            await tx.bakim_kaydi.updateMany({
                 where: {
                     makine_id: Number(makine_id),
                     durum: { in: ['BEKLEYEN', 'Onay Bekliyor', 'ONAYLANDI', 'Teknik Serviste', 'Bakımda'] }
                 },
-                orderBy: { bakim_tarihi: 'desc' },
-                select: { bakim_tarihi: true }
+                data: { durum: 'TAMAMLANDI' }
             });
-
-            if (mevcutBekleyen?.bakim_tarihi) {
-                hesaplananDurus = await otomatikDurusSuresiHesapla(
-                    mevcutBekleyen.bakim_tarihi,
-                    new Date()
-                );
-            }
 
             // A. Bakım Kaydını Oluştur
             const bakimKaydi = await tx.bakim_kaydi.create({
@@ -576,7 +566,10 @@ export const getTeknikServisIsleri = async (req: Request, res: Response) => {
                 kullanici: {
                     select: {
                         ad: true,
-                        soyad: true
+                        soyad: true,
+                        rol: {
+                            select: { rol_adi: true }
+                        }
                     }
                 },
                 parca_degisim: {
@@ -630,9 +623,9 @@ export const getTeknikServisIsleri = async (req: Request, res: Response) => {
                 durus_suresi: is.durus_suresi ? Number(is.durus_suresi) : 0,
                 aciklama: temizAciklama,
                 servis_firmasi: is.servis_firma?.firma_adi || "Belirtilmemiş",
-                // Teknisyen adı: kullanici_id doluysa iç personel, sorumlu_id doluysa misafir servis
+                // Teknisyen adı: kullanici_id doluysa iç personel (rol bilgisiyle), sorumlu_id doluysa misafir servis
                 teknisyen: is.kullanici_id && is.kullanici
-                    ? `${is.kullanici.ad} ${is.kullanici.soyad}`
+                    ? `${is.kullanici.ad} ${is.kullanici.soyad}${is.kullanici.rol?.rol_adi ? ` (${is.kullanici.rol.rol_adi})` : ''}`
                     : is.sorumlu_id && is.servis_sorumlusu
                         ? `${is.servis_sorumlusu.ad} ${is.servis_sorumlusu.soyad}`
                         : "Belirtilmemiş",
@@ -834,6 +827,12 @@ export const TumBakimlarToplu = async (req: Request, res: Response): Promise<Res
                         puan_id: true,
                         puan: true
                     }
+                },
+                kullanici: {
+                    select: { ad: true, soyad: true, rol: { select: { rol_adi: true } } }
+                },
+                servis_sorumlusu: {
+                    select: { ad: true, soyad: true, sorumlu_adi: true }
                 }
             },
             orderBy: {
@@ -842,10 +841,11 @@ export const TumBakimlarToplu = async (req: Request, res: Response): Promise<Res
         });
 
         // Frontend'in beklediği formata uygun olarak map'liyoruz
-        const formatliBakimlar = tumBakimlar.map(b => ({
+        const formatliBakimlar = (tumBakimlar as any[]).map(b => ({
             ...b,
             makine_ad: b.makine?.makine_adi || 'Bilinmeyen Makine',
-            servis_firmasi: b.servis_firma?.firma_adi || `Firma #${b.servis_firma_id}`
+            servis_firmasi: b.servis_firma?.firma_adi || `Firma #${b.servis_firma_id || 'Belirtilmemiş'}`,
+            teknisyen: b.kullanici ? `${b.kullanici.ad} ${b.kullanici.soyad}` : (b.servis_sorumlusu ? (b.servis_sorumlusu.ad ? `${b.servis_sorumlusu.ad} ${b.servis_sorumlusu.soyad}` : b.servis_sorumlusu.sorumlu_adi) : 'Belirtilmemiş')
         }));
 
         return res.status(200).json({ success: true, data: formatliBakimlar });
@@ -915,7 +915,9 @@ export const qrBakimTamamla = async (req: Request, res: Response) => {
             bakim_maliyet,
             aciklama,
             degisen_parcalar,
-            durus_suresi
+            durus_suresi,
+            servis_firma_id,
+            bakim_tur_id
         } = req.body;
 
         // Tip dönüşümleri ve validasyon
@@ -935,7 +937,8 @@ export const qrBakimTamamla = async (req: Request, res: Response) => {
                 bakim_id: true,
                 makine_id: true,
                 durum: true,
-                bakim_tarihi: true
+                bakim_tarihi: true,
+                ariza_kaydi: { select: { olusturma_tarihi: true, baslangic_zamani: true } }
             }
         });
 
@@ -965,18 +968,33 @@ export const qrBakimTamamla = async (req: Request, res: Response) => {
             // Tip dönüşümleri — frontend'den gelen değerlerin güvenli parse'ı
             const parsedMaliyet = bakim_maliyet ? Number(bakim_maliyet) : 0;
             const parsedAciklama = aciklama ? String(aciklama).trim() : '';
+            const parsedBakimTurId = bakim_tur_id ? Number(bakim_tur_id) : undefined;
 
-            // TPM: Duruş süresini otomatik hesapla (bakım oluşturulma → tamamlanma)
-            // bakim_tarihi orijinal oluşturulma zamanını temsil eder, overwrite edilmez
-            let hesaplananDurus: number = 0;
-            if (mevcutBakim.bakim_tarihi) {
-                hesaplananDurus = await otomatikDurusSuresiHesapla(
-                    mevcutBakim.bakim_tarihi,
-                    new Date()
-                );
+            let parsedDurus = durus_suresi ? Number(String(durus_suresi)) : null;
+
+            // TPM: Eğer formdan duruş süresi gelmemişse OTOMATİK HESAPLA
+            if (!parsedDurus) {
+                const mevcutBakimAny = mevcutBakim as any;
+                const baslangicTarihi = mevcutBakimAny.ariza_kaydi?.baslangic_zamani || mevcutBakimAny.ariza_kaydi?.olusturma_tarihi || mevcutBakim.bakim_tarihi;
+                if (baslangicTarihi) {
+                    parsedDurus = await otomatikDurusSuresiHesapla(
+                        baslangicTarihi,
+                        new Date()
+                    );
+                } else {
+                    parsedDurus = 0;
+                }
             }
 
-            console.log('[QR-TAMAMLA] Parse edilen değerler → maliyet:', parsedMaliyet, '| otomatik durus:', hesaplananDurus, '| aciklama:', parsedAciklama.substring(0, 50));
+            console.log('[QR-TAMAMLA] Parse edilen değerler → maliyet:', parsedMaliyet, '| otomatik durus:', parsedDurus, '| aciklama:', parsedAciklama.substring(0, 50));
+
+            // Kullanıcının veya formdan gelen servis firma ID'sini belirle
+            const finalServisFirmaId = (req.user as any)?.firma_id ? Number((req.user as any).firma_id) : (servis_firma_id ? Number(servis_firma_id) : undefined);
+
+            // Bakımı tamamlayan kişiyi (oturum sahibi) kaydetmek için tespit et
+            const tokenUser = (req as any).user;
+            const currentUserId = tokenUser?.userId ? Number(tokenUser.userId) : undefined;
+            const isServisRole = tokenUser?.rol === 'SERVIS';
 
             const guncellenmisKayit = await tx.bakim_kaydi.update({
                 where: { bakim_id: parsedBakimId },
@@ -984,8 +1002,12 @@ export const qrBakimTamamla = async (req: Request, res: Response) => {
                     durum: 'TAMAMLANDI',
                     bakim_maliyet: parsedMaliyet,
                     aciklama: parsedAciklama || undefined,
-                    durus_suresi: new Prisma.Decimal(hesaplananDurus)
-                    // bakim_tarihi overwrite EDİLMEZ — orijinal oluşturulma zamanı korunur
+                    durus_suresi: parsedDurus !== null && parsedDurus !== undefined ? new Prisma.Decimal(parsedDurus) : undefined,
+                    servis_firma_id: finalServisFirmaId,
+                    bakim_tur_id: parsedBakimTurId,
+                    kullanici_id: (!isServisRole && currentUserId) ? currentUserId : undefined,
+                    sorumlu_id: (isServisRole && currentUserId) ? currentUserId : undefined,
+                    bakim_tarihi: new Date() // Tamamlanma anı
                 }
             });
 

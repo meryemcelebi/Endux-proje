@@ -108,12 +108,12 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
                     -- 1. Planlı Bakım Maliyeti (Bakım türü tam olarak 'Planlı Bakım' veya 'Önleyici Bakım' olanlar)
                     (SELECT COALESCE(SUM(bakim_maliyet), 0)::FLOAT FROM bakim_kaydi bk 
                      JOIN bakim_turu bt ON bk.bakim_tur_id = bt.bakim_tur_id 
-                     WHERE bt.bakim_tur_adi IN ('Planlı Bakım', 'Önleyici Bakım')) as planli_bakim_maliyeti,
+                     WHERE bt.bakim_tur_adi ILIKE '%Planlı%' OR bt.bakim_tur_adi ILIKE '%Önleyici%' OR bt.bakim_tur_adi ILIKE '%Periyodik%') as planli_bakim_maliyeti,
                     
                     -- 2. Arızi Bakım Maliyeti (Geriye kalan tüm bakım maliyetleri)
                     (SELECT COALESCE(SUM(bakim_maliyet), 0)::FLOAT FROM bakim_kaydi bk 
                      JOIN bakim_turu bt ON bk.bakim_tur_id = bt.bakim_tur_id 
-                     WHERE bt.bakim_tur_adi NOT IN ('Planlı Bakım', 'Önleyici Bakım')) as arizi_bakim_maliyeti,
+                     WHERE bt.bakim_tur_adi NOT ILIKE '%Planlı%' AND bt.bakim_tur_adi NOT ILIKE '%Önleyici%' AND bt.bakim_tur_adi NOT ILIKE '%Periyodik%') as arizi_bakim_maliyeti,
                     
                     -- 3. Yedek Parça Giderleri (Parça değişim tablosundan)
                     (SELECT COALESCE(SUM(p.parca_maliyeti * COALESCE(pd.adet, 1)), 0)::FLOAT 
@@ -140,9 +140,9 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
                     m.makine_adi,
                     l.fabrika_alani,
                     -- Planlı Bakım
-                    COALESCE(SUM(CASE WHEN bt.bakim_tur_adi IN ('Planlı Bakım', 'Önleyici Bakım') THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as planli_maliyet,
+                    COALESCE(SUM(CASE WHEN bt.bakim_tur_adi ILIKE '%Planlı%' OR bt.bakim_tur_adi ILIKE '%Önleyici%' OR bt.bakim_tur_adi ILIKE '%Periyodik%' THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as planli_maliyet,
                     -- Arızi Bakım
-                    COALESCE(SUM(CASE WHEN bt.bakim_tur_adi NOT IN ('Planlı Bakım', 'Önleyici Bakım') THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as arizi_maliyet,
+                    COALESCE(SUM(CASE WHEN bt.bakim_tur_adi NOT ILIKE '%Planlı%' AND bt.bakim_tur_adi NOT ILIKE '%Önleyici%' AND bt.bakim_tur_adi NOT ILIKE '%Periyodik%' THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as arizi_maliyet,
                     -- Dış Servis (Sorumlu ID olanlar)
                     COALESCE(SUM(CASE WHEN bk.sorumlu_id IS NOT NULL THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as dis_servis_maliyet,
                     -- Yedek Parça (Makineye ait parça değişimleri)
@@ -188,8 +188,8 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
                 bakim_maliyetleri AS (
                     SELECT 
                         date_trunc('month', bk.bakim_tarihi)::DATE as ay,
-                        COALESCE(SUM(CASE WHEN bt.bakim_tur_adi IN ('Planlı Bakım', 'Önleyici Bakım') THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as planli,
-                        COALESCE(SUM(CASE WHEN bt.bakim_tur_adi NOT IN ('Planlı Bakım', 'Önleyici Bakım') THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as arizi,
+                        COALESCE(SUM(CASE WHEN bt.bakim_tur_adi ILIKE '%Planlı%' OR bt.bakim_tur_adi ILIKE '%Önleyici%' OR bt.bakim_tur_adi ILIKE '%Periyodik%' THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as planli,
+                        COALESCE(SUM(CASE WHEN bt.bakim_tur_adi NOT ILIKE '%Planlı%' AND bt.bakim_tur_adi NOT ILIKE '%Önleyici%' AND bt.bakim_tur_adi NOT ILIKE '%Periyodik%' THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as arizi,
                         COALESCE(SUM(CASE WHEN bk.sorumlu_id IS NOT NULL THEN bk.bakim_maliyet ELSE 0 END), 0)::FLOAT as dis_servis
                     FROM bakim_kaydi bk
                     LEFT JOIN bakim_turu bt ON bk.bakim_tur_id = bt.bakim_tur_id

@@ -67,7 +67,7 @@ export default function ServisMerkezi() {
         setFirms(firmData);
         setAllHistory(historyData);
 
-        // FIX #2: Dış servis puan listesi — TAMAMLANDI olan DİŞ servis bakımlarını göster
+        //  Dış servis puan listesi — TAMAMLANDI olan DİŞ servis bakımlarını göster
         // Daha önce "!== TAMAMLANDI" filtresi vardı, bu yüzden tamamlanan işler hiç görünmuyordu
         const liveHistory = historyData.filter(h =>
           h.servis_firma_id &&             // Dış servis firması atanmış olmalı
@@ -151,16 +151,14 @@ export default function ServisMerkezi() {
 
   const handleSaveFirm = async (firmData) => {
     try {
-      const isUpdate = !!firmData.id;
       await api.addFirm(firmData);
       setIsModalOpen(false);
-      setEditingFirm(null);
       const updatedFirms = await api.getFirms();
       setFirms(updatedFirms);
-      alert(`${firmData.tip} başarıyla ${isUpdate ? "güncellendi" : "eklendi"}!`);
+      alert(`${firmData.tip} başarıyla eklendi!`);
     } catch (error) {
-      console.error("Firma işlemi sırasında hata:", error);
-      alert(`Firma ${firmData.id ? "güncellenirken" : "eklenirken"} hata oluştu!`);
+      console.error("Firma eklenirken hata:", error);
+      alert("Firma eklenirken hata oluştu!");
     }
   };
 
@@ -407,7 +405,7 @@ export default function ServisMerkezi() {
         await api.deleteSupplier(firm.id);
       }
       setFirms(firms.filter(f => f.id !== firm.id));
-      alert("Sözleşme iptal edildi ve firma listeden kaldırıldı. Geçmiş veriler sistemde saklanmaya devam edecektir.");
+      alert("Sözleşme iptal edildi ve firma listeden kaldırıldı.");
     } catch (err) {
       console.error("Firma silme hatası:", err);
       alert("Hata: " + err.message);
@@ -441,14 +439,7 @@ export default function ServisMerkezi() {
             {filteredFirms.length > 0 ? (
               filteredFirms.map((f) => (
                 <React.Fragment key={f.id}>
-                  <tr 
-                    style={{
-                      ...trStyle,
-                      background: selectedFirmId === (f.servis_firma_id || f.id) ? "rgba(233, 69, 96, 0.05)" : "transparent",
-                      cursor: "pointer"
-                    }}
-                    onClick={() => setSelectedFirmId(selectedFirmId === (f.servis_firma_id || f.id) ? null : (f.servis_firma_id || f.id))}
-                  >
+                  <tr style={trStyle}>
                     <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>
                       {f.ad || f.firma_adi}
                       <div style={{ fontSize: "11px", color: "#95a5a6", fontWeight: "normal", marginTop: "4px" }}>{f.tip}</div>
@@ -482,9 +473,9 @@ export default function ServisMerkezi() {
                         {f.aktiflik !== false ? "Aktif" : "Pasif"}
                       </span>
                     </td>
-                    <td style={tdStyle}>
-                      {selectedFirmId === (f.servis_firma_id || f.id) && (
-                        <div style={{ display: "flex", gap: "8px", animation: "fadeIn 0.3s ease" }}>
+                    <td style={{ ...tdStyle, minWidth: "130px" }}>
+                      {selectedFirmId === (f.servis_firma_id || f.id) ? (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px", animation: "fadeIn 0.3s ease" }}>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -493,18 +484,21 @@ export default function ServisMerkezi() {
                               setIsModalOpen(true);
                             }}
                             style={{
-                              background: "#3498db",
-                              color: "white",
-                              border: "none",
-                              padding: "8px 16px",
+                              background: "rgba(52, 152, 219, 0.1)",
+                              color: "#3498db",
+                              border: "1px solid rgba(52, 152, 219, 0.3)",
+                              padding: "7px 12px",
                               borderRadius: "8px",
-                              fontSize: "12px",
+                              fontSize: "11px",
                               fontWeight: "bold",
                               cursor: "pointer",
-                              boxShadow: "0 4px 10px rgba(52, 152, 219, 0.3)"
+                              transition: "0.2s",
+                              whiteSpace: "nowrap"
                             }}
+                            onMouseOver={(e) => { e.target.style.background = "#3498db"; e.target.style.color = "white"; }}
+                            onMouseOut={(e) => { e.target.style.background = "rgba(52, 152, 219, 0.1)"; e.target.style.color = "#3498db"; }}
                           >
-                            Güncelle
+                            Sorumlu Güncelle
                           </button>
                           <button
                             onClick={(e) => {
@@ -512,23 +506,33 @@ export default function ServisMerkezi() {
                               handleDeleteFirm(f);
                             }}
                             style={{
-                              background: "#e74c3c",
-                              color: "white",
-                              border: "none",
-                              padding: "8px 16px",
+                              background: "rgba(231, 76, 60, 0.1)",
+                              color: "#e74c3c",
+                              border: "1px solid rgba(231, 76, 60, 0.3)",
+                              padding: "7px 12px",
                               borderRadius: "8px",
-                              fontSize: "12px",
+                              fontSize: "11px",
                               fontWeight: "bold",
                               cursor: "pointer",
-                              boxShadow: "0 4px 10px rgba(231, 76, 60, 0.3)"
+                              transition: "0.2s",
+                              whiteSpace: "nowrap"
                             }}
+                            onMouseOver={(e) => { e.target.style.background = "#e74c3c"; e.target.style.color = "white"; }}
+                            onMouseOut={(e) => { e.target.style.background = "rgba(231, 76, 60, 0.1)"; e.target.style.color = "#e74c3c"; }}
                           >
-                            İptal Et
+                            Sözleşmeyi İptal Et
                           </button>
                         </div>
-                      )}
-                      {selectedFirmId !== (f.servis_firma_id || f.id) && (
-                        <span style={{ color: "#95a5a6", fontSize: "12px", fontStyle: "italic" }}>İşlem için tıkla</span>
+                      ) : (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedFirmId(f.servis_firma_id || f.id);
+                          }}
+                          style={{ color: "#95a5a6", fontSize: "12px", fontStyle: "italic", cursor: "pointer" }}
+                        >
+                          İşlem için{"\n"}tıkla
+                        </span>
                       )}
                     </td>
                   </tr>
