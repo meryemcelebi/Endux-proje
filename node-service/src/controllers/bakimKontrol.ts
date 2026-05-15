@@ -54,31 +54,65 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                 data: { durum: 'TAMAMLANDI' }
             });
 
+            // A1. Arıza Bağlantısını Çöz (Frontend'den gelen ariza_id aslında ariza_tur_id'dir)
+            let gercekArizaId: number | null = null;
+            
+            // Makinenin açık bir arızası var mı bulalım
+            const acikAriza = await tx.ariza_kaydi.findFirst({
+                where: { makine_id: Number(makine_id), bitis_zamani: null },
+                orderBy: { olusturma_tarihi: 'desc' }
+            });
+
+            if (ariza_id) {
+                // Frontend bize bir Arıza Türü ID'si gönderdi
+                if (acikAriza) {
+                    // Açık arıza varsa türünü güncelle ve id'sini al, ayrıca arızayı kapat
+                    const guncellenenAriza = await tx.ariza_kaydi.update({
+                        where: { ariza_id: acikAriza.ariza_id },
+                        data: { ariza_tur_id: Number(ariza_id), bitis_zamani: new Date() }
+                    });
+                    gercekArizaId = guncellenenAriza.ariza_id;
+                } else {
+                    // Açık arıza yok, bu yüzden bu türde yeni bir (zaten tamamlanmış) arıza kaydı oluştur
+                    const yeniAriza = await tx.ariza_kaydi.create({
+                        data: {
+                            makine_id: Number(makine_id),
+                            ariza_tur_id: Number(ariza_id),
+                            ariza_tespit_kaynagi: isServisRole ? "Servis Personeli" : "Kullanıcı",
+                            ariza_aciklama: aciklama || "Bakım sırasında otomatik oluşturuldu",
+                            baslangic_zamani: new Date(),
+                            bitis_zamani: new Date(),
+                            olusturma_tarihi: new Date()
+                        }
+                    });
+                    gercekArizaId = yeniAriza.ariza_id;
+                }
+            } else {
+                // Frontend bir tür göndermediyse, sadece açık arıza varsa kapat ve bağla
+                if (acikAriza) {
+                    await tx.ariza_kaydi.update({
+                        where: { ariza_id: acikAriza.ariza_id },
+                        data: { bitis_zamani: new Date() }
+                    });
+                    gercekArizaId = acikAriza.ariza_id;
+                }
+            }
+
             // A. Bakım Kaydını Oluştur
             const bakimKaydi = await tx.bakim_kaydi.create({
                 data: {
                     makine_id: Number(makine_id),
-                    // Eğer SERVIS rolüyse sorumlu_id'ye, değilse kullanici_id'ye ata
                     sorumlu_id: isServisRole ? currentUserId : null,
                     kullanici_id: !isServisRole ? currentUserId : null,
-
                     servis_firma_id: servis_firma_id ? Number(servis_firma_id) : null,
-                    // Arıza bağlantısı: Frontend'den gelirse onu kullan, yoksa AI'ın açtığı son arızayı otomatik bağla
-                    ariza_id: ariza_id ? Number(ariza_id) : (
-                        await tx.ariza_kaydi.findFirst({
-                            where: { makine_id: Number(makine_id), bitis_zamani: null },
-                            orderBy: { olusturma_tarihi: 'desc' },
-                            select: { ariza_id: true }
-                        })
-                    )?.ariza_id || null,
+                    
+                    ariza_id: gercekArizaId,
                     bakim_tur_id: bakim_tur_id ? Number(bakim_tur_id) : null,
 
                     bakim_maliyet: Number(bakim_maliyet),
                     durus_suresi: durus_suresi ? new Prisma.Decimal(durus_suresi) : null,
                     aciklama: aciklama || null,
                     bakim_tarihi: new Date(),
-
-                    // TPM İş Akışı: Form kaydedildiği an bu görev TAMAMLANDI sayılır
                     durum: "TAMAMLANDI"
                 },
             });
