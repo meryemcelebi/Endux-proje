@@ -142,3 +142,15 @@ export const siralaArizaTurleri = async (req: Request, res: Response) => {
         res.status(500).json({ success: false, message: "Arıza türleri listelenirken bir hata oluştu." });
     }
 };
+
+//bakim türleri listesi API
+export const siralaBakimTurleri = async (req: Request, res: Response) => {
+    try {
+        const bakimTurleri = await prisma.bakim_turu.findMany({
+            select: { bakim_tur_id: true, bakim_tur_adi: true }
+        });
+        res.json({ success: true, bakimTurleri });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Bakım türleri listelenirken bir hata oluştu." });
+    }
+};
