@@ -165,7 +165,7 @@ export default function Servis() {
       servis_firma_id: currentUser?.firma_id ? Number(currentUser.firma_id) : (form.servis_firma_id ? Number(form.servis_firma_id) : null),
 
       // Kural 3: Sabit 1 gönderme. Formda arıza türü seçildiyse onu al, seçilmediyse veritabanındaki (3 - Donanım Arızası) ID'sini kullan.
-      ariza_id: form.ariza_id ? Number(form.ariza_id) : 3,
+      ariza_id: form.ariza_id ? Number(form.ariza_id) : null,
 
       ariza_sebebi: form.ariza_sebebi,
       bakim_maliyet: Number(form.bakim_maliyet) || 0,
