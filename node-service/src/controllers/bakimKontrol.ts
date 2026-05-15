@@ -63,7 +63,14 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
                     kullanici_id: !isServisRole ? currentUserId : null,
 
                     servis_firma_id: servis_firma_id ? Number(servis_firma_id) : null,
-                    ariza_id: null,
+                    // Arıza bağlantısı: Frontend'den gelirse onu kullan, yoksa AI'ın açtığı son arızayı otomatik bağla
+                    ariza_id: ariza_id ? Number(ariza_id) : (
+                        await tx.ariza_kaydi.findFirst({
+                            where: { makine_id: Number(makine_id), bitis_zamani: null },
+                            orderBy: { olusturma_tarihi: 'desc' },
+                            select: { ariza_id: true }
+                        })
+                    )?.ariza_id || null,
                     bakim_tur_id: bakim_tur_id ? Number(bakim_tur_id) : null,
 
                     bakim_maliyet: Number(bakim_maliyet),

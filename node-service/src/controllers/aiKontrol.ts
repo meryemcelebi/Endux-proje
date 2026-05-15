@@ -110,6 +110,36 @@ async function makineOZetVeriCek(makineID: number) {
     return makine;
 }
 
+// Sözel cevapları sayısal değerlere çevir (eski checklist formatı uyumluluğu)
+const CEVAP_MAPPING: Record<string, number> = {
+    // Yeni format (0/1/2 zaten sayısal)
+    "0": 0, "1": 1, "2": 2,
+    // Eski format (EVET/HAYIR)
+    "HAYIR": 2,   // Sorun var → Kritik
+    "EVET": 0,    // Sorun yok → Normal
+    // Sözel durum format
+    "NORMAL": 0,
+    "UYARI": 1,
+    "KRITIK": 2,
+    "KRİTİK": 2,
+};
+
+function cevapToSayi(girilen_deger: string | null, durum: string | null): number {
+    // Önce girilen_deger'e bak
+    if (girilen_deger) {
+        const ust = girilen_deger.toUpperCase().trim();
+        if (CEVAP_MAPPING[ust] !== undefined) return CEVAP_MAPPING[ust];
+        const sayi = Number(girilen_deger);
+        if (!isNaN(sayi)) return Math.min(2, Math.max(0, sayi)); // 0-2 arasında tut
+    }
+    // girilen_deger işe yaramadıysa durum'a bak
+    if (durum) {
+        const ust = durum.toUpperCase().trim();
+        if (CEVAP_MAPPING[ust] !== undefined) return CEVAP_MAPPING[ust];
+    }
+    return 0; // Varsayılan: Normal
+}
+
 // Form cevaplarını AI payload formatına çevir
 // form_madde_cevap → kontrol_maddesi JOIN ile {teknik_parametre: girilen_deger} çiftleri oluşturur
 async function formCevaplariToAIPayload(formId: number): Promise<Record<string, number>> {
@@ -124,8 +154,8 @@ async function formCevaplariToAIPayload(formId: number): Promise<Record<string, 
     for (const cevap of cevaplar) {
         const parametre = cevap.kontrol_maddesi?.teknik_parametre;
         if (parametre) {
-            // girilen_deger "0", "1", "2" şeklinde geliyor → sayıya çevir
-            payload[parametre] = Number(cevap.girilen_deger) || 0;
+            // Hem sayısal ("0","1","2") hem sözel ("HAYIR","EVET","KRITIK") formatları destekle
+            payload[parametre] = cevapToSayi(cevap.girilen_deger, cevap.durum);
         }
     }
     return payload;
@@ -208,6 +238,34 @@ async function riskSkoruKaydet(
         where: { form_id: formId },
         data: { ai_on_risk_durumu: riskPuani },
     });
+
+    // Risk %50 ve üstüyse otomatik arıza kaydı oluştur
+    if (riskPuani >= 50 && tahmin.tahmin_edilen_ariza && tahmin.tahmin_edilen_ariza !== "Arıza Tespit Edilmedi") {
+        try {
+            // AI'ın döndürdüğü Türkçe arıza adını DB'deki ariza_turu tablosunda ara
+            const eslesen = await prisma.ariza_turu.findFirst({
+                where: { ariza_tur: tahmin.tahmin_edilen_ariza }
+            });
+
+            // Eşleşme yoksa genel "Donanım Arızası" (ID:3) kullan
+            const arizaTurId = eslesen?.ariza_tur_id || 3;
+
+            await prisma.ariza_kaydi.create({
+                data: {
+                    makine_id: makineId,
+                    ariza_tespit_kaynagi: "AI Tahmin",
+                    ariza_aciklama: `${tahmin.tahmin_edilen_ariza} (Risk: %${riskPuani})`,
+                    baslangic_zamani: new Date(),
+                    olusturma_tarihi: new Date(),
+                    ariza_tur_id: arizaTurId
+                }
+            });
+            console.log(`[AI-ARIZA] Makine ${makineId} için otomatik arıza kaydı oluşturuldu. Tür: ${tahmin.tahmin_edilen_ariza}`);
+        } catch (arizaErr: any) {
+            console.error(`[AI-ARIZA] Arıza kaydı oluşturulamadı:`, arizaErr.message);
+            // Arıza kaydı oluşturulamazsa ana akışı bozma
+        }
+    }
 
     return riskKaydi;
 }

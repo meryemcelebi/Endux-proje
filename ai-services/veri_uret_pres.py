@@ -17,7 +17,7 @@ for _ in range(5000):
     ariza_kodu = "YOK"
     rnd = random.random()
     
-    # PRES ENDÜSTRİ STANDARTLARI (Mock Korelasyonlar)
+    # PRES ENDÜSTRİ STANDARTLARI
     if rnd < 0.25:
         ariza_kodu = "ANA_HIDROLIK_POMPA_ARIZASI"
         ortak["sicaklik"], ortak["ses_anomalisi"] = 2, 2

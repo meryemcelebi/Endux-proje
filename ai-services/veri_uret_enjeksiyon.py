@@ -17,7 +17,7 @@ for _ in range(5000):
     ariza_kodu = "YOK"
     rnd = random.random()
     
-    # ENJEKSİYON ENDÜSTRİ STANDARTLARI (Mock Korelasyonlar)
+    # ENJEKSİYON ENDÜSTRİ STANDARTLARI
     if rnd < 0.30:
         ariza_kodu = "ISITICI_REZISTANS_ARIZASI"
         ortak["sicaklik"] = 2

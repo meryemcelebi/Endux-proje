@@ -7,10 +7,10 @@ veri_cnc = []
 for _ in range(5000):
     form_suresi = random.randint(2, 120)
     
-    # 1. Ortak Parametreler (Word Dosyası Madde 1)
+    # 1. Ortak Parametreler
     ortak = {"sicaklik": 0, "titresim": 0, "ses_anomalisi": 0, "yag_durumu": 0}
     
-    # 2. CNC Özel Parametreler (Word Dosyası Madde 2)
+    # 2. CNC Özel Parametreler
     ozel = {
         "is_mili_ses_ve_titresim": 0, "eksen_olcu_sapmasi": 0, "takim_zorlanma_durumu": 0, 
         "islenen_yuzey_kalitesi": 0, "is_mili_govde_sicakligi": 0, "bor_yagi_ve_sogutma": 0,
@@ -20,7 +20,6 @@ for _ in range(5000):
     ariza_kodu = "YOK"
     rnd = random.random()
     
-    # MICHIGAN LABORATUVAR KORELASYONLARI
     if rnd < 0.25:
         ariza_kodu = "SPINDLE_RULMAN_ARIZASI" # Yüksek frekanslı titreşim -> Yüzey bozulur
         ortak["titresim"], ortak["ses_anomalisi"] = 2, 2
@@ -42,7 +41,7 @@ for _ in range(5000):
         ozel["bor_yagi_ve_sogutma"] = 2
         ozel["is_mili_govde_sicakligi"] = random.choice([1, 2])
 
-    # GÜVEN KALKANI (10 Saniye Altı -> Tembel Operatör Tüm Verileri 0 Girer)
+    # GÜVEN KALKANI)
     if form_suresi < 10 and ariza_kodu != "YOK":
         for k in ortak.keys(): ortak[k] = 0
         for k in ozel.keys(): ozel[k] = 0
