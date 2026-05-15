@@ -8,11 +8,9 @@ import os
 
 print("🚀 KB-V4: Ayrı Ayrı 3 Makine Modeli Eğitiliyor...\n")
 
-# Proje klasör yapısı
 DATA_DIR = "data"
 MODELS_DIR = "models"
 
-# Eğer models klasörü yoksa otomatik oluştur (Hata almamak için)
 if not os.path.exists(MODELS_DIR):
     os.makedirs(MODELS_DIR)
     print(f"📁 '{MODELS_DIR}' klasörü oluşturuldu.")
@@ -37,18 +35,18 @@ for makine in makineler:
     df = pd.read_csv(dosya_adi)
     
     # 2. X (Özellikler) ve Y (Hedef) Ayırma
-    # makine_turu, form_suresi ve HEDEF_ARIZA dışındaki TÜM kolonları X olarak al (Word dosyasındaki o özel parametreler)
+    # makine_turu, form_suresi ve HEDEF_ARIZA dışındaki TÜM kolonları X olarak al
     haric_tutulacaklar = ["makine_turu", "form_doldurma_suresi_sn", "HEDEF_ARIZA"]
     X = df.drop(columns=haric_tutulacaklar)
     
-    # Encoder ile metinleri sayıya çevir (Örn: SPINDLE_RULMAN_ARIZASI -> 0)
+    # Encoder ile metinleri sayıya çevir
     encoder = LabelEncoder()
     y = encoder.fit_transform(df["HEDEF_ARIZA"])
     
     # %80 Eğitim, %20 Test
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
-    # 3. XGBoost Modelini Eğit (Çoklu Sınıflandırma)
+    # 3. XGBoost Modelini Eğit
     model = xgb.XGBClassifier(objective='multi:softprob', eval_metric='mlogloss', n_estimators=100, seed=42)
     model.fit(X_train, y_train)
     

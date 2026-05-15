@@ -3,7 +3,8 @@ import psycopg2
 import pandas as pd
 from dotenv import load_dotenv
 
-# .env dosyasındaki değişkenleri (şifreleri) sisteme yükle
+#Sistem gerçek verilere geçtiğinde kullanılacak bir kod 
+
 load_dotenv()
 
 def verileri_getir(tablo_adi="gunluk_kontrol_formu"):
@@ -18,10 +19,8 @@ def verileri_getir(tablo_adi="gunluk_kontrol_formu"):
         # .env dosyasındaki DATABASE_URL'yi kullanarak doğrudan PostgreSQL bağlantısı kurar
         conn = psycopg2.connect(os.getenv("DATABASE_URL"))
         
-        # Veritabanına atacağımız SQL sorgusu
         sorgu = f"SELECT * FROM {tablo_adi};"
         
-        # Sorguyu çalıştırıp doğrudan Pandas DataFrame'e aktarıyoruz (Veri Bilimi standardı)
         df = pd.read_sql_query(sorgu, conn)
         
         print(f"[BASARILI] '{tablo_adi}' tablosundan {len(df)} satır veri çekildi.")

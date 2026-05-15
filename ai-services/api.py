@@ -40,20 +40,20 @@ except Exception as e:
     print(f"❌ MODEL YÜKLEME HATASI: {e} (Önce eğitim kodunu çalıştırıp modelleri ürettiğinden emin ol!)")
 
 # ==========================================
-# 2. PYDANTIC ŞEMALARI (Swagger İçin)
+# 2. PYDANTIC ŞEMALARI 
 # ==========================================
 
-# --- GİRDİ ŞEMASI (Node.js'ten gelecek JSON) ---
+# --- GİRDİ ŞEMASI---
 class BakimIstegi(BaseModel):
     makine_turu: str = Field(..., example="CNC Makinesi", description="CNC Makinesi, Pres Makinesi veya Plastik Enjeksiyon Makinesi")
     form_doldurma_suresi_sn: int = Field(..., example=45, description="Operatörün formu doldurma süresi")
     
-    # TPM ve Otonom Bakım Gözlemleri (Sensör yok, operatör beyanı var)
+    # TPM ve Otonom Bakım Gözlemleri 
     toplam_calisma_saati: int = Field(0, description="Makinenin toplam çalışma saati")
     son_bakimdan_gecen_gun: int = Field(0, description="Son bakımdan bu yana geçen gün sayısı")
     genel_temizlik_puani: int = Field(3, description="1-5 arası otonom bakım temizlik puanı")
     
-    # Tüm Parametreler (Gönderilmeyenler 0 kabul edilir)
+    # Tüm Parametreler
     sicaklik: int = 0
     titresim: int = 0
     ses_anomalisi: int = 0
@@ -90,7 +90,7 @@ class BakimIstegi(BaseModel):
     eksik_baski_durumu: int = 0
     capakli_baski_durumu: int = 0
 
-# --- ÇIKTI ŞEMASI (Node.js'e dönecek JSON) ---
+# --- ÇIKTI ŞEMASI---
 class TahminSonucu(BaseModel):
     sistem_mesaji: str
     makine_turu: str
@@ -103,7 +103,7 @@ class TahminSonucu(BaseModel):
     detaylar: dict
 
 # ==========================================
-# 3. KURAL MOTORU (Uzman Sistem Çıktıları)
+# 3. KURAL MOTORU
 # ==========================================
 KURAL_MOTORU = {
     "YOK": {"tahmini_maliyet": 0.00, "tahmini_durus_suresi": 0.00, "ekip": "Gerek Yok", "parca": "Sorun Yok"},
@@ -145,7 +145,7 @@ ARIZA_AD_MAPPING = {
 }
 
 # ==========================================
-# 4. API ENDPOINT (Tahmin Merkezi)
+# 4. API ENDPOINT
 # ==========================================
 @app.post("/tahmin-et", response_model=TahminSonucu)
 async def tahmin_yap(istek: BakimIstegi):
@@ -176,7 +176,7 @@ async def tahmin_yap(istek: BakimIstegi):
         model = modeller[makine]
         encoder = encoderlar[makine]
         
-        # Modelin tüm ihtimallerini (olasılıklarını) alıyoruz
+        # Modelin tüm ihtimallerini alıyoruz
         olasiliklar = model.predict_proba(veri_df)[0]
         tahmin_kodu = model.predict(veri_df)[0]
         ariza_ad = encoder.inverse_transform([tahmin_kodu])[0]
@@ -192,20 +192,6 @@ async def tahmin_yap(istek: BakimIstegi):
             # Arıza VAR kararı çıktıysa, risk skoru doğrudan modelin o arızaya verdiği ihtimaldir.
             # Örn: Model %85 Rulman Arızası diyorsa, risk skoru 85'tir (Kırmızı).
             risk_skoru = round(en_yuksek_olasilik / 100, 2)
-
-        # ═══════════════════════════════════════════════════════════════
-        # 3.5 PARAMETRE BAZLI GÜVENLİK AĞI (FMEA Severity Weighted)
-        #
-        # Her parametrenin ağırlığı FMEA (Failure Mode and Effects Analysis)
-        # Severity Rating'e (ISO 17359) dayalıdır. Değerler 1-10 skalasından
-        # normalize edilmiştir (10 → 1.0 = en kritik).
-        #
-        # Referans: FMEA RPN Metodolojisi
-        #   - Severity 9-10: Makinenin tamamen durmasına yol açar
-        #   - Severity 7-8 : Üretim kaybı, büyük onarım gerektirir
-        #   - Severity 4-6 : Performans düşüşü, yeniden işleme gerektirir
-        #   - Severity 1-3 : İhmal edilebilir etki
-        # ═══════════════════════════════════════════════════════════════
 
         # FMEA Severity Ağırlık Tablosu (Parametre adı → Normalize ciddiyet puanı)
         FMEA_AGIRLIK = {
@@ -281,8 +267,7 @@ async def tahmin_yap(istek: BakimIstegi):
              uyari_rengi = "SARI (Form çok hızlı dolduruldu, gidip teyit ediniz)"
              risk_skoru = max(risk_skoru, 0.50) # Arıza yok dese bile veri şüpheli olduğu için riski 0.50'ye çektik!
 
-        # 4. RUL Tahmini (Tahmini Kalan Faydalı Ömür)
-        # Basit RUL hesaplama: toplam_calisma_saati ve risk_skoru'na göre
+        # 4. RUL Tahmini
         if istek.toplam_calisma_saati > 0:
             # Risk arttıkça kalan ömür düşer
             rul_tahmini = max(0, istek.toplam_calisma_saati * (1 - risk_skoru) * 0.5)
