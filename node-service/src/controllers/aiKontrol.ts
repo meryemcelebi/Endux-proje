@@ -239,6 +239,34 @@ async function riskSkoruKaydet(
         data: { ai_on_risk_durumu: riskPuani },
     });
 
+    // Risk %50 ve üstüyse otomatik arıza kaydı oluştur
+    if (riskPuani >= 50 && tahmin.tahmin_edilen_ariza && tahmin.tahmin_edilen_ariza !== "Arıza Tespit Edilmedi") {
+        try {
+            // AI'ın döndürdüğü Türkçe arıza adını DB'deki ariza_turu tablosunda ara
+            const eslesen = await prisma.ariza_turu.findFirst({
+                where: { ariza_tur: tahmin.tahmin_edilen_ariza }
+            });
+
+            // Eşleşme yoksa genel "Donanım Arızası" (ID:3) kullan
+            const arizaTurId = eslesen?.ariza_tur_id || 3;
+
+            await prisma.ariza_kaydi.create({
+                data: {
+                    makine_id: makineId,
+                    ariza_tespit_kaynagi: "AI Tahmin",
+                    ariza_aciklama: `${tahmin.tahmin_edilen_ariza} (Risk: %${riskPuani})`,
+                    baslangic_zamani: new Date(),
+                    olusturma_tarihi: new Date(),
+                    ariza_tur_id: arizaTurId
+                }
+            });
+            console.log(`[AI-ARIZA] Makine ${makineId} için otomatik arıza kaydı oluşturuldu. Tür: ${tahmin.tahmin_edilen_ariza}`);
+        } catch (arizaErr: any) {
+            console.error(`[AI-ARIZA] Arıza kaydı oluşturulamadı:`, arizaErr.message);
+            // Arıza kaydı oluşturulamazsa ana akışı bozma
+        }
+    }
+
     return riskKaydi;
 }
 

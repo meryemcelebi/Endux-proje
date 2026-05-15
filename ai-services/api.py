@@ -124,6 +124,26 @@ KURAL_MOTORU = {
     "KALIP_SOGUTMA_VALFI_ARIZASI": {"tahmini_maliyet": 4500.00, "tahmini_durus_suresi": 2.00, "ekip": "Tesisat/Mekanik", "parca": "Soğutma Eşanjörü"}
 }
 
+# AI model kodu → Veritabanındaki ariza_turu tablosundaki Türkçe karşılığı
+# Bu sayede AI tahmini ile teknisyenin girdiği gerçek arıza türü karşılaştırılabilir
+ARIZA_AD_MAPPING = {
+    "YOK": "Arıza Tespit Edilmedi",
+    "GENEL_KRITIK_DURUM": "Donanım Arızası",
+    # CNC (makine_tur_id: 5)
+    "SPINDLE_RULMAN_ARIZASI": "İş Mili (Spindle) Arızası",
+    "EKSEN_MOTOR_ARIZASI": "Eksen ve Pozisyonlama Kayması",
+    "PNOMATIK_VALF_ARIZASI": "Pnömatik Valf Arızası",
+    "BOR_YAGI_POMPA_ARIZASI": "Soğutma ve Yağlama Sistemi Tıkanıklığı",
+    # PRES (makine_tur_id: 6)
+    "ANA_HIDROLIK_POMPA_ARIZASI": "Hidrolik Sızıntı ve Basınç Kaybı",
+    "HIDROLIK_YON_VALFI_ARIZASI": "Pompa ve Valf Arızası",
+    "MEKANIK_GOVDE_YORULMASI": "Gövde Çatlağı ve Metal Yorgunluğu",
+    # ENJEKSİYON (makine_tur_id: 7)
+    "ISITICI_REZISTANS_ARIZASI": "Rezistans ve Isıtma Grubu Yanması",
+    "VIDA_KOVAN_ASINMASI": "Vida ve Kovan (Screw & Barrel) Aşınması",
+    "KALIP_SOGUTMA_VALFI_ARIZASI": "Kalıp Soğutma Hatası"
+}
+
 # ==========================================
 # 4. API ENDPOINT (Tahmin Merkezi)
 # ==========================================
@@ -288,7 +308,7 @@ async def tahmin_yap(istek: BakimIstegi):
             sistem_mesaji="Tahmin Başarılı",
             makine_turu=makine,
             guvenilirlik_notu=guvenilirlik,
-            tahmin_edilen_ariza=ariza_ad,
+            tahmin_edilen_ariza=ARIZA_AD_MAPPING.get(ariza_ad, ariza_ad),
             risk_skoru=risk_yuzde,
             rul_tahmini_saat=round(rul_tahmini, 1),
             bakim_tavsiyesi=bakim_tavsiyesi,
