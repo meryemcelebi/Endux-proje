@@ -22,7 +22,7 @@ SENTETIK_VERI_AGIRLIGI = 1.0
 makineler = ["CNC", "PRES", "ENJEKSIYON"]
 
 for tur in makineler:
-    eski_dosya = os.path.join(DATA_DIR, f"kb_v4_{tur.lower()}_egitim_verisi.csv")
+    eski_dosya = os.path.join(DATA_DIR, f"kb_v6_{tur.lower()}_egitim_verisi.csv")
     yeni_dosya = os.path.join(YENI_VERI_DIR, f"gercek_saha_verisi_{tur.lower()}.csv")
     
     if not os.path.exists(yeni_dosya):
@@ -55,9 +55,17 @@ for tur in makineler:
         encoder = pickle.load(f)
     y = encoder.transform(df_toplam["HEDEF_ARIZA"])
     
-    # 4. Yeni Modeli Eğit
-    # XGBoost, 'sample_weight' parametresini gördüğünde gerçek verilere 5 kat daha fazla odaklanır.
-    model = xgb.XGBClassifier(objective='multi:softprob', eval_metric='mlogloss', n_estimators=100, seed=42)
+    # 4. Yeni Modeli Eğit (V6 Mimarisine Uygun XGBoost Ayarları)
+    model = xgb.XGBClassifier(
+        objective='multi:softprob', 
+        eval_metric='mlogloss', 
+        n_estimators=300, 
+        max_depth=8, 
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        seed=42
+    )
     model.fit(X, y, sample_weight=agirliklar_toplam)
     
     # 5. Güncel Modeli Üzerine Yaz
