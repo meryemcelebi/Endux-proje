@@ -90,7 +90,7 @@ export async function maliyetAnalizi(req: Request, res: Response) {
  * Maliyet Renk Kuralı
  * >%10 ise kırmızı
  * >%5 ise sarı
- * 2% -5% Turuncu
+
  * %2 ise yeşil
  */
 

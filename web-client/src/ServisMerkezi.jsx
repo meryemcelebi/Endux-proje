@@ -35,6 +35,14 @@ export default function ServisMerkezi() {
   }
   const isAdmin = userPayload?.rol_id === 0 || userPayload?.rol_id === 1;
 
+  function formatLocation(location) {
+    const loc = Array.isArray(location) ? location[0] : location;
+    if (!loc) return null;
+
+    const parts = [loc.kat, loc.fabrika_alani || loc.lokasyon_adi].filter(Boolean);
+    return parts.length > 0 ? parts.join(" - ") : null;
+  }
+
   // --- VERİ ÇEKME (API) ---
   useEffect(() => {
     const fetchData = async () => {
@@ -49,6 +57,7 @@ export default function ServisMerkezi() {
         const formattedTasks = taskData.map(t => ({
           ...t,
           makine_ad: t.makine_adi || t.makine?.makine_adi || "Bilinmeyen",
+          lokasyon_bilgisi: t.lokasyon_bilgisi || formatLocation(t.lokasyon || t.makine?.lokasyon),
           ariza_notu: t.ariza_notu || t.ariza_kaydi?.ariza_aciklama || t.aciklama || "Not yok",
           tarih: t.kayit_tarihi || (t.bakim_tarihi ? new Date(t.bakim_tarihi).toLocaleDateString("tr-TR") : "-"),
           durum: t.durum || "ONAYLANDI"
@@ -192,7 +201,15 @@ export default function ServisMerkezi() {
             ) : (
               filteredTasks.map(t => (
                 <tr key={t.bakim_id} style={trStyle}>
-                  <td style={{ ...tdStyle, fontWeight: "bold", color: "#0f3460" }}>{t.makine_ad || t.makine_adi}</td>
+                  <td style={{ ...tdStyle, color: "#0f3460" }}>
+                    <div style={{ fontWeight: "bold" }}>{t.makine_ad || t.makine_adi}</div>
+                    {t.lokasyon_bilgisi && (
+                      <div style={locationHintStyle}>
+                        <span aria-hidden="true">📍</span>
+                        {t.lokasyon_bilgisi}
+                      </div>
+                    )}
+                  </td>
                   <td style={tdStyle}>
                     {t.durum === "ONAYLANDI" ? (
                       <span style={{
@@ -844,6 +861,17 @@ const tdStyle = {
   color: "#555",
   borderBottom: "1px solid #f1f2f6",
   verticalAlign: "middle"
+};
+
+const locationHintStyle = {
+  marginTop: "6px",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "5px",
+  color: "#7f8c8d",
+  fontSize: "12px",
+  fontWeight: "600",
+  lineHeight: 1.3
 };
 
 const trStyle = {

@@ -202,7 +202,8 @@ export const bakimKaydiGir = async (req: Request, res: Response) => {
 export const acilBakimBildir = async (req: Request, res: Response) => {
     try {
         const makineId = Number(req.body.makine_id);
-        const aciklama = String(req.body.aciklama || "").trim();
+        const arizaTurId = req.body.ariza_id ? Number(req.body.ariza_id) : null;
+        const gelenAciklama = String(req.body.aciklama || "").trim();
         const kullaniciId = Number(req.user?.userId) || null;
 
         if (!makineId) {
@@ -212,10 +213,17 @@ export const acilBakimBildir = async (req: Request, res: Response) => {
             });
         }
 
-        if (!aciklama) {
+        if (!gelenAciklama && !arizaTurId) {
             return res.status(400).json({
                 success: false,
-                message: "Detaylı arıza açıklaması zorunludur."
+                message: "Arıza türü veya açıklama zorunludur."
+            });
+        }
+
+        if (arizaTurId && Number.isNaN(arizaTurId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Geçersiz arıza türü."
             });
         }
 
@@ -231,10 +239,51 @@ export const acilBakimBildir = async (req: Request, res: Response) => {
             });
         }
 
+        const arizaTuru = arizaTurId
+            ? await prisma.ariza_turu.findUnique({
+                where: { ariza_tur_id: arizaTurId },
+                select: { ariza_tur_id: true, ariza_tur: true }
+            })
+            : null;
+
+        if (arizaTurId && !arizaTuru) {
+            return res.status(404).json({
+                success: false,
+                message: "Seçilen arıza türü bulunamadı."
+            });
+        }
+
+        const aciklama = gelenAciklama || arizaTuru?.ariza_tur || "Acil bakım bildirimi";
+        const planliBakimTuru = !arizaTuru
+            ? await prisma.bakim_turu.findFirst({
+                where: {
+                    OR: [
+                        { bakim_tur_adi: { contains: "Planlı", mode: "insensitive" } },
+                        { bakim_tur_adi: { contains: "Önleyici", mode: "insensitive" } },
+                        { bakim_tur_adi: { contains: "Periyodik", mode: "insensitive" } }
+                    ]
+                },
+                select: { bakim_tur_id: true }
+            })
+            : null;
+
         await prisma.makine.update({
             where: { makine_id: makineId },
             data: { aktiflik_durumu: false }
         });
+
+        const arizaKaydi = arizaTuru
+            ? await prisma.ariza_kaydi.create({
+                data: {
+                    makine_id: makineId,
+                    ariza_tur_id: arizaTuru.ariza_tur_id,
+                    ariza_tespit_kaynagi: "Yönetici Paneli",
+                    ariza_aciklama: aciklama,
+                    baslangic_zamani: new Date(),
+                    olusturma_tarihi: new Date()
+                }
+            })
+            : null;
 
         const bakimKaydi = await prisma.bakim_kaydi.create({
             data: {
@@ -242,6 +291,8 @@ export const acilBakimBildir = async (req: Request, res: Response) => {
                 kullanici_id: kullaniciId,
                 bakim_maliyet: 0,
                 aciklama: `${ACIL_BILDIRIM_ETIKETI} ${aciklama}`,
+                ariza_id: arizaKaydi?.ariza_id || null,
+                bakim_tur_id: planliBakimTuru?.bakim_tur_id || null,
                 bakim_tarihi: new Date(),
                 durum: "ONAYLANDI"
             }
@@ -254,6 +305,9 @@ export const acilBakimBildir = async (req: Request, res: Response) => {
                 bakim_id: bakimKaydi.bakim_id,
                 makine_id: makine.makine_id,
                 makine_adi: makine.makine_adi,
+                ariza_id: arizaKaydi?.ariza_id || null,
+                ariza_tur_id: arizaTuru?.ariza_tur_id || null,
+                ariza_tur: arizaTuru?.ariza_tur || null,
                 durum: bakimKaydi.durum,
                 acil_bildirim: true
             }
@@ -583,7 +637,14 @@ export const getTeknikServisIsleri = async (req: Request, res: Response) => {
             include: {
                 makine: {
                     select: {
-                        makine_adi: true
+                        makine_adi: true,
+                        lokasyon: {
+                            select: {
+                                kat: true,
+                                fabrika_alani: true
+                            },
+                            take: 1
+                        }
                     }
                 },
                 ariza_kaydi: {
@@ -648,11 +709,17 @@ export const getTeknikServisIsleri = async (req: Request, res: Response) => {
             const aciklama = is.aciklama || "";
             const acilBildirim = aciklama.includes(ACIL_BILDIRIM_ETIKETI);
             const temizAciklama = aciklama.replace(ACIL_BILDIRIM_ETIKETI, "").trim();
+            const lokasyon = Array.isArray(is.makine?.lokasyon) ? is.makine.lokasyon[0] : null;
+            const lokasyonBilgisi = lokasyon
+                ? [lokasyon.kat, lokasyon.fabrika_alani].filter(Boolean).join(" - ")
+                : null;
 
             return {
                 bakim_id: is.bakim_id,
                 makine_id: is.makine_id,
                 makine_adi: is.makine?.makine_adi || `Makine #${is.makine_id}`,
+                lokasyon_bilgisi: lokasyonBilgisi,
+                lokasyon,
                 durum: frontendDurum,
                 ariza_notu: is.ariza_kaydi?.ariza_aciklama || temizAciklama || "Belirtilmemiş",
                 acil_bildirim: acilBildirim,

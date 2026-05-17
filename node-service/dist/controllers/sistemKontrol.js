@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.setVardiyaSaatleri = exports.getVardiyaSaatleri = exports.setMakineTuruDurusMaliyetleri = exports.getMakineTuruDurusMaliyetleri = exports.siralaMakineTurleri = exports.siralaRoller = exports.siralaFirmalar = void 0;
+exports.siralaBakimTurleri = exports.siralaArizaTurleri = exports.setVardiyaSaatleri = exports.getVardiyaSaatleri = exports.setMakineTuruDurusMaliyetleri = exports.getMakineTuruDurusMaliyetleri = exports.siralaMakineTurleri = exports.siralaRoller = exports.siralaFirmalar = void 0;
 const prisma_1 = __importDefault(require("../config/prisma"));
 const ensureMakineTuruDurusMaliyetiColumn = async () => {
     await prisma_1.default.$executeRawUnsafe(`
@@ -118,3 +118,40 @@ const setVardiyaSaatleri = async (req, res) => {
     }
 };
 exports.setVardiyaSaatleri = setVardiyaSaatleri;
+//ariza türleri listesi API
+const siralaArizaTurleri = async (req, res) => {
+    try {
+        const makine_tur_id = req.query.makine_tur_id;
+        let whereClause = {};
+        if (makine_tur_id) {
+            whereClause = {
+                OR: [
+                    { makine_tur_id: Number(makine_tur_id) },
+                    { makine_tur_id: null }
+                ]
+            };
+        }
+        const arizaTurleri = await prisma_1.default.ariza_turu.findMany({
+            where: whereClause,
+            select: { ariza_tur_id: true, ariza_tur: true }
+        });
+        res.json({ success: true, arizaTurleri });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: "Arıza türleri listelenirken bir hata oluştu." });
+    }
+};
+exports.siralaArizaTurleri = siralaArizaTurleri;
+//bakim türleri listesi API
+const siralaBakimTurleri = async (req, res) => {
+    try {
+        const bakimTurleri = await prisma_1.default.bakim_turu.findMany({
+            select: { bakim_tur_id: true, bakim_tur_adi: true }
+        });
+        res.json({ success: true, bakimTurleri });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: "Bakım türleri listelenirken bir hata oluştu." });
+    }
+};
+exports.siralaBakimTurleri = siralaBakimTurleri;

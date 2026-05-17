@@ -13,5 +13,4 @@ exports.config = {
     jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
     nodeEnv: process.env.NODE_ENV || "development",
     aiServiceUrl: process.env.AI_SERVICE_URL || "http://endux_ai:8000",
-    corsOrigin: process.env.CORS_ORIGIN || "*",
 };

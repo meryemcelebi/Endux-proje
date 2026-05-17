@@ -1,14 +1,48 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.qrBakimTamamla = exports.bakimBaslat = exports.TumBakimlarToplu = exports.bakimIsleminiOnayla = exports.bakimPuaniKaydet = exports.getTeknikServisIsleri = exports.getOnayBekleyenler = exports.bakimiYokSay = exports.bakimlariOnayla = exports.makineBakimKayitlari = exports.acilBakimBildir = exports.bakimKaydiGir = void 0;
+exports.durusSuresiYenidenHesapla = exports.qrBakimTamamla = exports.bakimBaslat = exports.TumBakimlarToplu = exports.bakimIsleminiOnayla = exports.bakimPuaniKaydet = exports.getTeknikServisIsleri = exports.getOnayBekleyenler = exports.bakimiYokSay = exports.bakimlariOnayla = exports.makineBakimKayitlari = exports.acilBakimBildir = exports.bakimKaydiGir = void 0;
 exports.dusukStokUyarisi = dusukStokUyarisi;
 exports.bakimOnaylaProseduru = bakimOnaylaProseduru;
 const prisma_1 = __importDefault(require("../config/prisma"));
 const client_1 = require("@prisma/client");
 const supabase_1 = require("../config/supabase");
+const durusSuresiHesapla_1 = require("../utils/durusSuresiHesapla");
 const ACIL_BILDIRIM_ETIKETI = "[ACIL_BILDIRIM]";
 const bakimKaydiGir = async (req, res) => {
     console.log('Frontend\'den gelen bakım verisi:', req.body);
@@ -36,21 +70,70 @@ const bakimKaydiGir = async (req, res) => {
         const currentUserId = Number(req.user?.userId || teknisyen_id);
         const isServisRole = req.user?.rol === 'SERVIS';
         const sonuc = await prisma_1.default.$transaction(async (tx) => {
+            // A0. Aynı makine için bekleyen eski bakım kayıtlarını TAMAMLANDI yap
+            await tx.bakim_kaydi.updateMany({
+                where: {
+                    makine_id: Number(makine_id),
+                    durum: { in: ['BEKLEYEN', 'Onay Bekliyor', 'ONAYLANDI', 'Teknik Serviste', 'Bakımda'] }
+                },
+                data: { durum: 'TAMAMLANDI' }
+            });
+            // A1. Arıza Bağlantısını Çöz (Frontend'den gelen ariza_id aslında ariza_tur_id'dir)
+            let gercekArizaId = null;
+            // Makinenin açık bir arızası var mı bulalım
+            const acikAriza = await tx.ariza_kaydi.findFirst({
+                where: { makine_id: Number(makine_id), bitis_zamani: null },
+                orderBy: { olusturma_tarihi: 'desc' }
+            });
+            if (ariza_id) {
+                // Frontend bize bir Arıza Türü ID'si gönderdi
+                if (acikAriza) {
+                    // Açık arıza varsa türünü güncelle ve id'sini al, ayrıca arızayı kapat
+                    const guncellenenAriza = await tx.ariza_kaydi.update({
+                        where: { ariza_id: acikAriza.ariza_id },
+                        data: { ariza_tur_id: Number(ariza_id), bitis_zamani: new Date() }
+                    });
+                    gercekArizaId = guncellenenAriza.ariza_id;
+                }
+                else {
+                    // Açık arıza yok, bu yüzden bu türde yeni bir (zaten tamamlanmış) arıza kaydı oluştur
+                    const yeniAriza = await tx.ariza_kaydi.create({
+                        data: {
+                            makine_id: Number(makine_id),
+                            ariza_tur_id: Number(ariza_id),
+                            ariza_tespit_kaynagi: isServisRole ? "Servis Personeli" : "Kullanıcı",
+                            ariza_aciklama: aciklama || "Bakım sırasında otomatik oluşturuldu",
+                            baslangic_zamani: new Date(),
+                            bitis_zamani: new Date(),
+                            olusturma_tarihi: new Date()
+                        }
+                    });
+                    gercekArizaId = yeniAriza.ariza_id;
+                }
+            }
+            else {
+                // Frontend bir tür göndermediyse, sadece açık arıza varsa kapat ve bağla
+                if (acikAriza) {
+                    await tx.ariza_kaydi.update({
+                        where: { ariza_id: acikAriza.ariza_id },
+                        data: { bitis_zamani: new Date() }
+                    });
+                    gercekArizaId = acikAriza.ariza_id;
+                }
+            }
             // A. Bakım Kaydını Oluştur
             const bakimKaydi = await tx.bakim_kaydi.create({
                 data: {
                     makine_id: Number(makine_id),
-                    // Eğer SERVIS rolüyse sorumlu_id'ye, değilse kullanici_id'ye ata
                     sorumlu_id: isServisRole ? currentUserId : null,
                     kullanici_id: !isServisRole ? currentUserId : null,
                     servis_firma_id: servis_firma_id ? Number(servis_firma_id) : null,
-                    ariza_id: null,
+                    ariza_id: gercekArizaId,
                     bakim_tur_id: bakim_tur_id ? Number(bakim_tur_id) : null,
                     bakim_maliyet: Number(bakim_maliyet),
                     durus_suresi: durus_suresi ? new client_1.Prisma.Decimal(durus_suresi) : null,
                     aciklama: aciklama || null,
                     bakim_tarihi: new Date(),
-                    // TPM İş Akışı: Form kaydedildiği an bu görev TAMAMLANDI sayılır
                     durum: "TAMAMLANDI"
                 },
             });
@@ -126,7 +209,8 @@ exports.bakimKaydiGir = bakimKaydiGir;
 const acilBakimBildir = async (req, res) => {
     try {
         const makineId = Number(req.body.makine_id);
-        const aciklama = String(req.body.aciklama || "").trim();
+        const arizaTurId = req.body.ariza_id ? Number(req.body.ariza_id) : null;
+        const gelenAciklama = String(req.body.aciklama || "").trim();
         const kullaniciId = Number(req.user?.userId) || null;
         if (!makineId) {
             return res.status(400).json({
@@ -134,10 +218,16 @@ const acilBakimBildir = async (req, res) => {
                 message: "makine_id alanı zorunludur."
             });
         }
-        if (!aciklama) {
+        if (!gelenAciklama && !arizaTurId) {
             return res.status(400).json({
                 success: false,
-                message: "Detaylı arıza açıklaması zorunludur."
+                message: "Arıza türü veya açıklama zorunludur."
+            });
+        }
+        if (arizaTurId && Number.isNaN(arizaTurId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Geçersiz arıza türü."
             });
         }
         const makine = await prisma_1.default.makine.findUnique({
@@ -150,16 +240,55 @@ const acilBakimBildir = async (req, res) => {
                 message: "Makine bulunamadı."
             });
         }
+        const arizaTuru = arizaTurId
+            ? await prisma_1.default.ariza_turu.findUnique({
+                where: { ariza_tur_id: arizaTurId },
+                select: { ariza_tur_id: true, ariza_tur: true }
+            })
+            : null;
+        if (arizaTurId && !arizaTuru) {
+            return res.status(404).json({
+                success: false,
+                message: "Seçilen arıza türü bulunamadı."
+            });
+        }
+        const aciklama = gelenAciklama || arizaTuru?.ariza_tur || "Acil bakım bildirimi";
+        const planliBakimTuru = !arizaTuru
+            ? await prisma_1.default.bakim_turu.findFirst({
+                where: {
+                    OR: [
+                        { bakim_tur_adi: { contains: "Planlı", mode: "insensitive" } },
+                        { bakim_tur_adi: { contains: "Önleyici", mode: "insensitive" } },
+                        { bakim_tur_adi: { contains: "Periyodik", mode: "insensitive" } }
+                    ]
+                },
+                select: { bakim_tur_id: true }
+            })
+            : null;
         await prisma_1.default.makine.update({
             where: { makine_id: makineId },
             data: { aktiflik_durumu: false }
         });
+        const arizaKaydi = arizaTuru
+            ? await prisma_1.default.ariza_kaydi.create({
+                data: {
+                    makine_id: makineId,
+                    ariza_tur_id: arizaTuru.ariza_tur_id,
+                    ariza_tespit_kaynagi: "Yönetici Paneli",
+                    ariza_aciklama: aciklama,
+                    baslangic_zamani: new Date(),
+                    olusturma_tarihi: new Date()
+                }
+            })
+            : null;
         const bakimKaydi = await prisma_1.default.bakim_kaydi.create({
             data: {
                 makine_id: makineId,
                 kullanici_id: kullaniciId,
                 bakim_maliyet: 0,
                 aciklama: `${ACIL_BILDIRIM_ETIKETI} ${aciklama}`,
+                ariza_id: arizaKaydi?.ariza_id || null,
+                bakim_tur_id: planliBakimTuru?.bakim_tur_id || null,
                 bakim_tarihi: new Date(),
                 durum: "ONAYLANDI"
             }
@@ -171,6 +300,9 @@ const acilBakimBildir = async (req, res) => {
                 bakim_id: bakimKaydi.bakim_id,
                 makine_id: makine.makine_id,
                 makine_adi: makine.makine_adi,
+                ariza_id: arizaKaydi?.ariza_id || null,
+                ariza_tur_id: arizaTuru?.ariza_tur_id || null,
+                ariza_tur: arizaTuru?.ariza_tur || null,
                 durum: bakimKaydi.durum,
                 acil_bildirim: true
             }
@@ -230,6 +362,15 @@ const makineBakimKayitlari = async (req, res) => {
                                 tahmini_omur_saati: true,
                             }
                         }
+                    }
+                },
+                // Dahili teknisyen bilgisi için kullanici tablosu
+                kullanici: {
+                    select: {
+                        kullanici_id: true,
+                        ad: true,
+                        soyad: true,
+                        telefon: true
                     }
                 },
                 // servis_puan bilgisini dahil et
@@ -469,13 +610,20 @@ const getTeknikServisIsleri = async (req, res) => {
         const isler = await prisma_1.default.bakim_kaydi.findMany({
             where: {
                 durum: {
-                    in: ['Teknik Serviste', 'TAMAMLANDI', 'Bakımda', 'ONAYLANDI']
+                    in: ['BEKLEYEN', 'Onay Bekliyor', 'Teknik Serviste', 'TAMAMLANDI', 'Bakımda', 'ONAYLANDI']
                 }
             },
             include: {
                 makine: {
                     select: {
-                        makine_adi: true
+                        makine_adi: true,
+                        lokasyon: {
+                            select: {
+                                kat: true,
+                                fabrika_alani: true
+                            },
+                            take: 1
+                        }
                     }
                 },
                 ariza_kaydi: {
@@ -494,6 +642,15 @@ const getTeknikServisIsleri = async (req, res) => {
                         soyad: true
                     }
                 },
+                kullanici: {
+                    select: {
+                        ad: true,
+                        soyad: true,
+                        rol: {
+                            select: { rol_adi: true }
+                        }
+                    }
+                },
                 parca_degisim: {
                     include: {
                         parca: {
@@ -509,8 +666,17 @@ const getTeknikServisIsleri = async (req, res) => {
                 bakim_tarihi: 'desc'
             }
         });
+        const enGuncelIslerMap = new Map();
+        for (const is of isler) {
+            // Her makine_id için sadece ilk karşılaştığımızı (en yenisini) alıyoruz.
+            if (is.makine_id && !enGuncelIslerMap.has(is.makine_id)) {
+                enGuncelIslerMap.set(is.makine_id, is);
+            }
+        }
+        // Map'ten sadece eşsiz (en güncel) kayıtları diziye çevir
+        const filtrelenmisIsler = Array.from(enGuncelIslerMap.values());
         // 3. Görseldeki tabloya uygun formatta DTO hazırlıyoruz
-        const tabloVerisi = isler.map(is => {
+        const tabloVerisi = filtrelenmisIsler.map((is) => {
             // Durum mapping: Teknik Serviste -> ONAYLANDI (frontend mantığı)
             let frontendDurum = is.durum;
             if (is.durum === 'Teknik Serviste' || is.durum === 'Bakımda') {
@@ -519,10 +685,16 @@ const getTeknikServisIsleri = async (req, res) => {
             const aciklama = is.aciklama || "";
             const acilBildirim = aciklama.includes(ACIL_BILDIRIM_ETIKETI);
             const temizAciklama = aciklama.replace(ACIL_BILDIRIM_ETIKETI, "").trim();
+            const lokasyon = Array.isArray(is.makine?.lokasyon) ? is.makine.lokasyon[0] : null;
+            const lokasyonBilgisi = lokasyon
+                ? [lokasyon.kat, lokasyon.fabrika_alani].filter(Boolean).join(" - ")
+                : null;
             return {
                 bakim_id: is.bakim_id,
                 makine_id: is.makine_id,
                 makine_adi: is.makine?.makine_adi || `Makine #${is.makine_id}`,
+                lokasyon_bilgisi: lokasyonBilgisi,
+                lokasyon,
                 durum: frontendDurum,
                 ariza_notu: is.ariza_kaydi?.ariza_aciklama || temizAciklama || "Belirtilmemiş",
                 acil_bildirim: acilBildirim,
@@ -532,10 +704,13 @@ const getTeknikServisIsleri = async (req, res) => {
                 durus_suresi: is.durus_suresi ? Number(is.durus_suresi) : 0,
                 aciklama: temizAciklama,
                 servis_firmasi: is.servis_firma?.firma_adi || "Belirtilmemiş",
-                teknisyen: is.servis_sorumlusu
-                    ? `${is.servis_sorumlusu.ad} ${is.servis_sorumlusu.soyad}`
-                    : "Belirtilmemiş",
-                degisen_parcalar: (is.parca_degisim || []).map(pd => ({
+                // Teknisyen adı: kullanici_id doluysa iç personel (rol bilgisiyle), sorumlu_id doluysa misafir servis
+                teknisyen: is.kullanici_id && is.kullanici
+                    ? `${is.kullanici.ad} ${is.kullanici.soyad}${is.kullanici.rol?.rol_adi ? ` (${is.kullanici.rol.rol_adi})` : ''}`
+                    : is.sorumlu_id && is.servis_sorumlusu
+                        ? `${is.servis_sorumlusu.ad} ${is.servis_sorumlusu.soyad}`
+                        : "Belirtilmemiş",
+                degisen_parcalar: (is.parca_degisim || []).map((pd) => ({
                     parca_adi: pd.parca?.parca_adi || "Bilinmeyen",
                     adet: pd.adet || 1,
                     maliyet: pd.parca?.parca_maliyeti || 0
@@ -634,7 +809,9 @@ const bakimIsleminiOnayla = async (req, res) => {
             where: { bakim_id: bakimId },
             select: {
                 bakim_id: true,
-                servis_puan_id: true
+                servis_puan_id: true,
+                makine_id: true,
+                bakim_tarihi: true
             }
         });
         if (!bakim) {
@@ -643,12 +820,24 @@ const bakimIsleminiOnayla = async (req, res) => {
         if (!bakim.servis_puan_id) {
             return res.status(400).json({ success: false, message: "İşlem onaylanmadan önce puan verilmelidir." });
         }
-        await prisma_1.default.bakim_kaydi.update({
-            where: { bakim_id: bakimId },
-            data: {
-                durum: "TAMAMLANDI"
-            }
-        });
+        // TPM: Duruş süresini otomatik hesapla (bakım oluşturulma → tamamlanma)
+        let hesaplananDurus = 0;
+        if (bakim.bakim_tarihi) {
+            hesaplananDurus = await (0, durusSuresiHesapla_1.otomatikDurusSuresiHesapla)(bakim.bakim_tarihi, new Date());
+        }
+        await prisma_1.default.$transaction([
+            prisma_1.default.bakim_kaydi.update({
+                where: { bakim_id: bakimId },
+                data: {
+                    durum: "TAMAMLANDI",
+                    durus_suresi: new client_1.Prisma.Decimal(hesaplananDurus)
+                }
+            }),
+            prisma_1.default.makine.update({
+                where: { makine_id: bakim.makine_id },
+                data: { aktiflik_durumu: true }
+            })
+        ]);
         return res.status(200).json({
             success: true,
             message: "Bakım işlemi onaylandı."
@@ -694,6 +883,12 @@ const TumBakimlarToplu = async (req, res) => {
                         puan_id: true,
                         puan: true
                     }
+                },
+                kullanici: {
+                    select: { ad: true, soyad: true, rol: { select: { rol_adi: true } } }
+                },
+                servis_sorumlusu: {
+                    select: { ad: true, soyad: true, sorumlu_adi: true }
                 }
             },
             orderBy: {
@@ -704,7 +899,8 @@ const TumBakimlarToplu = async (req, res) => {
         const formatliBakimlar = tumBakimlar.map(b => ({
             ...b,
             makine_ad: b.makine?.makine_adi || 'Bilinmeyen Makine',
-            servis_firmasi: b.servis_firma?.firma_adi || `Firma #${b.servis_firma_id}`
+            servis_firmasi: b.servis_firma?.firma_adi || `Firma #${b.servis_firma_id || 'Belirtilmemiş'}`,
+            teknisyen: b.kullanici ? `${b.kullanici.ad} ${b.kullanici.soyad}` : (b.servis_sorumlusu ? (b.servis_sorumlusu.ad ? `${b.servis_sorumlusu.ad} ${b.servis_sorumlusu.soyad}` : b.servis_sorumlusu.sorumlu_adi) : 'Belirtilmemiş')
         }));
         return res.status(200).json({ success: true, data: formatliBakimlar });
     }
@@ -763,7 +959,7 @@ const qrBakimTamamla = async (req, res) => {
         console.log('[QR-TAMAMLA] Gelen istek body:', JSON.stringify(req.body, null, 2));
         console.log('[QR-TAMAMLA] Kullanıcı:', req.user?.userId, '| Rol:', req.user?.rol);
         console.log('─────────────────────────────────────────');
-        const { bakim_id, bakim_maliyet, aciklama, degisen_parcalar, durus_suresi } = req.body;
+        const { bakim_id, bakim_maliyet, aciklama, degisen_parcalar, durus_suresi, servis_firma_id, bakim_tur_id } = req.body;
         // Tip dönüşümleri ve validasyon
         const parsedBakimId = Number(bakim_id);
         if (!parsedBakimId || isNaN(parsedBakimId)) {
@@ -779,7 +975,9 @@ const qrBakimTamamla = async (req, res) => {
             select: {
                 bakim_id: true,
                 makine_id: true,
-                durum: true
+                durum: true,
+                bakim_tarihi: true,
+                ariza_kaydi: { select: { olusturma_tarihi: true, baslangic_zamani: true } }
             }
         });
         if (!mevcutBakim) {
@@ -804,16 +1002,38 @@ const qrBakimTamamla = async (req, res) => {
             // 1) Bakım kaydını güncelle — durum TAMAMLANDI, form detayları yazılır
             // Tip dönüşümleri — frontend'den gelen değerlerin güvenli parse'ı
             const parsedMaliyet = bakim_maliyet ? Number(bakim_maliyet) : 0;
-            const parsedDurus = durus_suresi ? Number(String(durus_suresi)) : null;
             const parsedAciklama = aciklama ? String(aciklama).trim() : '';
-            console.log('[QR-TAMAMLA] Parse edilen değerler → maliyet:', parsedMaliyet, '| durus:', parsedDurus, '| aciklama:', parsedAciklama.substring(0, 50));
+            const parsedBakimTurId = bakim_tur_id ? Number(bakim_tur_id) : undefined;
+            let parsedDurus = durus_suresi ? Number(String(durus_suresi)) : null;
+            // TPM: Eğer formdan duruş süresi gelmemişse OTOMATİK HESAPLA
+            if (!parsedDurus) {
+                const mevcutBakimAny = mevcutBakim;
+                const baslangicTarihi = mevcutBakimAny.ariza_kaydi?.baslangic_zamani || mevcutBakimAny.ariza_kaydi?.olusturma_tarihi || mevcutBakim.bakim_tarihi;
+                if (baslangicTarihi) {
+                    parsedDurus = await (0, durusSuresiHesapla_1.otomatikDurusSuresiHesapla)(baslangicTarihi, new Date());
+                }
+                else {
+                    parsedDurus = 0;
+                }
+            }
+            console.log('[QR-TAMAMLA] Parse edilen değerler → maliyet:', parsedMaliyet, '| otomatik durus:', parsedDurus, '| aciklama:', parsedAciklama.substring(0, 50));
+            // Kullanıcının veya formdan gelen servis firma ID'sini belirle
+            const finalServisFirmaId = req.user?.firma_id ? Number(req.user.firma_id) : (servis_firma_id ? Number(servis_firma_id) : undefined);
+            // Bakımı tamamlayan kişiyi (oturum sahibi) kaydetmek için tespit et
+            const tokenUser = req.user;
+            const currentUserId = tokenUser?.userId ? Number(tokenUser.userId) : undefined;
+            const isServisRole = tokenUser?.rol === 'SERVIS';
             const guncellenmisKayit = await tx.bakim_kaydi.update({
                 where: { bakim_id: parsedBakimId },
                 data: {
                     durum: 'TAMAMLANDI',
                     bakim_maliyet: parsedMaliyet,
                     aciklama: parsedAciklama || undefined,
-                    durus_suresi: parsedDurus ? new client_1.Prisma.Decimal(parsedDurus) : undefined,
+                    durus_suresi: parsedDurus !== null && parsedDurus !== undefined ? new client_1.Prisma.Decimal(parsedDurus) : undefined,
+                    servis_firma_id: finalServisFirmaId,
+                    bakim_tur_id: parsedBakimTurId,
+                    kullanici_id: (!isServisRole && currentUserId) ? currentUserId : undefined,
+                    sorumlu_id: (isServisRole && currentUserId) ? currentUserId : undefined,
                     bakim_tarihi: new Date() // Tamamlanma anı
                 }
             });
@@ -873,3 +1093,66 @@ const qrBakimTamamla = async (req, res) => {
     }
 };
 exports.qrBakimTamamla = qrBakimTamamla;
+// ═══════════════════════════════════════════════════════════════════
+// DURUŞ SÜRESİ YENİDEN HESAPLAMA — POST /api/bakimlar/durus-yeniden-hesapla
+// Mevcut TAMAMLANDI kayıtlarının duruş sürelerini vardiya bazlı yeniden hesaplar.
+// ═══════════════════════════════════════════════════════════════════
+const durusSuresiYenidenHesapla = async (req, res) => {
+    try {
+        // Tüm TAMAMLANDI bakım kayıtlarını çek
+        const tamamlananlar = await prisma_1.default.bakim_kaydi.findMany({
+            where: { durum: 'TAMAMLANDI' },
+            select: {
+                bakim_id: true,
+                makine_id: true,
+                bakim_tarihi: true,
+                durus_suresi: true
+            }
+        });
+        // Her makine için en eski BEKLEYEN/ONAYLANDI kaydını bulmak zor olduğundan,
+        // bakim_tarihi'ni başlangıç kabul edip, mevcut zamana göre DEĞİL,
+        // tamamlanma zamanı bilinmediğinden mevcut durus_suresi > 0 olanları
+        // vardiya bazlı yeniden hesapla (bakim_tarihi + durus_suresi saat ekleyerek bitiş tahmin et)
+        const vardiyalar = await prisma_1.default.vardiya_saatleri.findMany({
+            select: { baslangic_saati: true, bitis_saati: true }
+        });
+        if (!vardiyalar.length) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vardiya saatleri tanımlı değil. Önce Sistem Ayarlarından vardiyaları tanımlayınız.'
+            });
+        }
+        let guncellenenSayisi = 0;
+        const { hesaplaDurusSuresi } = await Promise.resolve().then(() => __importStar(require('../utils/durusSuresiHesapla')));
+        for (const kayit of tamamlananlar) {
+            if (!kayit.bakim_tarihi)
+                continue;
+            const mevcutDurus = Number(kayit.durus_suresi || 0);
+            if (mevcutDurus <= 0)
+                continue; // Duruş süresi 0 olanları atla
+            // Tahmini bitiş zamanı: bakim_tarihi + mevcut durus_suresi (saat)
+            const tahminiTamamlanma = new Date(kayit.bakim_tarihi.getTime() + mevcutDurus * 60 * 60 * 1000);
+            const yeniDurus = hesaplaDurusSuresi(kayit.bakim_tarihi, tahminiTamamlanma, vardiyalar);
+            if (yeniDurus !== mevcutDurus) {
+                await prisma_1.default.bakim_kaydi.update({
+                    where: { bakim_id: kayit.bakim_id },
+                    data: { durus_suresi: new client_1.Prisma.Decimal(yeniDurus) }
+                });
+                guncellenenSayisi++;
+            }
+        }
+        return res.status(200).json({
+            success: true,
+            message: `${guncellenenSayisi} adet bakım kaydının duruş süresi vardiya bazlı yeniden hesaplandı.`,
+            data: { toplam_kayit: tamamlananlar.length, guncellenen: guncellenenSayisi }
+        });
+    }
+    catch (error) {
+        console.error('Duruş süresi yeniden hesaplama hatası:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Duruş süreleri yeniden hesaplanırken bir hata oluştu.'
+        });
+    }
+};
+exports.durusSuresiYenidenHesapla = durusSuresiYenidenHesapla;

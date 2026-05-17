@@ -592,13 +592,14 @@ export const api = {
     });
     return handleResponse(res);
   },
-  createEmergencyMaintenance: async ({ makine_id, aciklama }) => {
+  createEmergencyMaintenance: async ({ makine_id, aciklama, ariza_id }) => {
     const res = await fetch(`${API_BASE}/bakimlar/acil-bildir`, {
       method: "POST",
       headers: getHeaders(),
       body: JSON.stringify({
         makine_id: Number(makine_id),
         aciklama,
+        ariza_id: ariza_id ? Number(ariza_id) : undefined,
       }),
     });
     return handleResponse(res);

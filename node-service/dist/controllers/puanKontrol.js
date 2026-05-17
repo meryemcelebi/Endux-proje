@@ -9,7 +9,7 @@ const prisma_1 = __importDefault(require("../config/prisma"));
 // 1 - 5 arasında servise puan verilir, 5 en yüksek puandır
 async function servisPuanVer(req, res) {
     try {
-        const { servis_firma_id, puan, yorum } = req.body;
+        const { servis_firma_id, puan, yorum, bakim_id } = req.body;
         const puanlayanID = Number(req.user?.userId);
         if (!servis_firma_id || puan === undefined || puan === null) {
             res.status(400).json({
@@ -46,6 +46,7 @@ async function servisPuanVer(req, res) {
                     puan: puanDegeri,
                     yorum: yorum ? String(yorum) : null,
                     puanlayan_kullanici_id: puanlayanID,
+                    bakim_id: bakim_id ? Number(bakim_id) : null, // BUG FIX: bakim_id kaydediliyor
                     tarih: new Date()
                 }
             });
@@ -107,6 +108,22 @@ async function tedarikciPuanVer(req, res) {
                     tarih: new Date()
                 }
             });
+            //  guvenilirlik_skoru alanını güncel ortalamaya göre güncelle
+            const tumPuanlar = await tx.tedarikci_puan.findMany({
+                where: { tedarikci_id: Number(tedarikci_id) },
+                select: { puan: true }
+            });
+            const gecerliPuanlar = tumPuanlar
+                .map(tp => Number(tp.puan))
+                .filter(p => Number.isFinite(p) && p > 0);
+            if (gecerliPuanlar.length > 0) {
+                const ortalama = gecerliPuanlar.reduce((a, b) => a + b, 0) / gecerliPuanlar.length;
+                // guvenilirlik_skoru = ortalama * 10 (1-5 puan → 10-50 skor)
+                await tx.tedarikci.update({
+                    where: { tedarikci_id: Number(tedarikci_id) },
+                    data: { guvenilirlik_skoru: Number((ortalama * 10).toFixed(1)) }
+                });
+            }
             return yeniPuan;
         });
         res.status(201).json({

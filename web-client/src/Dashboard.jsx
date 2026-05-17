@@ -31,7 +31,8 @@ export default function Dashboard() {
   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
   const [alertModalType, setAlertModalType] = useState("risk");
   const [activeBreakdownId, setActiveBreakdownId] = useState(null);
-  const [breakdownDesc, setBreakdownDesc] = useState("");
+  const [selectedBreakdownTypeId, setSelectedBreakdownTypeId] = useState("");
+  const [arizaTurleri, setArizaTurleri] = useState([]);
   const [emergencySubmitId, setEmergencySubmitId] = useState(null);
   const [ignoredRiskIds, setIgnoredRiskIds] = useState([]);
   const [activeFloor, setActiveFloor] = useState(0); // Fabrika haritası kat kontrolü
@@ -131,6 +132,9 @@ export default function Dashboard() {
         const inventoryData = await api.getInventory();
         setLowStockParts((inventoryData || []).filter(part => Number(part.miktar || 0) < 5));
 
+        const arizaTurleriData = await api.getSystemArizaTurleri();
+        setArizaTurleri(arizaTurleriData || []);
+
       } catch (err) {
         console.error("Dashboard yükleme hatası:", err);
         alert("Dashboard verileri yüklenirken bir hata oluştu. Lütfen sayfayı yenileyiniz. Hata: " + err.message);
@@ -162,9 +166,9 @@ export default function Dashboard() {
 
   // Yeni bir arıza kaydı oluşturma işlemi (Bildirim simülasyonu)
   const handleCreateBreakdown = async (mach) => {
-    const aciklama = breakdownDesc.trim();
-    if (!aciklama) {
-      alert("Lütfen detaylı arıza açıklaması yazın.");
+    const selectedAriza = arizaTurleri.find((ariza) => String(ariza.ariza_tur_id) === String(selectedBreakdownTypeId));
+    if (!selectedAriza) {
+      alert("Lütfen arıza türü seçin.");
       return;
     }
 
@@ -172,7 +176,8 @@ export default function Dashboard() {
       setEmergencySubmitId(mach.id);
       const response = await api.createEmergencyMaintenance({
         makine_id: mach.id,
-        aciklama,
+        ariza_id: selectedAriza.ariza_tur_id,
+        aciklama: selectedAriza.ariza_tur,
       });
 
       setMachinesList(prev => prev.map(machine =>
@@ -182,7 +187,7 @@ export default function Dashboard() {
       ));
       setIgnoredRiskIds(prev => prev.includes(mach.id) ? prev : [...prev, mach.id]);
       setActiveBreakdownId(null);
-      setBreakdownDesc("");
+      setSelectedBreakdownTypeId("");
       alert(`${mach.ad || mach.makine_adi} için acil bakım iş emri teknik servise aktarıldı.`);
       navigate("/teknik-servis");
     } catch (err) {
@@ -198,6 +203,7 @@ export default function Dashboard() {
     if (!confirmIgnore) return;
     setIgnoredRiskIds(prev => prev.includes(machineId) ? prev : [...prev, machineId]);
     setActiveBreakdownId(null);
+    setSelectedBreakdownTypeId("");
   };
 
 
@@ -1157,7 +1163,13 @@ export default function Dashboard() {
                               </div>
                               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(90px, 1fr))", gap: "8px", minWidth: "330px" }}>
                                 <button onClick={() => navigate(`/makine/${m.id}`)} style={{ ...btnStyle, background: "#1e293b", width: "100%", minWidth: "0" }}>Detay Gör</button>
-                                <button onClick={() => setActiveBreakdownId(activeBreakdownId === m.id ? null : m.id)} style={{ ...btnStyle, background: "#e94560", width: "100%", minWidth: "0" }}>
+                                <button
+                                  onClick={() => {
+                                    setActiveBreakdownId(activeBreakdownId === m.id ? null : m.id);
+                                    setSelectedBreakdownTypeId("");
+                                  }}
+                                  style={{ ...btnStyle, background: "#e94560", width: "100%", minWidth: "0" }}
+                                >
                                   {activeBreakdownId === m.id ? "Gizle" : "Arıza Kaydı"}
                                 </button>
                                 <button onClick={() => handleIgnoreMachine(m.id, makineAdi)} style={{ ...btnStyle, background: "#94a3b8", width: "100%", minWidth: "0" }}>Yoksay</button>
@@ -1166,18 +1178,24 @@ export default function Dashboard() {
 
                             {activeBreakdownId === m.id && (
                               <div style={{ marginTop: "16px", padding: "16px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e1e5eb" }}>
-                                <div style={{ marginBottom: "10px", fontWeight: "bold", fontSize: "14px", color: "#333" }}>Detaylı Arıza Açıklaması:</div>
-                                <textarea
-                                  value={breakdownDesc}
-                                  onChange={(e) => setBreakdownDesc(e.target.value)}
-                                  placeholder="Açıklama..."
-                                  style={{ width: "100%", padding: "12px", boxSizing: "border-box", borderRadius: "6px", border: "1px solid #ccc", outline: "none", minHeight: "90px", marginBottom: "12px", fontSize: "14px", resize: "vertical" }}
-                                />
+                                <div style={{ marginBottom: "10px", fontWeight: "bold", fontSize: "14px", color: "#333" }}>Arıza Türü:</div>
+                                <select
+                                  value={selectedBreakdownTypeId}
+                                  onChange={(e) => setSelectedBreakdownTypeId(e.target.value)}
+                                  style={breakdownSelectStyle}
+                                >
+                                  <option value="">Arıza türü seçin...</option>
+                                  {arizaTurleri.map((ariza) => (
+                                    <option key={ariza.ariza_tur_id} value={ariza.ariza_tur_id}>
+                                      {ariza.ariza_tur}
+                                    </option>
+                                  ))}
+                                </select>
                                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
                                   <button
                                     onClick={() => handleCreateBreakdown({ ...m, ad: makineAdi })}
-                                    disabled={emergencySubmitId === m.id}
-                                    style={{ ...saveBtnStyle, opacity: emergencySubmitId === m.id ? 0.7 : 1, cursor: emergencySubmitId === m.id ? "default" : "pointer" }}
+                                    disabled={emergencySubmitId === m.id || !selectedBreakdownTypeId}
+                                    style={{ ...saveBtnStyle, opacity: emergencySubmitId === m.id || !selectedBreakdownTypeId ? 0.7 : 1, cursor: emergencySubmitId === m.id || !selectedBreakdownTypeId ? "default" : "pointer" }}
                                   >
                                     {emergencySubmitId === m.id ? "Gönderiliyor..." : "Kaydet ve Bildir"}
                                   </button>
@@ -1334,6 +1352,18 @@ const btnStyle = { minWidth: "115px", padding: "10px 5px", background: "#e94560"
 
 // Kaydet/Onayla butonları
 const saveBtnStyle = { padding: "10px 20px", background: "#2ecc71", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" };
+const breakdownSelectStyle = {
+  width: "100%",
+  padding: "12px",
+  boxSizing: "border-box",
+  borderRadius: "6px",
+  border: "1px solid #cbd5e1",
+  outline: "none",
+  marginBottom: "12px",
+  fontSize: "14px",
+  color: "#1e293b",
+  background: "white"
+};
 
 // Harita kutusu tasarımı
 const mapBox = {

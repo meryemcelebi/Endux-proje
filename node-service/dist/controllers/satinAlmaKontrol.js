@@ -186,12 +186,16 @@ exports.getAlimGecmisi = getAlimGecmisi;
 // GET /api/satin-alma/stok
 const getStokDurumu = async (req, res) => {
     try {
+        // Sadece stok_miktari > 0 olanları getir (tükenmiş parçaları hariç tut)
         const parcalar = await prisma_1.default.parca.findMany({
+            where: {
+                stok_miktari: { gt: 0 }
+            },
             orderBy: {
                 parca_adi: 'asc'
             }
         });
-        // Frontend'in beklediği veri yapısına çeviriyoruz
+        // frontend için
         const formatliStoklar = parcalar.map((p) => ({
             stok_id: p.parca_id,
             parca_adi: p.parca_adi,

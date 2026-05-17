@@ -9,13 +9,15 @@ router.get('/onay-bekleyenler', yetki_1.oturumKontrol, bakimKontrol_1.getOnayBek
 // GET /api/bakimlar/stok-uyarisi  — Düşük stok uyarısı getirir
 router.get('/stok-uyarisi', yetki_1.oturumKontrol, bakimKontrol_1.dusukStokUyarisi);
 // GET /api/bakimlar/teknik-servis — Teknik servis işlerini getirir
-router.get('/teknik-servis', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('YONETICI', 'TEKNISYEN'), bakimKontrol_1.getTeknikServisIsleri);
+router.get('/teknik-servis', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('YONETICI', 'TEKNISYEN', 'SERVIS'), bakimKontrol_1.getTeknikServisIsleri);
 // GET /api/bakimlar/tum-bakimlar — Tüm bakım geçmişini toplu getirir
 router.get('/tum-bakimlar', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('YONETICI'), bakimKontrol_1.TumBakimlarToplu);
 // POST /api/bakimlar/qr-tamamla — QR okutarak sahada bakım tamamlama
 router.post('/qr-tamamla', yetki_1.oturumKontrol, bakimKontrol_1.qrBakimTamamla);
 // POST /api/bakimlar/acil-bildir — Riskli makineden doğrudan teknik servis iş emri oluşturur
 router.post('/acil-bildir', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('YONETICI'), bakimKontrol_1.acilBakimBildir);
+// POST /api/bakimlar/durus-yeniden-hesapla — Mevcut kayıtların duruş sürelerini vardiya bazlı yeniden hesaplar
+router.post('/durus-yeniden-hesapla', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('YONETICI'), bakimKontrol_1.durusSuresiYenidenHesapla);
 // POST /api/bakimlar  — Yeni bakım kaydı oluşturur
 router.post('/', yetki_1.oturumKontrol, (0, yetki_1.rolKontrol)('TEKNISYEN', 'YONETICI', 'SERVIS'), bakimKontrol_1.bakimKaydiGir);
 // PUT /api/bakimlar/onayla — Bekleyen bakımları onaylar (Teknik Servis'e aktarır)

@@ -137,7 +137,6 @@ export default function ChecklistGiris() {
           <p style={{ color: "#a0a5b1", marginTop: "5px", fontSize: "14px" }}>
             {isGuestMode ? "Misafir (Servis) Girişi" : "Personel Giriş Paneli"}
           </p>
-          {id && <div style={etiketStil}>Makine ID: {id}</div>}
         </div>
 
         {welcomeMsg && (

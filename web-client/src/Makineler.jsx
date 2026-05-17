@@ -438,6 +438,7 @@ export default function Makineler() {
               .map((m) => {
                 const riskSkoru = Number(m.mevcut_risk_skoru || 0);
                 const isMaxRisk = riskSkoru >= 100;
+                const isExpanded = expandedMachineId === m.id;
 
                 return (
                   <div
@@ -445,7 +446,7 @@ export default function Makineler() {
                     style={{
                       ...cardStyle,
                       cursor: "pointer",
-                      border: expandedMachineId === m.id
+                      border: isExpanded
                         ? "2px solid #3498db"
                         : isMaxRisk
                           ? "2px solid rgba(231, 76, 60, 0.55)"
@@ -463,12 +464,31 @@ export default function Makineler() {
                       opacity: (m.aktiflik_durumu === "Pasif" || m.aktiflik_durumu === false) ? 0.7 : 1, // Pasif makineleri hafif şeffaf yap
                       transition: "all 0.3s ease"
                     }}
-                    onClick={() => setExpandedMachineId(expandedMachineId === m.id ? null : m.id)}
+                    onClick={() => setExpandedMachineId(isExpanded ? null : m.id)}
                   >
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid #eee", paddingBottom: "10px", marginBottom: "15px", height: "50px" }}>
-                        <h3 style={{ margin: 0, color: "#2c3e50", fontSize: "16px", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{m.makine_adi || m.makine_ad}</h3>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "5px", alignItems: "flex-end" }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", minWidth: 0, flex: 1 }}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedMachineId(isExpanded ? null : m.id);
+                            }}
+                            aria-label={isExpanded ? "Makine detaylarını gizle" : "Makine detaylarını göster"}
+                            title={isExpanded ? "Detayları gizle" : "Detayları göster"}
+                            style={{
+                              ...detailToggleBtnStyle,
+                              background: isExpanded ? "#3498db" : "#f0f6fc",
+                              color: isExpanded ? "white" : "#0f3460",
+                              borderColor: isExpanded ? "#3498db" : "#cfe3f7"
+                            }}
+                          >
+                            {isExpanded ? "−" : "+"}
+                          </button>
+                          <h3 style={{ margin: 0, color: "#2c3e50", fontSize: "16px", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{m.makine_adi || m.makine_ad}</h3>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "5px", alignItems: "flex-end", marginLeft: "10px" }}>
                           {m.garanti_suresi > 0 && (
                             <span style={garantiRozetStyle} title={`${m.garanti_suresi} Ay Garanti`}>
                               🛡️ Garantili
@@ -528,7 +548,7 @@ export default function Makineler() {
                         </div>
                       </div>
 
-                      {expandedMachineId === m.id && (
+                      {isExpanded && (
                         <div style={{ marginTop: "15px", paddingTop: "15px", borderTop: "1px dashed #ccc", overflow: "hidden" }}>
                           <div style={{ marginBottom: "10px", color: "#0f3460", fontWeight: "bold", fontSize: "14px" }}>Detaylı Bilgiler</div>
                           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "13px", color: "#555" }}>
@@ -811,6 +831,23 @@ const kpiBox = { flex: 1, minWidth: "150px", background: "white", padding: "20px
 const kpiTitle = { color: "#7f8c8d", fontSize: "13px", fontWeight: "bold", textTransform: "uppercase", marginBottom: "8px", letterSpacing: "0.5px" };
 
 const cardStyle = { background: "white", padding: "20px", borderRadius: "10px", boxShadow: "0 4px 15px rgba(0,0,0,0.05)", transition: "transform 0.2s" };
+const detailToggleBtnStyle = {
+  width: "28px",
+  height: "28px",
+  minWidth: "28px",
+  borderRadius: "50%",
+  border: "1px solid #cfe3f7",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "20px",
+  lineHeight: 1,
+  fontWeight: "800",
+  cursor: "pointer",
+  padding: 0,
+  boxShadow: "0 2px 6px rgba(52, 152, 219, 0.16)",
+  transition: "all 0.2s ease"
+};
 
 const ekleButonStyle = { padding: "12px 20px", background: "#e94560", color: "white", fontSize: "15px", fontWeight: "bold", border: "none", borderRadius: "8px", cursor: "pointer", boxShadow: "0 4px 10px rgba(233, 69, 96, 0.3)" };
 const printBtnStyle = { marginTop: "15px", padding: "8px 15px", background: "#34495e", color: "white", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", fontSize: "13px", width: "100%" };

@@ -10,4 +10,6 @@ router.get('/vardiya-saatleri', sistemKontrol_1.getVardiyaSaatleri);
 router.post('/vardiya-saatleri', sistemKontrol_1.setVardiyaSaatleri);
 router.get('/makine-turu-durus-maliyetleri', sistemKontrol_1.getMakineTuruDurusMaliyetleri);
 router.post('/makine-turu-durus-maliyetleri', sistemKontrol_1.setMakineTuruDurusMaliyetleri);
+router.get('/ariza-turleri', sistemKontrol_1.siralaArizaTurleri);
+router.get('/bakim-turleri', sistemKontrol_1.siralaBakimTurleri);
 exports.default = router;
