@@ -3,9 +3,7 @@ import cors from "cors";
 import { config } from "./config";
 import routes from "./routes";
 import { connectDB } from "./config/prisma";
-import swaggerUi from 'swagger-ui-express';
-import fs from 'fs';
-import path from 'path';
+
 
 
 const app = express();
@@ -20,16 +18,7 @@ app.use(express.json());
 
 app.use(express.urlencoded({ extended: true }));
 // swagger.json dosyasını güvenli bir şekilde oku
-const swaggerDocument = JSON.parse(
-    fs.readFileSync(path.join(__dirname, 'swagger.json'), 'utf8')
-);
 
-// Express uygulmana middleware olarak ekle (Örn: app.use altındaki rotaların oraya)
-app.use(
-    '/api-docs', 
-    swaggerUi.serve as any, 
-    swaggerUi.setup(swaggerDocument) as any
-);
 app.get("/api/health", (_req, res) => {
   res.status(200).json({
     success: true,
