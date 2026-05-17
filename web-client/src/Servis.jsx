@@ -157,15 +157,13 @@ export default function Servis() {
     const payload = {
       makine_id: Number(id),
 
-      // Kural 1: Eğer kullanıcı/teknisyen ID yoksa 0 (Sıfır) GÖNDERME! null veya undefined gönder ki Prisma çökmek yerine boş geçsin.
       kullanici_id: currentUser?.userId || currentUser?.kullanici_id ? Number(currentUser.userId || currentUser.kullanici_id) : null,
       teknisyen_id: currentUser?.userId || currentUser?.kullanici_id ? Number(currentUser.userId || currentUser.kullanici_id) : null,
 
-      // Kural 2: Eğer giriş yapan kullanıcı dış servis ise (firma_id doluysa) onu kullan, yoksa formdan seçilmiş olanı al.
       servis_firma_id: currentUser?.firma_id ? Number(currentUser.firma_id) : (form.servis_firma_id ? Number(form.servis_firma_id) : null),
 
-      // Kural 3: Sabit 1 gönderme. Formda arıza türü seçildiyse onu al, seçilmediyse veritabanındaki (3 - Donanım Arızası) ID'sini kullan.
-      ariza_id: form.ariza_id ? Number(form.ariza_id) : 3,
+      // ariza_id backend'de ariza_kaydi tablosuna FK — formdan gelen ariza_tur_id ile karıştırılmamalı
+      ariza_id: null,
 
       ariza_sebebi: form.ariza_sebebi,
       bakim_maliyet: Number(form.bakim_maliyet) || 0,
