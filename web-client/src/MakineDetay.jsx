@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "./services/api";
+import { supabase } from "./supabaseClient";
 
 /**
  * Makine Detay Sayfası
@@ -16,6 +17,7 @@ export default function MakineDetay() {
     const [checklistHistory, setChecklistHistory] = useState([]); // Son 3 güne ait günlük kontrol formları
     const [isFocusView, setIsFocusView] = useState(false); // Detaylı "Teknik & Tedarikçi" görünüm modu anahtarı
     const [loading, setLoading] = useState(true); // Sayfa yükleniyor durum kontrolü
+    const [aiTahminiMaliyet, setAiTahminiMaliyet] = useState(null); // AI'ın son tahmini maliyeti
 
     // Güvenli render için yardımcı fonksiyon
     const safeVal = (v) => {
@@ -36,6 +38,21 @@ export default function MakineDetay() {
                 setMachine(macData);
                 setHistory(histData);
                 setChecklistHistory(chData);
+
+                // AI Tahmini Maliyet: ai_ariza_tespit tablosundan son kaydı çek
+                try {
+                    const { data: aiData } = await supabase
+                        .from('ai_ariza_tespit')
+                        .select('tahmini_maliyet, tahmin_edilen_ariza, tespit_tarihi')
+                        .eq('makine_id', Number(id))
+                        .order('tespit_tarihi', { ascending: false })
+                        .limit(1);
+                    if (aiData && aiData.length > 0 && aiData[0].tahmini_maliyet > 0) {
+                        setAiTahminiMaliyet(aiData[0]);
+                    }
+                } catch (aiErr) {
+                    console.error("AI maliyet verisi çekilemedi:", aiErr);
+                }
             } catch (err) {
                 console.error("Detaylar yüklenemedi", err);
             } finally {
@@ -204,6 +221,15 @@ export default function MakineDetay() {
                                     <div style={kartDegerStil}>{safeVal(machine.mevcut_risk_skoru)} / 100</div>
                                 </div>
                             </div>
+                            {aiTahminiMaliyet && (
+                                <div style={bilgiKartStil}>
+                                    <div style={kartIkonStil}>📊</div>
+                                    <div>
+                                        <div style={kartBaslikStil}>AI Tahmini Maliyet</div>
+                                        <div style={kartDegerStil}>{Number(aiTahminiMaliyet.tahmini_maliyet).toLocaleString()} ₺</div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                     </>

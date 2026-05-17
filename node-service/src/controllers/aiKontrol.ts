@@ -1,3 +1,4 @@
+
 import { Request, Response } from "express";
 import axios, { AxiosError } from "axios";
 import prisma from "../config/prisma";
@@ -205,6 +206,57 @@ async function riskSkoruKaydet(
         },
     });
 
+    // Güncel Parça Fiyatına Dayalı Maliyet Hesabı
+    // AI'ın kural motorundan gelen parça adını, veritabanındaki parca tablosunda arayıp
+    // güncel parca_maliyeti + (saatlik_durus_maliyeti × duruş süresi) ile toplam maliyet hesapla
+    let nihaiMaliyet = tahmin.detaylar.tahmini_maliyet || 0;
+
+    if (tahmin.tahmin_edilen_ariza && tahmin.tahmin_edilen_ariza !== "Arıza Tespit Edilmedi") {
+        try {
+            const parcaAdi = tahmin.detaylar.parca; // AI'ın söylediği parça adı (örn: "Bor Yağı Pompası")
+
+            // 1. Makine bilgilerini ve saatlik duruş maliyetini çek
+            const makineDetay = await prisma.makine.findUnique({
+                where: { makine_id: makineId },
+                include: { makine_turu: true }
+            });
+
+            // 2. Duruş Maliyeti = saatlik duruş maliyeti × AI'ın verdiği tahmini duruş süresi
+            const saatlikDurusMaliyeti = makineDetay?.makine_turu?.saatlik_durus_maliyeti || 0;
+            const durusMaliyeti = saatlikDurusMaliyeti * (tahmin.detaylar.tahmini_durus_suresi || 0);
+
+            // 3. Parça Maliyeti: AI'ın söylediği parça adını DB'deki parca tablosunda ara
+            let parcaMaliyeti = 0;
+            if (parcaAdi && parcaAdi !== "Sorun Yok" && parcaAdi !== "Kapsamlı kontrol gerekli") {
+                // Parça adı içinde anahtar kelimelerle ara (tam eşleşme yerine benzer arama)
+                const parcaKelimeler = parcaAdi.split(/[\s\/,()]+/).filter((k: string) => k.length > 2);
+
+                for (const kelime of parcaKelimeler) {
+                    const bulunanParca = await prisma.parca.findFirst({
+                        where: {
+                            parca_adi: { contains: kelime, mode: 'insensitive' }
+                        }
+                    });
+                    if (bulunanParca) {
+                        parcaMaliyeti += Number(bulunanParca.parca_maliyeti);
+                        console.log(`[AI-MALİYET] Parça bulundu: "${bulunanParca.parca_adi}" → ${bulunanParca.parca_maliyeti} TL`);
+                        break; // İlk eşleşen parçayı al
+                    }
+                }
+            }
+
+            // 4. Toplam Maliyet = Parça Maliyeti + Duruş Maliyeti
+            if (parcaMaliyeti > 0 || durusMaliyeti > 0) {
+                nihaiMaliyet = Math.round(parcaMaliyeti + durusMaliyeti);
+                console.log(`[AI-MALİYET] Parça: ${parcaMaliyeti} TL + Duruş: ${durusMaliyeti} TL = Toplam: ${nihaiMaliyet} TL`);
+            }
+            // Eğer DB'de parça bulunamazsa, AI'ın kural motorundaki sabit maliyet kullanılır (fallback)
+
+        } catch (err) {
+            console.error("[AI-MALİYET] Güncel fiyat hesaplamasında hata:", err);
+        }
+    }
+
     //ai_ariza_tespit tablosuna kaydet
     await prisma.ai_ariza_tespit.create({
         data: {
@@ -216,7 +268,7 @@ async function riskSkoruKaydet(
             tespit_tarihi: new Date(),
             model_versiyon: "xgboost-v4.0",
             tahmini_durus_suresi: tahmin.detaylar.tahmini_durus_suresi,
-            tahmini_maliyet: tahmin.detaylar.tahmini_maliyet,
+            tahmini_maliyet: nihaiMaliyet,
         },
     });
 
