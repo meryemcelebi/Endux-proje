@@ -68,6 +68,7 @@ export const api = {
     const json = await handleResponse(res);
     return (json.data || []).map((m) => {
       const sonRisk = m.risk_skoru?.[0] || null;
+      const sonAiTahmin = m.ai_ariza_tespit?.[0] || null;
       const riskScore = normalizeRiskScore(sonRisk?.risk_skoru);
       return {
         ...m,
@@ -76,6 +77,8 @@ export const api = {
         aktiflik_durumu: getMachineDisplayStatus(m),
         mevcut_risk_skoru: riskScore,
         risk_seviyesi: sonRisk?.risk_seviyesi || (riskScore >= 80 ? "YUKSEK" : riskScore >= 50 ? "ORTA" : "DUSUK"),
+        ai_tahmin: sonAiTahmin,
+        tahmin_edilen_ariza: sonAiTahmin?.tahmin_edilen_ariza || null,
         kategori: riskScore >= 80 ? "Yüksek Riskli" : riskScore >= 50 ? "Bakımı Yaklaşan" : "Normal",
         satin_alma_maliyeti: Number(m.satin_alma_maliyeti || 0),
         top_calisma_saati: Number(m.toplam_calisma_saati || 0),

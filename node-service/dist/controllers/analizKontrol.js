@@ -82,7 +82,7 @@ async function maliyetAnalizi(req, res) {
  * Maliyet Renk Kuralı
  * >%10 ise kırmızı
  * >%5 ise sarı
- * 2% -5% Turuncu
+
  * %2 ise yeşil
  */
 async function lokasyonHaritasi(req, res) {

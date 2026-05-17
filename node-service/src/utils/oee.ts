@@ -1,74 +1,74 @@
-export function roundOeeValue(value: number, digits = 2): number {
-    const factor = 10 ** digits;
-    return Math.round(value * factor) / factor;
+export function oeeYuvarla(deger: number, basamak = 2): number {
+    const carpan = 10 ** basamak;
+    return Math.round(deger * carpan) / carpan;
 }
 
-export function calculateOeeScore(
-    availability?: number | null,
-    performance?: number | null,
-    quality?: number | null,
-    digits = 2
+export function oeeSkoruHesapla(
+    kullanilabilirlik?: number | null,
+    performans?: number | null,
+    kalite?: number | null,
+    basamak = 2
 ): number | null {
-    if (availability == null || performance == null || quality == null) {
+    if (kullanilabilirlik == null || performans == null || kalite == null) {
         return null;
     }
 
-    return roundOeeValue((availability * performance * quality) / 10000, digits);
+    return oeeYuvarla((kullanilabilirlik * performans * kalite) / 10000, basamak);
 }
 
-export function averageOeeComponents<T>(
-    records: T[],
-    selectors: {
-        availability: (record: T) => number | null | undefined;
-        performance: (record: T) => number | null | undefined;
-        quality: (record: T) => number | null | undefined;
+export function oeeKomponentOrtalamasi<T>(
+    kayitlar: T[],
+    seciciler: {
+        kullanilabilirlik: (kayit: T) => number | null | undefined;
+        performans: (kayit: T) => number | null | undefined;
+        kalite: (kayit: T) => number | null | undefined;
     }
 ) {
-    const totals = records.reduce(
-        (acc, record) => {
-            const availability = selectors.availability(record);
-            const performance = selectors.performance(record);
-            const quality = selectors.quality(record);
+    const toplamlar = kayitlar.reduce(
+        (birikim, kayit) => {
+            const kullanilabilirlik = seciciler.kullanilabilirlik(kayit);
+            const performans = seciciler.performans(kayit);
+            const kalite = seciciler.kalite(kayit);
 
-            if (availability != null) {
-                acc.availability += availability;
-                acc.availabilityCount += 1;
+            if (kullanilabilirlik != null) {
+                birikim.kullanilabilirlik += kullanilabilirlik;
+                birikim.kullanilabilirlikSayisi += 1;
             }
-            if (performance != null) {
-                acc.performance += performance;
-                acc.performanceCount += 1;
+            if (performans != null) {
+                birikim.performans += performans;
+                birikim.performansSayisi += 1;
             }
-            if (quality != null) {
-                acc.quality += quality;
-                acc.qualityCount += 1;
+            if (kalite != null) {
+                birikim.kalite += kalite;
+                birikim.kaliteSayisi += 1;
             }
 
-            return acc;
+            return birikim;
         },
         {
-            availability: 0,
-            availabilityCount: 0,
-            performance: 0,
-            performanceCount: 0,
-            quality: 0,
-            qualityCount: 0,
+            kullanilabilirlik: 0,
+            kullanilabilirlikSayisi: 0,
+            performans: 0,
+            performansSayisi: 0,
+            kalite: 0,
+            kaliteSayisi: 0,
         }
     );
 
-    const availability = totals.availabilityCount
-        ? roundOeeValue(totals.availability / totals.availabilityCount)
+    const kullanilabilirlik = toplamlar.kullanilabilirlikSayisi
+        ? oeeYuvarla(toplamlar.kullanilabilirlik / toplamlar.kullanilabilirlikSayisi)
         : 0;
-    const performance = totals.performanceCount
-        ? roundOeeValue(totals.performance / totals.performanceCount)
+    const performans = toplamlar.performansSayisi
+        ? oeeYuvarla(toplamlar.performans / toplamlar.performansSayisi)
         : 0;
-    const quality = totals.qualityCount
-        ? roundOeeValue(totals.quality / totals.qualityCount)
+    const kalite = toplamlar.kaliteSayisi
+        ? oeeYuvarla(toplamlar.kalite / toplamlar.kaliteSayisi)
         : 0;
 
     return {
-        availability,
-        performance,
-        quality,
-        oee: calculateOeeScore(availability, performance, quality) ?? 0,
+        kullanilabilirlik,
+        performans,
+        kalite,
+        oee: oeeSkoruHesapla(kullanilabilirlik, performans, kalite) ?? 0,
     };
 }

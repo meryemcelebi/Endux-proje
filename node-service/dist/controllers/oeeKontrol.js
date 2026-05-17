@@ -67,7 +67,7 @@ async function getMakineOee(makineId, baslangicTarihi, bitisTarihi) {
             kullanilabilirlik: t.kullanilabilirlik_orani,
             performans: t.performans_orani,
             kalite: t.kalite_orani,
-            oee_skoru: (0, oee_1.calculateOeeScore)(t.kullanilabilirlik_orani, t.performans_orani, t.kalite_orani) ?? t.oee_skoru
+            oee_skoru: (0, oee_1.oeeSkoruHesapla)(t.kullanilabilirlik_orani, t.performans_orani, t.kalite_orani) ?? t.oee_skoru
         })),
         durus_nedenleri: durusPastaGrafik
     };
@@ -131,15 +131,15 @@ async function topluOeeGetir(req, res) {
                 let avgPerf = 0;
                 let avgKalite = 0;
                 if (oee.oee_trend.length > 0) {
-                    const averages = (0, oee_1.averageOeeComponents)(oee.oee_trend, {
-                        availability: val => val.kullanilabilirlik,
-                        performance: val => val.performans,
-                        quality: val => val.kalite,
+                    const averages = (0, oee_1.oeeKomponentOrtalamasi)(oee.oee_trend, {
+                        kullanilabilirlik: val => val.kullanilabilirlik,
+                        performans: val => val.performans,
+                        kalite: val => val.kalite,
                     });
                     avgOee = averages.oee;
-                    avgKull = averages.availability;
-                    avgPerf = averages.performance;
-                    avgKalite = averages.quality;
+                    avgKull = averages.kullanilabilirlik;
+                    avgPerf = averages.performans;
+                    avgKalite = averages.kalite;
                 }
                 sonuclar.push({
                     makine_id: oee.makine_id,
@@ -159,10 +159,10 @@ async function topluOeeGetir(req, res) {
                 });
             }
         }
-        const fabrikaOrtalamalari = (0, oee_1.averageOeeComponents)(sonuclar, {
-            availability: s => s.kullanabilirlik,
-            performance: s => s.performans,
-            quality: s => s.kalite,
+        const fabrikaOrtalamalari = (0, oee_1.oeeKomponentOrtalamasi)(sonuclar, {
+            kullanilabilirlik: s => s.kullanabilirlik,
+            performans: s => s.performans,
+            kalite: s => s.kalite,
         });
         // Tüm raporları çekip haftalık trend oluştur
         const tumOeeKayitlari = await prisma_1.default.oee_raporlari.findMany({
@@ -199,7 +199,7 @@ async function topluOeeGetir(req, res) {
             const q = getAvg(g.q);
             return {
                 week,
-                oee: (0, oee_1.calculateOeeScore)(a, p, q, 1) ?? 0,
+                oee: (0, oee_1.oeeSkoruHesapla)(a, p, q, 1) ?? 0,
                 a,
                 p,
                 q
@@ -211,9 +211,9 @@ async function topluOeeGetir(req, res) {
             data: {
                 fabrika_ortalama_oee: fabrikaOrtalamalari.oee,
                 fabrika_bilesenleri: {
-                    kullanilabilirlik: fabrikaOrtalamalari.availability,
-                    performans: fabrikaOrtalamalari.performance,
-                    kalite: fabrikaOrtalamalari.quality,
+                    kullanilabilirlik: fabrikaOrtalamalari.kullanilabilirlik,
+                    performans: fabrikaOrtalamalari.performans,
+                    kalite: fabrikaOrtalamalari.kalite,
                 },
                 donem: { baslangic, bitis },
                 fabrika_trend,

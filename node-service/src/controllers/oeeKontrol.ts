@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
-import { averageOeeComponents, calculateOeeScore } from '../utils/oee';
+import { oeeSkoruHesapla, oeeKomponentOrtalamasi } from '../utils/oee';
 
 export async function getMakineOee(makineId: number, baslangicTarihi: Date, bitisTarihi: Date) {
     const makine = await prisma.makine.findUnique({
@@ -66,7 +66,7 @@ export async function getMakineOee(makineId: number, baslangicTarihi: Date, biti
             kullanilabilirlik: t.kullanilabilirlik_orani,
             performans: t.performans_orani,
             kalite: t.kalite_orani,
-            oee_skoru: calculateOeeScore(
+            oee_skoru: oeeSkoruHesapla(
                 t.kullanilabilirlik_orani,
                 t.performans_orani,
                 t.kalite_orani
@@ -149,16 +149,16 @@ export async function topluOeeGetir(req: Request, res: Response) {
                 let avgKalite = 0;
 
                 if (oee.oee_trend.length > 0) {
-                    const averages = averageOeeComponents(oee.oee_trend, {
-                        availability: val => val.kullanilabilirlik,
-                        performance: val => val.performans,
-                        quality: val => val.kalite,
+                    const averages = oeeKomponentOrtalamasi(oee.oee_trend, {
+                        kullanilabilirlik: val => val.kullanilabilirlik,
+                        performans: val => val.performans,
+                        kalite: val => val.kalite,
                     });
 
                     avgOee = averages.oee;
-                    avgKull = averages.availability;
-                    avgPerf = averages.performance;
-                    avgKalite = averages.quality;
+                    avgKull = averages.kullanilabilirlik;
+                    avgPerf = averages.performans;
+                    avgKalite = averages.kalite;
                 }
 
                 sonuclar.push({
@@ -179,10 +179,10 @@ export async function topluOeeGetir(req: Request, res: Response) {
             }
         }
 
-        const fabrikaOrtalamalari = averageOeeComponents(sonuclar, {
-            availability: s => s.kullanabilirlik,
-            performance: s => s.performans,
-            quality: s => s.kalite,
+        const fabrikaOrtalamalari = oeeKomponentOrtalamasi(sonuclar, {
+            kullanilabilirlik: s => s.kullanabilirlik,
+            performans: s => s.performans,
+            kalite: s => s.kalite,
         });
             
         // Tüm raporları çekip haftalık trend oluştur
@@ -219,7 +219,7 @@ export async function topluOeeGetir(req: Request, res: Response) {
             const q = getAvg(g.q);
             return {
                 week,
-                oee: calculateOeeScore(a, p, q, 1) ?? 0,
+                oee: oeeSkoruHesapla(a, p, q, 1) ?? 0,
                 a,
                 p,
                 q
@@ -232,9 +232,9 @@ export async function topluOeeGetir(req: Request, res: Response) {
             data: {
                 fabrika_ortalama_oee: fabrikaOrtalamalari.oee,
                 fabrika_bilesenleri: {
-                    kullanilabilirlik: fabrikaOrtalamalari.availability,
-                    performans: fabrikaOrtalamalari.performance,
-                    kalite: fabrikaOrtalamalari.quality,
+                    kullanilabilirlik: fabrikaOrtalamalari.kullanilabilirlik,
+                    performans: fabrikaOrtalamalari.performans,
+                    kalite: fabrikaOrtalamalari.kalite,
                 },
                 donem: { baslangic, bitis },
                 fabrika_trend,

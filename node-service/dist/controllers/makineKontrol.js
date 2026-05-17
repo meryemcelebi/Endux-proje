@@ -331,6 +331,7 @@ async function tumMakineBilgileriGetir(req, res) {
                     include: { iletisim: true }
                 },
                 risk_skoru: { orderBy: { hesaplama_tarihi: 'desc' }, take: 1 },
+                ai_ariza_tespit: { orderBy: { tespit_tarihi: 'desc' }, take: 1 },
                 bakim_kaydi: { orderBy: { bakim_tarihi: 'desc' }, take: 5 },
                 ariza_kaydi: { orderBy: { olusturma_tarihi: 'desc' }, take: 5 }
             }

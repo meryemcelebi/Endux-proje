@@ -1,8 +1,18 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
-import { calculateOeeScore, roundOeeValue } from '../utils/oee';
+import { oeeSkoruHesapla, oeeKomponentOrtalamasi, oeeYuvarla } from '../utils/oee';
 
 const ONAY_BEKLEYEN_DURUMLAR = ['BEKLEYEN', 'Onay Bekliyor'];
+const YAKLASAN_BAKIM_SAAT_ESIGI = 50;
+
+const periyodikBakimSayaciHesapla = (toplamCalismaSaati: unknown, periyodikBakimSaati: unknown) => {
+    const calismaSaati = Number(toplamCalismaSaati || 0);
+    const periyodik = Number(periyodikBakimSaati || 3000);
+    const donguSaati = calismaSaati % periyodik;
+    const kalanSaat = calismaSaati > 0 && donguSaati === 0 ? 0 : periyodik - donguSaati;
+
+    return { calismaSaati, periyodik, kalanSaat };
+};
 
 export const getDashboardOzet = async (req: Request, res: Response): Promise<Response> => {
     try {
@@ -233,18 +243,13 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
             toplam_makine_alim: 0
         };
 
-        // TPM: %90 eşik algoritması — bakımı yaklaşan makineleri filtrele
+        // TPM: Çalışma saati sayaçlarıyla aynı döngüsel kalan saat hesabı
         const bakimiYaklasanMakineler = bakimiYaklasanAdaylar
-            .filter(m => {
-                const calismaSaati = Number(m.toplam_calisma_saati || 0);
-                const periyodik = m.makine_turu?.periyodik_bakim_saati || 3000;
-                const esikDeger = periyodik * 0.9; // %90 eşik
-                return calismaSaati >= esikDeger;
-            })
             .map(m => {
-                const calismaSaati = Number(m.toplam_calisma_saati || 0);
-                const periyodik = m.makine_turu?.periyodik_bakim_saati || 3000;
-                const kalanSaat = Math.max(0, periyodik - calismaSaati);
+                const { calismaSaati, periyodik, kalanSaat } = periyodikBakimSayaciHesapla(
+                    m.toplam_calisma_saati,
+                    m.makine_turu?.periyodik_bakim_saati
+                );
                 return {
                     makine_id: m.makine_id,
                     makine_adi: m.makine_adi || "İsimsiz Makine",
@@ -252,9 +257,10 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
                     calisma_saati: calismaSaati,
                     periyodik_limit: periyodik,
                     kalan_saat: kalanSaat,
-                    aciliyet: kalanSaat <= 0 ? "GEÇMİŞ" : kalanSaat <= 100 ? "KRİTİK" : "UYARI"
+                    aciliyet: kalanSaat <= 0 ? "GEÇMİŞ" : kalanSaat <= YAKLASAN_BAKIM_SAAT_ESIGI ? "KRİTİK" : "UYARI"
                 };
             })
+            .filter(m => m.kalan_saat <= YAKLASAN_BAKIM_SAAT_ESIGI)
             .sort((a, b) => a.kalan_saat - b.kalan_saat); // En acil olan önce
 
         const toplamMakine = makineDurumlari.reduce(
@@ -263,10 +269,10 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
         );
         const toplamAktifMAkine = makineDurumlari.find(durum => durum.aktiflik_durumu === true)?._count._all ?? 0;
         const toplamPasifMakine = makineDurumlari.find(durum => durum.aktiflik_durumu === false)?._count._all ?? 0;
-        const ortalamaKullanilabilirlik = roundOeeValue(ortalamaOee._avg.kullanilabilirlik_orani ?? 0);
-        const ortalamaPerformans = roundOeeValue(ortalamaOee._avg.performans_orani ?? 0);
-        const ortalamaKalite = roundOeeValue(ortalamaOee._avg.kalite_orani ?? 0);
-        const hesaplananOee = calculateOeeScore(
+        const ortalamaKullanilabilirlik = oeeYuvarla(ortalamaOee._avg.kullanilabilirlik_orani ?? 0);
+        const ortalamaPerformans = oeeYuvarla(ortalamaOee._avg.performans_orani ?? 0);
+        const ortalamaKalite = oeeYuvarla(ortalamaOee._avg.kalite_orani ?? 0);
+        const hesaplananOee = oeeSkoruHesapla(
             ortalamaKullanilabilirlik,
             ortalamaPerformans,
             ortalamaKalite

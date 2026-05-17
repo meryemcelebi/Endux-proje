@@ -164,7 +164,7 @@ export default function Dashboard() {
 
   // --- HANDLERS (Olay Yakalayıcılar) ---
 
-  // Yeni bir arıza kaydı oluşturma işlemi (Bildirim simülasyonu)
+  // AI tahminini göstererek yöneticinin seçtiği arıza türüyle teknik servis işi oluşturur.
   const handleCreateBreakdown = async (mach) => {
     const selectedAriza = arizaTurleri.find((ariza) => String(ariza.ariza_tur_id) === String(selectedBreakdownTypeId));
     if (!selectedAriza) {
@@ -172,12 +172,18 @@ export default function Dashboard() {
       return;
     }
 
+    const aiTahmin = mach.tahmin_edilen_ariza || mach.ai_tahmin?.tahmin_edilen_ariza;
+    const tahminMetni = aiTahmin && aiTahmin !== "Arıza Tespit Edilmedi"
+      ? aiTahmin
+      : "Arıza türü belirsiz - teknik inceleme gerekli";
+    const riskSkoru = Number(mach.mevcut_risk_skoru || 0).toFixed(2);
+
     try {
       setEmergencySubmitId(mach.id);
       const response = await api.createEmergencyMaintenance({
         makine_id: mach.id,
         ariza_id: selectedAriza.ariza_tur_id,
-        aciklama: selectedAriza.ariza_tur,
+        aciklama: `${selectedAriza.ariza_tur}. AI tahmini: ${tahminMetni}. Risk skoru: ${riskSkoru}/100.`,
       });
 
       setMachinesList(prev => prev.map(machine =>
@@ -1178,7 +1184,13 @@ export default function Dashboard() {
 
                             {activeBreakdownId === m.id && (
                               <div style={{ marginTop: "16px", padding: "16px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e1e5eb" }}>
-                                <div style={{ marginBottom: "10px", fontWeight: "bold", fontSize: "14px", color: "#333" }}>Arıza Türü:</div>
+                                <div style={{ marginBottom: "8px", fontWeight: "bold", fontSize: "14px", color: "#333" }}>AI Tahmini:</div>
+                                <div style={{ padding: "12px 14px", marginBottom: "12px", background: "white", border: "1px solid #dbe3ef", borderRadius: "8px", color: "#1e293b", fontSize: "14px", lineHeight: 1.5 }}>
+                                  {m.tahmin_edilen_ariza && m.tahmin_edilen_ariza !== "Arıza Tespit Edilmedi"
+                                    ? m.tahmin_edilen_ariza
+                                    : "Arıza türü belirsiz - teknik servis incelemesi gerekli"}
+                                </div>
+                                <div style={{ marginBottom: "10px", fontWeight: "bold", fontSize: "14px", color: "#333" }}>Yönetici Arıza Türü Seçimi:</div>
                                 <select
                                   value={selectedBreakdownTypeId}
                                   onChange={(e) => setSelectedBreakdownTypeId(e.target.value)}

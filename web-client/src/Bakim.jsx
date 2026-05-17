@@ -63,13 +63,7 @@ export default function Bakim() {
     };
   }).filter(item => item.toplamMaliyet > 0).sort((a, b) => b.toplamMaliyet - a.toplamMaliyet);
 
-  // 5. Yaklaşan Bakımlar (Risk skoru en yüksek olan ilk 5)
-  const yaklasanBakimTablosu = machines
-    .filter(m => m.aktiflik_durumu !== "Pasif" && m.aktiflik_durumu !== "Bakımda" && m.mevcut_risk_skoru >= 50)
-    .sort((a, b) => b.mevcut_risk_skoru - a.mevcut_risk_skoru)
-    .slice(0, 5);
-
-  // 6. Son 3 ayın maliyet verileri (Grafik için)
+  // 5. Son 3 ayın maliyet verileri (Grafik için)
   const last3Months = [];
   for (let i = 2; i >= 0; i--) {
     const targetDate = new Date();
@@ -92,20 +86,32 @@ export default function Bakim() {
   const maxCost = Math.max(...last3Months.map(d => d.cost), 1000);
 
   // --- MAKİNE SAYAÇLARI HESAPLAMA ---
+  const calculateMaintenanceCounter = (machine) => {
+    const periyodik = Number(machine.makine_turu?.periyodik_bakim_saati) || 500;
+    const calisan = Number(machine.toplam_calisma_saati) || 0;
+    const donguSaati = calisan % periyodik;
+    const kalan = calisan > 0 && donguSaati === 0 ? 0 : periyodik - donguSaati;
+    const progress = Math.min((donguSaati / periyodik) * 100, 100);
+
+    return { periyodik, calisan, kalan, progress };
+  };
+
   const machineCounters = machines.map(m => {
-    const periyodik = m.makine_turu?.periyodik_bakim_saati || 500;
-    const calisan = Number(m.toplam_calisma_saati) || 0;
-    const kalan = periyodik - (calisan % periyodik);
-    const progress = Math.min(((periyodik - kalan) / periyodik) * 100, 100);
+    const { periyodik, calisan, kalan, progress } = calculateMaintenanceCounter(m);
     return {
       ...m,
       name: m.makine_adi || m.ad || `Makine ${m.makine_id}`,
+      calisan,
       kalan,
       periyodik,
       progress,
-      isKritik: kalan < 50
+      isKritik: kalan <= 50
     };
   }).sort((a, b) => a.kalan - b.kalan);
+
+  const yaklasanBakimTablosu = machineCounters
+    .filter(m => m.aktiflik_durumu !== false && m.aktiflik_durumu !== "Pasif" && m.aktiflik_durumu !== "Bakımda" && m.kalan <= 50)
+    .sort((a, b) => a.kalan - b.kalan);
 
   // --- TAKVİM HESAPLAMA ---
   const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
@@ -170,7 +176,7 @@ export default function Bakim() {
                         <div>
                           <div style={{ fontWeight: "bold", color: "#2c3e50", fontSize: "12px" }}>{m.makine_adi || m.ad || `Makine ${m.makine_id}`}</div>
                           <div style={{ color: "#7f8c8d", fontSize: "10px", marginTop: "2px" }}>
-                            Risk Skoru: <span style={{ color: "#e74c3c", fontWeight: "bold" }}>{m.mevcut_risk_skoru}</span>
+                            Kalan Saat: <span style={{ color: m.isKritik ? "#e74c3c" : "#f39c12", fontWeight: "bold" }}>{m.kalan}</span>
                           </div>
                         </div>
                       </div>
@@ -274,7 +280,7 @@ export default function Bakim() {
                 <div style={{ ...cardStyle, display: "flex", flexDirection: "column", padding: "15px" }}>
                   <h3 style={{ ...cardTitle, fontSize: "15px", marginBottom: "10px", paddingBottom: "8px" }}>Çalışma Saati Sayaçları</h3>
                   <div style={{ display: "flex", flexDirection: "column", gap: "15px", flex: 1 }}>
-                    {machineCounters.slice(0, 5).map((m, i) => (
+                    {yaklasanBakimTablosu.map((m, i) => (
                       <div key={i} onClick={() => navigate(`/makine/${m.makine_id}`)} style={{ display: "flex", flexDirection: "column", gap: "6px", cursor: "pointer" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2px" }}>
                           <span style={{ fontSize: "13px", color: "#2c3e50", fontWeight: "500" }}>{m.name}</span>
@@ -291,8 +297,8 @@ export default function Bakim() {
                         </div>
                       </div>
                     ))}
-                    {machineCounters.length === 0 && (
-                      <div style={{ textAlign: "center", color: "#999", padding: "20px" }}>Makine sayacı bulunmuyor.</div>
+                    {yaklasanBakimTablosu.length === 0 && (
+                      <div style={{ textAlign: "center", color: "#999", padding: "20px" }}>Periyodik bakımına 50 saatten az kalan makine bulunmuyor.</div>
                     )}
                   </div>
                 </div>

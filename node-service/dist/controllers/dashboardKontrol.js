@@ -7,6 +7,14 @@ exports.getDashboardOzet = void 0;
 const prisma_1 = __importDefault(require("../config/prisma"));
 const oee_1 = require("../utils/oee");
 const ONAY_BEKLEYEN_DURUMLAR = ['BEKLEYEN', 'Onay Bekliyor'];
+const YAKLASAN_BAKIM_SAAT_ESIGI = 50;
+const periyodikBakimSayaciHesapla = (toplamCalismaSaati, periyodikBakimSaati) => {
+    const calismaSaati = Number(toplamCalismaSaati || 0);
+    const periyodik = Number(periyodikBakimSaati || 3000);
+    const donguSaati = calismaSaati % periyodik;
+    const kalanSaat = calismaSaati > 0 && donguSaati === 0 ? 0 : periyodik - donguSaati;
+    return { calismaSaati, periyodik, kalanSaat };
+};
 const getDashboardOzet = async (req, res) => {
     try {
         await prisma_1.default.$executeRawUnsafe(`
@@ -217,18 +225,10 @@ const getDashboardOzet = async (req, res) => {
             durus_maliyeti: 0,
             toplam_makine_alim: 0
         };
-        // TPM: %90 eşik algoritması — bakımı yaklaşan makineleri filtrele
+        // TPM: Çalışma saati sayaçlarıyla aynı döngüsel kalan saat hesabı
         const bakimiYaklasanMakineler = bakimiYaklasanAdaylar
-            .filter(m => {
-            const calismaSaati = Number(m.toplam_calisma_saati || 0);
-            const periyodik = m.makine_turu?.periyodik_bakim_saati || 3000;
-            const esikDeger = periyodik * 0.9; // %90 eşik
-            return calismaSaati >= esikDeger;
-        })
             .map(m => {
-            const calismaSaati = Number(m.toplam_calisma_saati || 0);
-            const periyodik = m.makine_turu?.periyodik_bakim_saati || 3000;
-            const kalanSaat = Math.max(0, periyodik - calismaSaati);
+            const { calismaSaati, periyodik, kalanSaat } = periyodikBakimSayaciHesapla(m.toplam_calisma_saati, m.makine_turu?.periyodik_bakim_saati);
             return {
                 makine_id: m.makine_id,
                 makine_adi: m.makine_adi || "İsimsiz Makine",
@@ -236,17 +236,18 @@ const getDashboardOzet = async (req, res) => {
                 calisma_saati: calismaSaati,
                 periyodik_limit: periyodik,
                 kalan_saat: kalanSaat,
-                aciliyet: kalanSaat <= 0 ? "GEÇMİŞ" : kalanSaat <= 100 ? "KRİTİK" : "UYARI"
+                aciliyet: kalanSaat <= 0 ? "GEÇMİŞ" : kalanSaat <= YAKLASAN_BAKIM_SAAT_ESIGI ? "KRİTİK" : "UYARI"
             };
         })
+            .filter(m => m.kalan_saat <= YAKLASAN_BAKIM_SAAT_ESIGI)
             .sort((a, b) => a.kalan_saat - b.kalan_saat); // En acil olan önce
         const toplamMakine = makineDurumlari.reduce((toplam, durum) => toplam + durum._count._all, 0);
         const toplamAktifMAkine = makineDurumlari.find(durum => durum.aktiflik_durumu === true)?._count._all ?? 0;
         const toplamPasifMakine = makineDurumlari.find(durum => durum.aktiflik_durumu === false)?._count._all ?? 0;
-        const ortalamaKullanilabilirlik = (0, oee_1.roundOeeValue)(ortalamaOee._avg.kullanilabilirlik_orani ?? 0);
-        const ortalamaPerformans = (0, oee_1.roundOeeValue)(ortalamaOee._avg.performans_orani ?? 0);
-        const ortalamaKalite = (0, oee_1.roundOeeValue)(ortalamaOee._avg.kalite_orani ?? 0);
-        const hesaplananOee = (0, oee_1.calculateOeeScore)(ortalamaKullanilabilirlik, ortalamaPerformans, ortalamaKalite) ?? 0;
+        const ortalamaKullanilabilirlik = (0, oee_1.oeeYuvarla)(ortalamaOee._avg.kullanilabilirlik_orani ?? 0);
+        const ortalamaPerformans = (0, oee_1.oeeYuvarla)(ortalamaOee._avg.performans_orani ?? 0);
+        const ortalamaKalite = (0, oee_1.oeeYuvarla)(ortalamaOee._avg.kalite_orani ?? 0);
+        const hesaplananOee = (0, oee_1.oeeSkoruHesapla)(ortalamaKullanilabilirlik, ortalamaPerformans, ortalamaKalite) ?? 0;
         return res.status(200).json({
             success: true,
             data: {
