@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import prisma from '../config/prisma';
-import { oeeSkoruHesapla, oeeKomponentOrtalamasi, oeeYuvarla } from '../utils/oee';
+import { fabrikaOeeHesapla } from '../services/oeeService';
 
 const ONAY_BEKLEYEN_DURUMLAR = ['BEKLEYEN', 'Onay Bekliyor'];
 const YAKLASAN_BAKIM_SAAT_ESIGI = 50;
@@ -16,6 +16,10 @@ const periyodikBakimSayaciHesapla = (toplamCalismaSaati: unknown, periyodikBakim
 
 export const getDashboardOzet = async (req: Request, res: Response): Promise<Response> => {
     try {
+        const oeeBitis = new Date();
+        const oeeBaslangic = new Date();
+        oeeBaslangic.setDate(oeeBaslangic.getDate() - 6);
+
         await prisma.$executeRawUnsafe(`
             ALTER TABLE "makine_turu"
             ADD COLUMN IF NOT EXISTS "saatlik_durus_maliyeti" DOUBLE PRECISION DEFAULT 0
@@ -24,7 +28,7 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
         const [
             makineDurumlari,
             onayBekleyenMakineler,
-            ortalamaOee,
+            fabrikaOee,
             kritikRiskliMakineler,
             bakimiYaklasanAdaylar,
             maliyetAnalizi,
@@ -66,13 +70,7 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
                     }
                 }
             }),
-            prisma.oee_raporlari.aggregate({
-                _avg: {
-                    kullanilabilirlik_orani: true,
-                    performans_orani: true,
-                    kalite_orani: true,
-                },
-            }),
+            fabrikaOeeHesapla(oeeBaslangic, oeeBitis),
 
             prisma.risk_skoru.findMany({
                 where: {
@@ -269,14 +267,10 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
         );
         const toplamAktifMAkine = makineDurumlari.find(durum => durum.aktiflik_durumu === true)?._count._all ?? 0;
         const toplamPasifMakine = makineDurumlari.find(durum => durum.aktiflik_durumu === false)?._count._all ?? 0;
-        const ortalamaKullanilabilirlik = oeeYuvarla(ortalamaOee._avg.kullanilabilirlik_orani ?? 0);
-        const ortalamaPerformans = oeeYuvarla(ortalamaOee._avg.performans_orani ?? 0);
-        const ortalamaKalite = oeeYuvarla(ortalamaOee._avg.kalite_orani ?? 0);
-        const hesaplananOee = oeeSkoruHesapla(
-            ortalamaKullanilabilirlik,
-            ortalamaPerformans,
-            ortalamaKalite
-        ) ?? 0;
+        const ortalamaKullanilabilirlik = fabrikaOee.fabrika_bilesenleri.kullanilabilirlik;
+        const ortalamaPerformans = fabrikaOee.fabrika_bilesenleri.performans;
+        const ortalamaKalite = fabrikaOee.fabrika_bilesenleri.kalite;
+        const hesaplananOee = fabrikaOee.fabrika_ortalama_oee;
 
         return res.status(200).json({
             success: true,
@@ -290,7 +284,8 @@ export const getDashboardOzet = async (req: Request, res: Response): Promise<Res
                     ortalama_oee: hesaplananOee,
                     kullanilabilirlik: ortalamaKullanilabilirlik,
                     performans: ortalamaPerformans,
-                    kalite: ortalamaKalite
+                    kalite: ortalamaKalite,
+                    veri_kaynagi: "Son 7 gün vardiya saatleri ve üretim kayıtları"
                 },
                 acil_aksiyonlar: {
                     onay_bekleyen_is: onayBekleyenMakineler.length,

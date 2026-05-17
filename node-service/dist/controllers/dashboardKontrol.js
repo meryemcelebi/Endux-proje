@@ -5,7 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getDashboardOzet = void 0;
 const prisma_1 = __importDefault(require("../config/prisma"));
-const oee_1 = require("../utils/oee");
+const oeeService_1 = require("../services/oeeService");
 const ONAY_BEKLEYEN_DURUMLAR = ['BEKLEYEN', 'Onay Bekliyor'];
 const YAKLASAN_BAKIM_SAAT_ESIGI = 50;
 const periyodikBakimSayaciHesapla = (toplamCalismaSaati, periyodikBakimSaati) => {
@@ -17,11 +17,14 @@ const periyodikBakimSayaciHesapla = (toplamCalismaSaati, periyodikBakimSaati) =>
 };
 const getDashboardOzet = async (req, res) => {
     try {
+        const oeeBitis = new Date();
+        const oeeBaslangic = new Date();
+        oeeBaslangic.setDate(oeeBaslangic.getDate() - 6);
         await prisma_1.default.$executeRawUnsafe(`
             ALTER TABLE "makine_turu"
             ADD COLUMN IF NOT EXISTS "saatlik_durus_maliyeti" DOUBLE PRECISION DEFAULT 0
         `);
-        const [makineDurumlari, onayBekleyenMakineler, ortalamaOee, kritikRiskliMakineler, bakimiYaklasanAdaylar, maliyetAnalizi, makineBazliMaliyetler, parcaKategoriMaliyetleri, aylikMaliyetTrend] = await Promise.all([
+        const [makineDurumlari, onayBekleyenMakineler, fabrikaOee, kritikRiskliMakineler, bakimiYaklasanAdaylar, maliyetAnalizi, makineBazliMaliyetler, parcaKategoriMaliyetleri, aylikMaliyetTrend] = await Promise.all([
             prisma_1.default.makine.groupBy({
                 by: ['aktiflik_durumu'],
                 _count: {
@@ -56,13 +59,7 @@ const getDashboardOzet = async (req, res) => {
                     }
                 }
             }),
-            prisma_1.default.oee_raporlari.aggregate({
-                _avg: {
-                    kullanilabilirlik_orani: true,
-                    performans_orani: true,
-                    kalite_orani: true,
-                },
-            }),
+            (0, oeeService_1.fabrikaOeeHesapla)(oeeBaslangic, oeeBitis),
             prisma_1.default.risk_skoru.findMany({
                 where: {
                     risk_skoru: {
@@ -244,10 +241,10 @@ const getDashboardOzet = async (req, res) => {
         const toplamMakine = makineDurumlari.reduce((toplam, durum) => toplam + durum._count._all, 0);
         const toplamAktifMAkine = makineDurumlari.find(durum => durum.aktiflik_durumu === true)?._count._all ?? 0;
         const toplamPasifMakine = makineDurumlari.find(durum => durum.aktiflik_durumu === false)?._count._all ?? 0;
-        const ortalamaKullanilabilirlik = (0, oee_1.oeeYuvarla)(ortalamaOee._avg.kullanilabilirlik_orani ?? 0);
-        const ortalamaPerformans = (0, oee_1.oeeYuvarla)(ortalamaOee._avg.performans_orani ?? 0);
-        const ortalamaKalite = (0, oee_1.oeeYuvarla)(ortalamaOee._avg.kalite_orani ?? 0);
-        const hesaplananOee = (0, oee_1.oeeSkoruHesapla)(ortalamaKullanilabilirlik, ortalamaPerformans, ortalamaKalite) ?? 0;
+        const ortalamaKullanilabilirlik = fabrikaOee.fabrika_bilesenleri.kullanilabilirlik;
+        const ortalamaPerformans = fabrikaOee.fabrika_bilesenleri.performans;
+        const ortalamaKalite = fabrikaOee.fabrika_bilesenleri.kalite;
+        const hesaplananOee = fabrikaOee.fabrika_ortalama_oee;
         return res.status(200).json({
             success: true,
             data: {
@@ -260,7 +257,8 @@ const getDashboardOzet = async (req, res) => {
                     ortalama_oee: hesaplananOee,
                     kullanilabilirlik: ortalamaKullanilabilirlik,
                     performans: ortalamaPerformans,
-                    kalite: ortalamaKalite
+                    kalite: ortalamaKalite,
+                    veri_kaynagi: "Son 7 gün vardiya saatleri ve üretim kayıtları"
                 },
                 acil_aksiyonlar: {
                     onay_bekleyen_is: onayBekleyenMakineler.length,

@@ -8,9 +8,6 @@ const cors_1 = __importDefault(require("cors"));
 const config_1 = require("./config");
 const routes_1 = __importDefault(require("./routes"));
 const prisma_1 = require("./config/prisma");
-const swagger_ui_express_1 = __importDefault(require("swagger-ui-express"));
-const fs_1 = __importDefault(require("fs"));
-const path_1 = __importDefault(require("path"));
 const app = (0, express_1.default)();
 // Veritabanı bağlantısını başlat
 (0, prisma_1.connectDB)();
@@ -18,9 +15,6 @@ app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 // swagger.json dosyasını güvenli bir şekilde oku
-const swaggerDocument = JSON.parse(fs_1.default.readFileSync(path_1.default.join(__dirname, 'swagger.json'), 'utf8'));
-// Express uygulmana middleware olarak ekle (Örn: app.use altındaki rotaların oraya)
-app.use('/api-docs', swagger_ui_express_1.default.serve, swagger_ui_express_1.default.setup(swaggerDocument));
 app.get("/api/health", (_req, res) => {
     res.status(200).json({
         success: true,
